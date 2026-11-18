@@ -1,0 +1,171 @@
+import React from 'react';
+import {
+  BookOpen,
+  CreditCard,
+  Grid,
+  Layers,
+  Maximize2,
+  Minimize2,
+  Minus,
+  Moon,
+  PictureInPicture2,
+  Pin,
+  PinOff,
+  Square,
+  Sun,
+  X,
+} from 'lucide-react';
+import {
+  ElectronWindowState,
+  StudyViewMode,
+  ThemeMode,
+} from '../types/hebrew';
+
+interface TitleBarProps {
+  activeView: StudyViewMode;
+  onSelectView: (view: StudyViewMode) => void;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
+  windowState: ElectronWindowState;
+  onToggleAlwaysOnTop: () => void;
+  onToggleMiniMode: () => void;
+  onChangeOpacity: (opacity: number) => void;
+  onMinimize: () => void;
+  onMaximize: () => void;
+  onClose: () => void;
+  masteredCount: number;
+  totalCount: number;
+}
+
+const NAV_ITEMS: { id: StudyViewMode; label: string; icon: React.ReactNode }[] = [
+  { id: 'grid', label: '全字母表', icon: <Grid size={15} /> },
+  { id: 'detail', label: '单字卡片', icon: <CreditCard size={15} /> },
+  { id: 'flashcards', label: '闪卡自测', icon: <Layers size={15} /> },
+  { id: 'rules', label: '规则对比', icon: <BookOpen size={15} /> },
+];
+
+export const TitleBar: React.FC<TitleBarProps> = ({
+  activeView,
+  onSelectView,
+  theme,
+  onToggleTheme,
+  windowState,
+  onToggleAlwaysOnTop,
+  onToggleMiniMode,
+  onChangeOpacity,
+  onMinimize,
+  onMaximize,
+  onClose,
+  masteredCount,
+  totalCount,
+}) => {
+  return (
+    <header className="titlebar">
+      <div className="titlebar-left">
+        <div className="brand-badge" dir="rtl">
+          אב
+        </div>
+        <div className="brand-text">
+          <span className="brand-name">Alef</span>
+          <span className="brand-sub">
+            已掌握 {masteredCount}/{totalCount}
+          </span>
+        </div>
+      </div>
+
+      <nav className="titlebar-nav" aria-label="主视图切换">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`nav-pill ${activeView === item.id ? 'active' : ''}`}
+            onClick={() => onSelectView(item.id)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="titlebar-actions">
+        <div className="opacity-control desktop-only-control" title="窗口透明度">
+          <span className="opacity-label">{Math.round(windowState.opacity * 100)}%</span>
+          <input
+            type="range"
+            min={0.45}
+            max={1}
+            step={0.05}
+            value={windowState.opacity}
+            onChange={(e) => onChangeOpacity(Number(e.target.value))}
+            aria-label="调节窗口透明度"
+          />
+        </div>
+
+        <button
+          type="button"
+          className={`icon-action-btn desktop-only-control ${windowState.isAlwaysOnTop ? 'active-pin' : ''}`}
+          onClick={onToggleAlwaysOnTop}
+          title={windowState.isAlwaysOnTop ? '取消窗口置顶' : '窗口常驻置顶'}
+        >
+          {windowState.isAlwaysOnTop ? <Pin size={15} /> : <PinOff size={15} />}
+          <span className="btn-label-desktop">置顶</span>
+        </button>
+
+        <button
+          type="button"
+          className="icon-action-btn desktop-only-control"
+          onClick={onToggleMiniMode}
+          title="切换桌面迷你悬浮小窗"
+        >
+          <PictureInPicture2 size={15} />
+          <span className="btn-label-desktop">迷你窗</span>
+        </button>
+
+        <button
+          type="button"
+          className="icon-action-btn"
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? '切换为羊皮纸日间主题' : '切换为深邃夜间主题'}
+        >
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+
+        {windowState.isElectron && (
+          <div className="window-controls">
+            <button
+              type="button"
+              className="win-btn"
+              onClick={onMinimize}
+              title="最小化"
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              className="win-btn"
+              onClick={onMaximize}
+              title={windowState.isMaximized ? '还原窗口' : '最大化'}
+            >
+              {windowState.isMaximized ? <Minimize2 size={13} /> : <Square size={12} />}
+            </button>
+            <button
+              type="button"
+              className="win-btn win-close"
+              onClick={onClose}
+              title="关闭"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {!windowState.isElectron && (
+          <span className="preview-tag desktop-only-control" title="当前在浏览器中运行，桌面打包或 npm start 可使用原生无边框置顶">
+            <Maximize2 size={12} />
+            <span>Web</span>
+          </span>
+        )}
+      </div>
+    </header>
+  );
+};

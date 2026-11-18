@@ -1,0 +1,139 @@
+export type LetterCategory =
+  | 'begadkefat'
+  | 'sofit'
+  | 'guttural'
+  | 'mater'
+  | 'sibilant';
+
+export type MasteryLevel = 'unlearned' | 'learning' | 'mastered';
+
+export type StudyViewMode = 'grid' | 'detail' | 'flashcards' | 'rules';
+
+export type ThemeMode = 'dark' | 'parchment';
+
+export type AlphabetOrder = 'rtl' | 'ltr';
+
+export type GridFilter =
+  | 'all'
+  | 'sofit'
+  | 'begadkefat'
+  | 'guttural'
+  | 'confusable'
+  | 'needs_review';
+
+export interface StrokePath {
+  d: string;
+  startX: number;
+  startY: number;
+  label?: string;
+}
+
+export interface StrokeGuide {
+  blockSteps: string[];
+  cursiveSteps: string[];
+  blockStrokes: StrokePath[];
+  cursiveStrokes: StrokePath[];
+  sofitBlockSteps?: string[];
+  sofitCursiveSteps?: string[];
+  sofitBlockStrokes?: StrokePath[];
+  sofitCursiveStrokes?: StrokePath[];
+}
+
+export interface BegadkefatVariant {
+  glyph: string;
+  name: string;
+  modernSound: string;
+  modernIpa: string;
+  biblicalIpa: string;
+}
+
+export interface BegadkefatInfo {
+  withDagesh: BegadkefatVariant;
+  withoutDagesh: BegadkefatVariant;
+  modernPreserved: boolean;
+  note: string;
+}
+
+export interface WordExample {
+  hebrew: string;
+  transliteration: string;
+  meaning: string;
+  note?: string;
+}
+
+export interface SofitInfo {
+  medialGlyph: string;
+  finalGlyph: string;
+  sofitGematria: number;
+  rule: string;
+  exampleWord: WordExample;
+}
+
+export interface HebrewLetter {
+  id: string;
+  order: number;
+  hebrew: string;
+  sofit: string | null;
+  nameHebrew: string;
+  nameEnglish: string;
+  nameChinese: string;
+  transliteration: string;
+  modernSound: string;
+  modernIpa: string;
+  biblicalIpa: string;
+  biblicalDiff: string;
+  pronunciationDesc: string;
+  gematria: number;
+  categories: LetterCategory[];
+  meaning: string;
+  etymology: string;
+  cursiveDesc: string;
+  confusableWith: string[];
+  begadkefat: BegadkefatInfo | null;
+  sofitInfo: SofitInfo | null;
+  strokeGuide: StrokeGuide;
+  examples: WordExample[];
+}
+
+export interface CustomDisplayConfig {
+  showBlock: boolean;
+  showCursive: boolean;
+  showSofit: boolean;
+  showBegadkefat: boolean;
+  showHebrewName: boolean;
+  showEnglishName: boolean;
+  showChineseName: boolean;
+  showModernSound: boolean;
+  showBiblicalDiff: boolean;
+  showTransliteration: boolean;
+  showGematria: boolean;
+  showMastery: boolean;
+  showCategoryBadges: boolean;
+}
+
+export interface ConfusableGroup {
+  id: string;
+  title: string;
+  letterIds: string[];
+  comparisonNotes: string[];
+  tip: string;
+}
+
+export interface NiqqudItem {
+  id: string;
+  nameHebrew: string;
+  nameEnglish: string;
+  nameChinese: string;
+  sample: string;
+  vowelSound: string;
+  ipa: string;
+  note: string;
+}
+
+export interface ElectronWindowState {
+  isAlwaysOnTop: boolean;
+  isMiniMode: boolean;
+  opacity: number;
+  isMaximized: boolean;
+  isElectron: boolean;
+}
