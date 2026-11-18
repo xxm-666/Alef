@@ -218,7 +218,7 @@ export const App: React.FC = () => {
   return (
     <div
       className="app-root"
-      style={!windowState.isElectron ? { opacity: windowState.opacity } : undefined}
+      style={!windowState.isElectron && windowState.opacity < 1 ? { opacity: windowState.opacity } : undefined}
     >
       <TitleBar
         activeView={activeView}
