@@ -9,11 +9,13 @@ import {
   ChevronRight,
   Circle,
   Clock,
+  Delete,
   Eye,
   EyeOff,
   HelpCircle,
   LayoutGrid,
   Layers,
+  MessageSquare,
   Search,
   Sparkles,
   Volume2,
@@ -23,8 +25,11 @@ import {
   HebrewWord,
   MasteryLevel,
   WordCategory,
+  WordSrsRecord,
 } from '../types/hebrew';
 import { WORD_CATEGORY_META } from '../data/hebrewWords';
+import { WORD_INFLECTIONS } from '../data/wordInflections';
+import { HEBREW_PHRASES, PHRASE_SCENARIO_META, PhraseScenario } from '../data/hebrewPhrases';
 import { playFeedbackTone, speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
 
@@ -32,15 +37,21 @@ interface WordsStudyViewProps {
   words: HebrewWord[];
   letters: HebrewLetter[];
   wordMasteryMap: Record<string, MasteryLevel>;
+  wordSrsMap: Record<string, WordSrsRecord>;
   onSetWordMastery: (wordId: string, level: MasteryLevel) => void;
   onOpenLetterDetail: (letterId: string) => void;
   speechRate: number;
 }
 
-type WordFilter = 'all' | 'needs_review' | WordCategory;
-type WordsMode = 'browse' | 'cards' | 'quiz';
-type WordQuizKind = 'meaning' | 'listening';
+type WordFilter = 'all' | 'needs_review' | 'due_srs' | WordCategory;
+type WordsMode = 'browse' | 'cards' | 'phrases' | 'quiz';
+type WordQuizKind = 'meaning' | 'listening' | 'spelling';
 type WordSortOrder = 'default' | 'alpha';
+
+const HEBREW_KEYBOARD_LETTERS = [
+  'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'כ', 'ך',
+  'ל', 'מ', 'ם', 'נ', 'ן', 'ס', 'ע', 'פ', 'ף', 'צ', 'ץ', 'ק', 'ר', 'ש', 'ת',
+];
 
 const ROW_HEIGHT = 72;
 const ROW_GAP = 6;
@@ -119,6 +130,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   words,
   letters,
   wordMasteryMap,
+  wordSrsMap,
   onSetWordMastery,
   onOpenLetterDetail,
   speechRate,
@@ -169,6 +181,20 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   );
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [quizScore, setQuizScore] = useState({ correct: 0, total: 0 });
+  const [spellingInput, setSpellingInput] = useState('');
+  const [spellingSubmitted, setSpellingSubmitted] = useState(false);
+
+  // Phrases state
+  const [phraseScenario, setPhraseScenario] = useState<'all' | PhraseScenario>('all');
+  const [hidePhraseZh, setHidePhraseZh] = useState(false);
+
+  const dueSrsCount = useMemo(() => {
+    const now = Date.now();
+    return words.filter((w) => {
+      const rec = wordSrsMap[w.id];
+      return Boolean(rec && rec.nextReviewAt <= now);
+    }).length;
+  }, [words, wordSrsMap]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -183,9 +209,14 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     const list = words.filter((word) => {
       const mastery = wordMasteryMap[word.id] ?? 'unlearned';
       if (activeFilter === 'needs_review' && mastery === 'mastered') return false;
+      if (activeFilter === 'due_srs') {
+        const rec = wordSrsMap[word.id];
+        if (!rec || rec.nextReviewAt > Date.now()) return false;
+      }
       if (
         activeFilter !== 'all' &&
         activeFilter !== 'needs_review' &&
+        activeFilter !== 'due_srs' &&
         word.category !== activeFilter
       ) {
         return false;
@@ -332,6 +363,18 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     [selectedWord, letters]
   );
 
+  const rootSiblings = useMemo(() => {
+    if (!selectedWord?.root) return [];
+    return words.filter((w) => w.id !== selectedWord.id && w.root === selectedWord.root);
+  }, [selectedWord, words]);
+
+  const wordInflection = selectedWord ? WORD_INFLECTIONS[selectedWord.id] : undefined;
+
+  const filteredPhrases = useMemo(() => {
+    if (phraseScenario === 'all') return HEBREW_PHRASES;
+    return HEBREW_PHRASES.filter((p) => p.scenario === phraseScenario);
+  }, [phraseScenario]);
+
   // Virtual window calculation
   const totalHeight = filteredWords.length * ROW_STRIDE;
   const startIndex = Math.max(0, Math.floor(scrollTop / ROW_STRIDE) - OVERSCAN);
@@ -354,14 +397,35 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     [words, quizTargetId]
   );
 
-  function loadNextQuiz(pool: HebrewWord[] = filteredWords.length >= 4 ? filteredWords : words) {
-    const next = pool[Math.floor(Math.random() * pool.length)];
+  function loadNextQuiz(
+    pool: HebrewWord[] = filteredWords.length >= 4 ? filteredWords : words,
+    targetKind: WordQuizKind = quizKind
+  ) {
+    const effectivePool =
+      targetKind === 'spelling'
+        ? pool.filter((w) => /^[\u05D0-\u05EA]{2,8}$/.test(w.hebrewUnpointed))
+        : pool;
+    const safePool = effectivePool.length > 0 ? effectivePool : words;
+    const next = safePool[Math.floor(Math.random() * safePool.length)];
     setQuizTargetId(next.id);
     setQuizOptions(pickQuizOptions(next, words));
     setSelectedOptionId(null);
-    if (quizKind === 'listening') {
+    setSpellingInput('');
+    setSpellingSubmitted(false);
+    if (targetKind === 'listening') {
       speakHebrew(next.hebrew, next.transliteration, speechRate);
     }
+  }
+
+  function handleCheckSpelling() {
+    if (spellingSubmitted || !spellingInput.trim()) return;
+    setSpellingSubmitted(true);
+    const isCorrect = spellingInput.trim() === quizTarget.hebrewUnpointed;
+    playFeedbackTone(isCorrect ? 'correct' : 'wrong');
+    setQuizScore((prev) => ({
+      correct: prev.correct + (isCorrect ? 1 : 0),
+      total: prev.total + 1,
+    }));
   }
 
   function handleAnswerQuiz(optionId: string) {
@@ -450,6 +514,14 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
               </button>
               <button
                 type="button"
+                className={mode === 'phrases' ? 'active' : ''}
+                onClick={() => setMode('phrases')}
+              >
+                <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+                情景短句
+              </button>
+              <button
+                type="button"
                 className={mode === 'quiz' ? 'active' : ''}
                 onClick={() => {
                   setMode('quiz');
@@ -489,10 +561,17 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
           >
             待掌握
           </button>
+          <button
+            type="button"
+            className={`filter-pill ${activeFilter === 'due_srs' ? 'active' : ''}`}
+            onClick={() => setActiveFilter('due_srs')}
+          >
+            今日待复习 ({dueSrsCount})
+          </button>
         </div>
 
         {/* Alef-Bet Initial Letter Jump Strip */}
-        {mode !== 'quiz' && (
+        {(mode === 'browse' || mode === 'cards') && (
           <div className="alefbet-jump-row" aria-label="按希伯来首字母筛选">
             <span className="muted-caption" style={{ flexShrink: 0 }}>
               首字母索引：
@@ -672,9 +751,15 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                     <span className="meta-badge">{selectedWord.partOfSpeech}</span>
                     <span className="meta-badge">{selectedWord.grammarTag}</span>
                     {selectedWord.root && (
-                      <span className="meta-badge root-badge" dir="rtl">
+                      <button
+                        type="button"
+                        className="meta-badge root-badge clickable-root-badge"
+                        dir="rtl"
+                        onClick={() => setSearchQuery(selectedWord.root ?? '')}
+                        title="点击筛选所有同词根单词"
+                      >
                         词根: {selectedWord.root}
-                      </span>
+                      </button>
                     )}
                   </div>
 
@@ -821,6 +906,80 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                   <p className="word-note-text">{selectedWord.note}</p>
                 </div>
 
+                {/* Shoresh Root Family */}
+                {rootSiblings.length > 0 && (
+                  <div className="word-section-box">
+                    <div className="word-section-header">
+                      <h4>同词根词汇家族 ({selectedWord.root})</h4>
+                      <span className="muted-caption">共 {rootSiblings.length + 1} 个同源词</span>
+                    </div>
+                    <div className="root-family-chips">
+                      {rootSiblings.map((sib) => (
+                        <button
+                          key={sib.id}
+                          type="button"
+                          className="root-sibling-chip"
+                          onClick={() => setSelectedWordId(sib.id)}
+                        >
+                          <span className="root-sib-hebrew" dir="rtl">
+                            {showNiqqud ? sib.hebrew : sib.hebrewUnpointed}
+                          </span>
+                          <span className="root-sib-zh">{sib.meaningZh}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Gender / Number Inflections */}
+                {wordInflection && (
+                  <div className="word-section-box">
+                    <h4>性数变形速查（点击即可发音）</h4>
+                    {wordInflection.kind === 'four-form' ? (
+                      <div className="inflection-four-grid">
+                        {(
+                          [
+                            ['阳性单数', wordInflection.ms],
+                            ['阴性单数', wordInflection.fs],
+                            ['阳性复数', wordInflection.mp],
+                            ['阴性复数', wordInflection.fp],
+                          ] as const
+                        ).map(([label, form]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            className="inflection-cell-btn"
+                            onClick={() => speakHebrew(form.hebrew, form.translit, speechRate)}
+                          >
+                            <span className="inflection-label">{label}</span>
+                            <span className="inflection-hebrew" dir="rtl">
+                              {form.hebrew}
+                            </span>
+                            <span className="inflection-translit">{form.translit}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="inflection-two-grid">
+                        {[wordInflection.singular, wordInflection.plural].map((form) => (
+                          <button
+                            key={form.label}
+                            type="button"
+                            className="inflection-cell-btn"
+                            onClick={() => speakHebrew(form.hebrew, form.translit, speechRate)}
+                          >
+                            <span className="inflection-label">{form.label}</span>
+                            <span className="inflection-hebrew" dir="rtl">
+                              {form.hebrew}
+                            </span>
+                            <span className="inflection-translit">{form.translit}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Optional Example Sentence */}
                 {selectedWord.sentence && (
                   <div className="word-section-box word-sentence-box">
@@ -961,6 +1120,79 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             </div>
           </div>
         )
+      ) : mode === 'phrases' ? (
+        /* Situational Phrases Mode */
+        <div className="phrases-section">
+          <div className="toolbar-card phrases-toolbar">
+            <div className="filter-pills-row">
+              <button
+                type="button"
+                className={`filter-pill ${phraseScenario === 'all' ? 'active' : ''}`}
+                onClick={() => setPhraseScenario('all')}
+              >
+                全部短句 ({HEBREW_PHRASES.length})
+              </button>
+              {(Object.keys(PHRASE_SCENARIO_META) as PhraseScenario[]).map((sc) => (
+                <button
+                  key={sc}
+                  type="button"
+                  className={`filter-pill ${phraseScenario === sc ? 'active' : ''}`}
+                  onClick={() => setPhraseScenario(sc)}
+                >
+                  {PHRASE_SCENARIO_META[sc].label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={`btn-secondary btn-sm ${hidePhraseZh ? 'active-btn' : ''}`}
+              onClick={() => setHidePhraseZh((v) => !v)}
+            >
+              {hidePhraseZh ? <EyeOff size={14} /> : <Eye size={14} />}
+              <span>{hidePhraseZh ? '显示中文释义' : '隐藏中文自测'}</span>
+            </button>
+          </div>
+
+          <div className="phrases-grid">
+            {filteredPhrases.map((phrase) => (
+              <div key={phrase.id} className="phrase-card">
+                <div className="phrase-card-top">
+                  <span className="meta-badge">
+                    {PHRASE_SCENARIO_META[phrase.scenario].label}
+                  </span>
+                  <div className="phrase-audio-btns">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-xs"
+                      onClick={() => speakHebrew(phrase.hebrew, phrase.transliteration, 0.68)}
+                      title="慢速跟读"
+                    >
+                      0.7x 慢读
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary btn-xs"
+                      onClick={() =>
+                        speakHebrew(phrase.hebrew, phrase.transliteration, speechRate)
+                      }
+                    >
+                      <Volume2 size={12} />
+                      <span>朗读</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="phrase-hebrew" dir="rtl">
+                  {showNiqqud ? phrase.hebrew : phrase.hebrewUnpointed}
+                </div>
+                <div className="phrase-translit">{phrase.transliteration}</div>
+                <div className={`phrase-zh ${hidePhraseZh ? 'masked-zh' : ''}`}>
+                  {hidePhraseZh ? '点击上方「显示中文释义」核对翻译' : phrase.meaningZh}
+                </div>
+                {phrase.note && <p className="phrase-note">{phrase.note}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         /* Word Quiz Mode */
         <div className="quiz-stage">
@@ -970,7 +1202,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                 <button
                   type="button"
                   className={quizKind === 'meaning' ? 'active' : ''}
-                  onClick={() => setQuizKind('meaning')}
+                  onClick={() => {
+                    setQuizKind('meaning');
+                    loadNextQuiz(undefined, 'meaning');
+                  }}
                 >
                   看词选义
                 </button>
@@ -979,10 +1214,20 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                   className={quizKind === 'listening' ? 'active' : ''}
                   onClick={() => {
                     setQuizKind('listening');
-                    speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate);
+                    loadNextQuiz(undefined, 'listening');
                   }}
                 >
                   听音辨词
+                </button>
+                <button
+                  type="button"
+                  className={quizKind === 'spelling' ? 'active' : ''}
+                  onClick={() => {
+                    setQuizKind('spelling');
+                    loadNextQuiz(undefined, 'spelling');
+                  }}
+                >
+                  拼写练习
                 </button>
               </div>
 
@@ -994,103 +1239,205 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
               </div>
             </div>
 
-            <div className="quiz-stimulus-box word-quiz-stimulus">
-              {quizKind === 'meaning' ? (
-                <div className="word-quiz-prompt">
-                  <span className="quiz-big-hebrew" dir="rtl">
-                    {showNiqqud ? quizTarget.hebrew : quizTarget.hebrewUnpointed}
-                  </span>
+            {quizKind === 'spelling' ? (
+              <div className="spelling-quiz-body">
+                <div className="spelling-prompt-box">
+                  <h3>{quizTarget.meaningZh}</h3>
+                  <div className="word-phonetics-row">
+                    <span>提示转写：{quizTarget.transliteration}</span>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-xs"
+                      onClick={() =>
+                        speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate)
+                      }
+                    >
+                      <Volume2 size={13} />
+                      <span>听发音</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="spelling-display-box" dir="rtl">
+                  {spellingInput || (
+                    <span className="muted-caption" dir="ltr">
+                      请点击下方希伯来字母从右向左拼写...
+                    </span>
+                  )}
+                </div>
+
+                <div className="hebrew-keyboard-grid" dir="rtl">
+                  {HEBREW_KEYBOARD_LETTERS.map((ch) => (
+                    <button
+                      key={ch}
+                      type="button"
+                      className="hebrew-key-btn"
+                      disabled={spellingSubmitted}
+                      onClick={() => setSpellingInput((prev) => prev + ch)}
+                    >
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="spelling-actions-row">
                   <button
                     type="button"
                     className="btn-secondary btn-sm"
-                    onClick={() =>
-                      speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate)
-                    }
+                    disabled={spellingSubmitted || spellingInput.length === 0}
+                    onClick={() => setSpellingInput((prev) => prev.slice(0, -1))}
                   >
-                    <Volume2 size={14} />
-                    <span>朗读</span>
+                    <Delete size={14} />
+                    <span>退格</span>
                   </button>
+                  <button
+                    type="button"
+                    className="btn-ghost btn-sm"
+                    disabled={spellingSubmitted || spellingInput.length === 0}
+                    onClick={() => setSpellingInput('')}
+                  >
+                    清空
+                  </button>
+                  {!spellingSubmitted ? (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      disabled={spellingInput.length === 0}
+                      onClick={handleCheckSpelling}
+                    >
+                      提交拼写
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      onClick={() => loadNextQuiz(undefined, 'spelling')}
+                    >
+                      下一题
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() =>
-                    speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate)
-                  }
-                >
-                  <Volume2 size={18} />
-                  <span>播放单词发音</span>
-                </button>
-              )}
-            </div>
 
-            <div className="quiz-options-grid">
-              {quizOptions.map((opt) => {
-                const isPicked = selectedOptionId === opt.id;
-                const isRight = opt.id === quizTarget.id;
-                let cls = 'quiz-option-btn';
-                if (selectedOptionId) {
-                  if (isRight) cls += ' correct';
-                  else if (isPicked) cls += ' wrong';
-                  else cls += ' dimmed';
-                }
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={cls}
-                    onClick={() => handleAnswerQuiz(opt.id)}
+                {spellingSubmitted && (
+                  <div
+                    className={`quiz-feedback-box ${
+                      spellingInput.trim() === quizTarget.hebrewUnpointed ? 'correct' : 'wrong'
+                    }`}
                   >
-                    <span className="opt-main">
-                      {quizKind === 'listening' ? opt.hebrew : opt.meaningZh}
-                    </span>
-                    <span className="opt-sub">
-                      {quizKind === 'listening'
-                        ? `${opt.transliteration} · ${opt.meaningZh}`
-                        : opt.transliteration}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedOptionId && (
-              <div
-                className={`quiz-feedback-box ${
-                  selectedOptionId === quizTarget.id ? 'correct' : 'wrong'
-                }`}
-              >
-                <div className="feedback-text">
-                  <strong>
-                    {selectedOptionId === quizTarget.id ? '回答正确！' : '再记一下：'}
-                  </strong>
-                  <span>
-                    {quizTarget.hebrew} ({quizTarget.transliteration}) — {quizTarget.meaningZh}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    onClick={() =>
-                      onSetWordMastery(
-                        quizTarget.id,
-                        selectedOptionId === quizTarget.id ? 'mastered' : 'learning'
-                      )
-                    }
-                  >
-                    {selectedOptionId === quizTarget.id ? '标为已掌握' : '加入学习中'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary btn-sm"
-                    onClick={() => loadNextQuiz()}
-                  >
-                    下一题
-                  </button>
-                </div>
+                    <div className="feedback-text">
+                      <strong>
+                        {spellingInput.trim() === quizTarget.hebrewUnpointed
+                          ? '拼写完全正确！'
+                          : '再核对一下拼写：'}
+                      </strong>
+                      <span>
+                        正确拼写：{quizTarget.hebrew}（无点：{quizTarget.hebrewUnpointed}）
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : (
+              <>
+                <div className="quiz-stimulus-box word-quiz-stimulus">
+                  {quizKind === 'meaning' ? (
+                    <div className="word-quiz-prompt">
+                      <span className="quiz-big-hebrew" dir="rtl">
+                        {showNiqqud ? quizTarget.hebrew : quizTarget.hebrewUnpointed}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() =>
+                          speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate)
+                        }
+                      >
+                        <Volume2 size={14} />
+                        <span>朗读</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() =>
+                        speakHebrew(quizTarget.hebrew, quizTarget.transliteration, speechRate)
+                      }
+                    >
+                      <Volume2 size={18} />
+                      <span>播放单词发音</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="quiz-options-grid">
+                  {quizOptions.map((opt) => {
+                    const isPicked = selectedOptionId === opt.id;
+                    const isRight = opt.id === quizTarget.id;
+                    let cls = 'quiz-option-btn';
+                    if (selectedOptionId) {
+                      if (isRight) cls += ' correct';
+                      else if (isPicked) cls += ' wrong';
+                      else cls += ' dimmed';
+                    }
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={cls}
+                        onClick={() => handleAnswerQuiz(opt.id)}
+                      >
+                        <span className="opt-main">
+                          {quizKind === 'listening' ? opt.hebrew : opt.meaningZh}
+                        </span>
+                        <span className="opt-sub">
+                          {quizKind === 'listening'
+                            ? `${opt.transliteration} · ${opt.meaningZh}`
+                            : opt.transliteration}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedOptionId && (
+                  <div
+                    className={`quiz-feedback-box ${
+                      selectedOptionId === quizTarget.id ? 'correct' : 'wrong'
+                    }`}
+                  >
+                    <div className="feedback-text">
+                      <strong>
+                        {selectedOptionId === quizTarget.id ? '回答正确！' : '再记一下：'}
+                      </strong>
+                      <span>
+                        {quizTarget.hebrew} ({quizTarget.transliteration}) — {quizTarget.meaningZh}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() =>
+                          onSetWordMastery(
+                            quizTarget.id,
+                            selectedOptionId === quizTarget.id ? 'mastered' : 'learning'
+                          )
+                        }
+                      >
+                        {selectedOptionId === quizTarget.id ? '标为已掌握' : '加入学习中'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        onClick={() => loadNextQuiz()}
+                      >
+                        下一题
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

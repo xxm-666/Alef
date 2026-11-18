@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BookOpen,
   CreditCard,
+  Database,
   Grid,
   Languages,
   Layers,
@@ -34,6 +35,7 @@ interface TitleBarProps {
   onMinimize: () => void;
   onMaximize: () => void;
   onClose: () => void;
+  onOpenBackup: () => void;
   masteredCount: number;
   totalCount: number;
 }
@@ -58,6 +60,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onMinimize,
   onMaximize,
   onClose,
+  onOpenBackup,
   masteredCount,
   totalCount,
 }) => {
@@ -121,6 +124,15 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         >
           <PictureInPicture2 size={15} />
           <span className="btn-label-desktop">迷你窗</span>
+        </button>
+
+        <button
+          type="button"
+          className="icon-action-btn"
+          onClick={onOpenBackup}
+          title="学习进度备份与同步"
+        >
+          <Database size={15} />
         </button>
 
         <button

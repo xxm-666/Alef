@@ -6,6 +6,7 @@ import {
   NiqqudItem,
 } from '../types/hebrew';
 import { HebrewGlyphSvg } from './HebrewGlyphSvg';
+import { SyllableLab } from './SyllableLab';
 import { speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
 
@@ -17,7 +18,7 @@ interface SpecialRulesViewProps {
   speechRate: number;
 }
 
-type RulesTab = 'sofit' | 'begadkefat' | 'confusable' | 'guttural' | 'niqqud';
+type RulesTab = 'syllables' | 'sofit' | 'begadkefat' | 'confusable' | 'guttural' | 'niqqud';
 
 const RULES_TAB_KEY = 'alef.rulesTab.v1';
 
@@ -44,6 +45,13 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
     <div className="view-container rules-view">
       <div className="toolbar-card rules-tabs-bar">
         <div className="segmented-control rules-tabs">
+          <button
+            type="button"
+            className={activeTab === 'syllables' ? 'active' : ''}
+            onClick={() => setActiveTab('syllables')}
+          >
+            音节拼读练习
+          </button>
           <button
             type="button"
             className={activeTab === 'sofit' ? 'active' : ''}
@@ -81,6 +89,8 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
           </button>
         </div>
       </div>
+
+      {activeTab === 'syllables' && <SyllableLab speechRate={speechRate} />}
 
       {activeTab === 'sofit' && (
         <div className="rules-section">

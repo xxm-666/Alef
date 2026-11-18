@@ -12,6 +12,7 @@ import {
   MasteryLevel,
   StudyViewMode,
   ThemeMode,
+  WordSrsRecord,
 } from './types/hebrew';
 import { DEFAULT_WINDOW_STATE, getElectronAPI } from './utils/electronBridge';
 import { readStorage, writeStorage } from './utils/storage';
@@ -22,11 +23,13 @@ import { FlashcardStudyView } from './components/FlashcardStudyView';
 import { SpecialRulesView } from './components/SpecialRulesView';
 import { MiniWidgetView } from './components/MiniWidgetView';
 import { WordsStudyView } from './components/WordsStudyView';
+import { BackupModal } from './components/BackupModal';
 
 const STORAGE_KEYS = {
   displayConfig: 'alef.displayConfig.v1',
   mastery: 'alef.mastery.v1',
   wordMastery: 'alef.wordMastery.v1',
+  wordSrs: 'alef.wordSrs.v1',
   theme: 'alef.theme.v1',
   order: 'alef.order.v1',
   speechRate: 'alef.speechRate.v1',
@@ -69,6 +72,10 @@ export const App: React.FC = () => {
   const [wordMasteryMap, setWordMasteryMap] = useState<Record<string, MasteryLevel>>(() =>
     readStorage(STORAGE_KEYS.wordMastery, {})
   );
+  const [wordSrsMap, setWordSrsMap] = useState<Record<string, WordSrsRecord>>(() =>
+    readStorage(STORAGE_KEYS.wordSrs, {})
+  );
+  const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() =>
     readStorage(STORAGE_KEYS.theme, 'dark')
   );
@@ -101,6 +108,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.wordMastery, JSON.stringify(wordMasteryMap));
   }, [wordMasteryMap]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.wordSrs, wordSrsMap);
+  }, [wordSrsMap]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.order, JSON.stringify(order));
@@ -172,6 +183,27 @@ export const App: React.FC = () => {
 
   function handleSetWordMastery(wordId: string, level: MasteryLevel) {
     setWordMasteryMap((prev) => ({ ...prev, [wordId]: level }));
+    const now = Date.now();
+    const DAY_MS = 86_400_000;
+    setWordSrsMap((prev) => {
+      if (level === 'unlearned') {
+        const next = { ...prev };
+        delete next[wordId];
+        return next;
+      }
+      if (level === 'learning') {
+        return {
+          ...prev,
+          [wordId]: { intervalDays: 1, nextReviewAt: now + DAY_MS },
+        };
+      }
+      const prevDays = prev[wordId]?.intervalDays ?? 1;
+      const nextDays = prevDays < 3 ? 3 : prevDays < 7 ? 7 : prevDays < 14 ? 14 : 30;
+      return {
+        ...prev,
+        [wordId]: { intervalDays: nextDays, nextReviewAt: now + nextDays * DAY_MS },
+      };
+    });
   }
 
   function handleSelectView(nextView: StudyViewMode) {
@@ -271,6 +303,7 @@ export const App: React.FC = () => {
         onMinimize={handleMinimize}
         onMaximize={handleMaximize}
         onClose={handleClose}
+        onOpenBackup={() => setIsBackupOpen(true)}
         masteredCount={masteredCount}
         totalCount={HEBREW_LETTERS.length}
       />
@@ -308,6 +341,7 @@ export const App: React.FC = () => {
             words={HEBREW_WORDS}
             letters={HEBREW_LETTERS}
             wordMasteryMap={wordMasteryMap}
+            wordSrsMap={wordSrsMap}
             onSetWordMastery={handleSetWordMastery}
             onOpenLetterDetail={handleOpenDetail}
             speechRate={speechRate}
@@ -334,6 +368,14 @@ export const App: React.FC = () => {
           />
         )}
       </main>
+
+      <BackupModal
+        isOpen={isBackupOpen}
+        onClose={() => setIsBackupOpen(false)}
+        lettersMastered={masteredCount}
+        wordsMastered={Object.values(wordMasteryMap).filter((v) => v === 'mastered').length}
+        srsCount={Object.keys(wordSrsMap).length}
+      />
     </div>
   );
 };

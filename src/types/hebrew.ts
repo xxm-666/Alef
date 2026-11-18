@@ -171,3 +171,8 @@ export interface ElectronWindowState {
   isMaximized: boolean;
   isElectron: boolean;
 }
+
+export interface WordSrsRecord {
+  nextReviewAt: number;
+  intervalDays: number;
+}

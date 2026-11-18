@@ -2986,6 +2986,451 @@ button {
   gap: 12px;
 }
 
+/* Syllable Lab */
+.syllable-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.syllable-lab-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.consonant-picker-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.consonant-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 46px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.consonant-chip:hover {
+  border-color: var(--accent);
+}
+
+.consonant-chip.active {
+  background: var(--accent);
+  color: #0b1120;
+  border-color: var(--accent);
+}
+
+[data-theme='parchment'] .consonant-chip.active {
+  color: #ffffff;
+}
+
+.consonant-chip-glyph {
+  font-family: var(--font-hebrew);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.consonant-chip-sub {
+  font-size: 10px;
+  opacity: 0.78;
+}
+
+.syllables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.syllable-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.syllable-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+}
+
+.syllable-card-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.syllable-speaker {
+  color: var(--accent);
+}
+
+.syllable-big-glyph {
+  font-family: var(--font-hebrew);
+  font-size: 62px;
+  line-height: 1.05;
+  color: var(--accent);
+}
+
+.syllable-reading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.syllable-vowel-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.syllable-tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Shoresh Family & Inflections */
+.clickable-root-badge {
+  cursor: pointer;
+}
+
+.clickable-root-badge:hover {
+  border-color: var(--accent);
+}
+
+.root-family-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root-sibling-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.root-sibling-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.root-sib-hebrew {
+  font-family: var(--font-hebrew);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.root-sib-zh {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.inflection-four-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inflection-two-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inflection-cell-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.inflection-cell-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.inflection-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inflection-hebrew {
+  font-family: var(--font-hebrew);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.inflection-translit {
+  font-size: 11.5px;
+  color: var(--accent);
+}
+
+/* Situational Phrases */
+.phrases-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.phrases-toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.phrases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 12px;
+}
+
+.phrase-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phrase-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.phrase-audio-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phrase-hebrew {
+  font-family: var(--font-hebrew);
+  font-size: 25px;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.phrase-translit {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.phrase-zh {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.phrase-zh.masked-zh {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.phrase-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gold);
+}
+
+/* Spelling Quiz */
+.spelling-quiz-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.spelling-prompt-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.spelling-prompt-box h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.spelling-display-box {
+  min-height: 64px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hebrew);
+  font-size: 38px;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.hebrew-keyboard-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hebrew-key-btn {
+  width: 40px;
+  height: 42px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-hebrew);
+  font-size: 22px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.hebrew-key-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.spelling-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Backup Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-header h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-section h4 {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.modal-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-upload-btn {
+  align-self: flex-start;
+}
+
+.backup-textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.backup-status-msg {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
 @media (max-width: 980px) {
   .detail-hero-card,
   .detail-bottom-grid,
@@ -3176,7 +3621,19 @@ button {
   .stroke-pad-body,
   .back-details-grid,
   .quiz-options-grid,
+  .dagesh-mini-pair,
+  .inflection-four-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stroke-pad-body,
+  .back-details-grid,
+  .quiz-options-grid,
   .dagesh-mini-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .phrases-grid {
     grid-template-columns: 1fr;
   }
 
