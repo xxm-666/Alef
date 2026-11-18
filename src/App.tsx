@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CONFUSABLE_GROUPS,
   HEBREW_LETTERS,
@@ -14,6 +14,7 @@ import {
   ThemeMode,
 } from './types/hebrew';
 import { DEFAULT_WINDOW_STATE, getElectronAPI } from './utils/electronBridge';
+import { readStorage, writeStorage } from './utils/storage';
 import { TitleBar } from './components/TitleBar';
 import { AlphabetGridView } from './components/AlphabetGridView';
 import { LetterDetailView } from './components/LetterDetailView';
@@ -29,6 +30,8 @@ const STORAGE_KEYS = {
   theme: 'alef.theme.v1',
   order: 'alef.order.v1',
   speechRate: 'alef.speechRate.v1',
+  activeView: 'alef.activeView.v1',
+  selectedLetterId: 'alef.selectedLetterId.v1',
 };
 
 const DEFAULT_DISPLAY_CONFIG: CustomDisplayConfig = {
@@ -47,19 +50,15 @@ const DEFAULT_DISPLAY_CONFIG: CustomDisplayConfig = {
   showCategoryBadges: false,
 };
 
-function readStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<StudyViewMode>('grid');
-  const [selectedLetterId, setSelectedLetterId] = useState<string>(HEBREW_LETTERS[0].id);
+  const [activeView, setActiveView] = useState<StudyViewMode>(() =>
+    readStorage<StudyViewMode>(STORAGE_KEYS.activeView, 'grid')
+  );
+  const [selectedLetterId, setSelectedLetterId] = useState<string>(() =>
+    readStorage<string>(STORAGE_KEYS.selectedLetterId, HEBREW_LETTERS[0].id)
+  );
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+  const viewScrollPositionsRef = useRef<Partial<Record<StudyViewMode, number>>>({});
 
   const [displayConfig, setDisplayConfig] = useState<CustomDisplayConfig>(() =>
     readStorage(STORAGE_KEYS.displayConfig, DEFAULT_DISPLAY_CONFIG)
@@ -108,8 +107,24 @@ export const App: React.FC = () => {
   }, [order]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.speechRate, JSON.stringify(speechRate));
+    writeStorage(STORAGE_KEYS.speechRate, speechRate);
   }, [speechRate]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.activeView, activeView);
+    const el = mainScrollRef.current;
+    if (!el) return;
+    const savedTop = viewScrollPositionsRef.current[activeView] ?? 0;
+    requestAnimationFrame(() => {
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = savedTop;
+      }
+    });
+  }, [activeView]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.selectedLetterId, selectedLetterId);
+  }, [selectedLetterId]);
 
   useEffect(() => {
     const api = getElectronAPI();
@@ -159,7 +174,17 @@ export const App: React.FC = () => {
     setWordMasteryMap((prev) => ({ ...prev, [wordId]: level }));
   }
 
+  function handleSelectView(nextView: StudyViewMode) {
+    if (mainScrollRef.current) {
+      viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
+    }
+    setActiveView(nextView);
+  }
+
   function handleOpenDetail(letterId: string) {
+    if (mainScrollRef.current) {
+      viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
+    }
     setSelectedLetterId(letterId);
     setActiveView('detail');
   }
@@ -236,7 +261,7 @@ export const App: React.FC = () => {
     >
       <TitleBar
         activeView={activeView}
-        onSelectView={setActiveView}
+        onSelectView={handleSelectView}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'parchment' : 'dark'))}
         windowState={windowState}
@@ -250,7 +275,7 @@ export const App: React.FC = () => {
         totalCount={HEBREW_LETTERS.length}
       />
 
-      <main className="main-scroll-area">
+      <main ref={mainScrollRef} className="main-scroll-area">
         {activeView === 'grid' && (
           <AlphabetGridView
             letters={HEBREW_LETTERS}

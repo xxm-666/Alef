@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
   CheckCircle2,
@@ -18,6 +18,7 @@ import {
 } from '../types/hebrew';
 import { HebrewGlyphSvg } from './HebrewGlyphSvg';
 import { speakHebrew } from '../utils/audio';
+import { readStorage, writeStorage } from '../utils/storage';
 
 interface AlphabetGridViewProps {
   letters: HebrewLetter[];
@@ -152,6 +153,14 @@ function renderMasteryIcon(level: MasteryLevel) {
   return <Circle size={14} />;
 }
 
+const GRID_STATE_KEY = 'alef.gridState.v1';
+
+interface PersistedGridState {
+  searchQuery: string;
+  activeFilter: GridFilter;
+  showCustomPanel: boolean;
+}
+
 export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
   letters,
   displayConfig,
@@ -164,11 +173,26 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
   speechRate,
   onChangeSpeechRate,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<GridFilter>('all');
-  const [showCustomPanel, setShowCustomPanel] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth > 768 : true
+  const initialGrid = useMemo(
+    () =>
+      readStorage<PersistedGridState>(GRID_STATE_KEY, {
+        searchQuery: '',
+        activeFilter: 'all',
+        showCustomPanel: typeof window !== 'undefined' ? window.innerWidth > 768 : true,
+      }),
+    []
   );
+  const [searchQuery, setSearchQuery] = useState(initialGrid.searchQuery);
+  const [activeFilter, setActiveFilter] = useState<GridFilter>(initialGrid.activeFilter);
+  const [showCustomPanel, setShowCustomPanel] = useState(initialGrid.showCustomPanel);
+
+  useEffect(() => {
+    writeStorage<PersistedGridState>(GRID_STATE_KEY, {
+      searchQuery,
+      activeFilter,
+      showCustomPanel,
+    });
+  }, [searchQuery, activeFilter, showCustomPanel]);
 
   const filteredLetters = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

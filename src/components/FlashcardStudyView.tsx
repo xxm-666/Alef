@@ -13,6 +13,7 @@ import {
 import { HebrewLetter, MasteryLevel } from '../types/hebrew';
 import { HebrewGlyphSvg } from './HebrewGlyphSvg';
 import { playFeedbackTone, speakHebrew } from '../utils/audio';
+import { readStorage, writeStorage } from '../utils/storage';
 
 interface FlashcardStudyViewProps {
   letters: HebrewLetter[];
@@ -145,6 +146,16 @@ function buildQuizQuestion(letters: HebrewLetter[], quizType: QuizType): QuizQue
   };
 }
 
+const FLASHCARD_STATE_KEY = 'alef.flashcardState.v1';
+
+interface PersistedFlashcardState {
+  subMode: StudySubMode;
+  frontType: CardFrontType;
+  deckScope: DeckScope;
+  cardIndex: number;
+  quizType: QuizType;
+}
+
 export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
   letters,
   masteryMap,
@@ -152,19 +163,41 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
   onOpenDetail,
   speechRate,
 }) => {
-  const [subMode, setSubMode] = useState<StudySubMode>('flip');
-  const [frontType, setFrontType] = useState<CardFrontType>('block');
-  const [deckScope, setDeckScope] = useState<DeckScope>('all');
+  const initialFlash = useMemo(
+    () =>
+      readStorage<PersistedFlashcardState>(FLASHCARD_STATE_KEY, {
+        subMode: 'flip',
+        frontType: 'block',
+        deckScope: 'all',
+        cardIndex: 0,
+        quizType: 'block-to-sound',
+      }),
+    []
+  );
+
+  const [subMode, setSubMode] = useState<StudySubMode>(initialFlash.subMode);
+  const [frontType, setFrontType] = useState<CardFrontType>(initialFlash.frontType);
+  const [deckScope, setDeckScope] = useState<DeckScope>(initialFlash.deckScope);
   const [shuffledIds, setShuffledIds] = useState<string[] | null>(null);
-  const [cardIndex, setCardIndex] = useState(0);
+  const [cardIndex, setCardIndex] = useState(initialFlash.cardIndex);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  const [quizType, setQuizType] = useState<QuizType>('block-to-sound');
+  const [quizType, setQuizType] = useState<QuizType>(initialFlash.quizType);
   const [question, setQuestion] = useState<QuizQuestion>(() =>
-    buildQuizQuestion(letters, 'block-to-sound')
+    buildQuizQuestion(letters, initialFlash.quizType)
   );
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [quizStats, setQuizStats] = useState({ correct: 0, total: 0, streak: 0 });
+
+  useEffect(() => {
+    writeStorage<PersistedFlashcardState>(FLASHCARD_STATE_KEY, {
+      subMode,
+      frontType,
+      deckScope,
+      cardIndex,
+      quizType,
+    });
+  }, [subMode, frontType, deckScope, cardIndex, quizType]);
 
   const baseDeck = useMemo(() => {
     const filtered = letters.filter((l) => {

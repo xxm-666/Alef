@@ -26,6 +26,7 @@ import {
 } from '../types/hebrew';
 import { WORD_CATEGORY_META } from '../data/hebrewWords';
 import { playFeedbackTone, speakHebrew } from '../utils/audio';
+import { readStorage, writeStorage } from '../utils/storage';
 
 interface WordsStudyViewProps {
   words: HebrewWord[];
@@ -98,6 +99,22 @@ function pickQuizOptions(target: HebrewWord, pool: HebrewWord[]): HebrewWord[] {
   return [target, ...distractors].sort(() => Math.random() - 0.5);
 }
 
+interface PersistedWordsState {
+  searchQuery: string;
+  activeFilter: WordFilter;
+  initialLetter: string;
+  sortOrder: WordSortOrder;
+  showNiqqud: boolean;
+  showCursive: boolean;
+  mode: WordsMode;
+  mobileSubView: 'list' | 'detail';
+  selectedWordId: string;
+  cardsPage: number;
+  scrollTop: number;
+}
+
+const WORDS_STATE_KEY = 'alef.wordsState.v1';
+
 export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   words,
   letters,
@@ -106,20 +123,43 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   onOpenLetterDetail,
   speechRate,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<WordFilter>('all');
-  const [initialLetter, setInitialLetter] = useState<string>('all');
-  const [sortOrder, setSortOrder] = useState<WordSortOrder>('default');
-  const [showNiqqud, setShowNiqqud] = useState(true);
-  const [showCursive, setShowCursive] = useState(true);
-  const [mode, setMode] = useState<WordsMode>('browse');
-  const [selectedWordId, setSelectedWordId] = useState<string>(words[0]?.id ?? '');
-  const [cardsPage, setCardsPage] = useState(1);
+  const initialSaved = useMemo(
+    () =>
+      readStorage<PersistedWordsState>(WORDS_STATE_KEY, {
+        searchQuery: '',
+        activeFilter: 'all',
+        initialLetter: 'all',
+        sortOrder: 'default',
+        showNiqqud: true,
+        showCursive: true,
+        mode: 'browse',
+        mobileSubView: 'list',
+        selectedWordId: words[0]?.id ?? '',
+        cardsPage: 1,
+        scrollTop: 0,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const [searchQuery, setSearchQuery] = useState(initialSaved.searchQuery);
+  const [activeFilter, setActiveFilter] = useState<WordFilter>(initialSaved.activeFilter);
+  const [initialLetter, setInitialLetter] = useState<string>(initialSaved.initialLetter);
+  const [sortOrder, setSortOrder] = useState<WordSortOrder>(initialSaved.sortOrder);
+  const [showNiqqud, setShowNiqqud] = useState(initialSaved.showNiqqud);
+  const [showCursive, setShowCursive] = useState(initialSaved.showCursive);
+  const [mode, setMode] = useState<WordsMode>(initialSaved.mode);
+  const [mobileSubView, setMobileSubView] = useState<'list' | 'detail'>(
+    initialSaved.mobileSubView ?? 'list'
+  );
+  const [selectedWordId, setSelectedWordId] = useState<string>(initialSaved.selectedWordId);
+  const [cardsPage, setCardsPage] = useState(initialSaved.cardsPage);
 
   // Virtual list state
   const listScrollRef = useRef<HTMLDivElement | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  const [scrollTop, setScrollTop] = useState(initialSaved.scrollTop);
   const [viewportHeight, setViewportHeight] = useState(520);
+  const didMountFiltersRef = useRef(false);
 
   // Quiz state
   const [quizKind, setQuizKind] = useState<WordQuizKind>('meaning');
@@ -173,12 +213,58 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   }, [words, activeFilter, initialLetter, searchQuery, wordMasteryMap, sortOrder]);
 
   useEffect(() => {
+    if (!didMountFiltersRef.current) {
+      didMountFiltersRef.current = true;
+      return;
+    }
     setCardsPage(1);
     setScrollTop(0);
     if (listScrollRef.current) {
       listScrollRef.current.scrollTop = 0;
     }
   }, [activeFilter, initialLetter, searchQuery, sortOrder]);
+
+  // Restore saved virtual list scrollTop when entering browse mode
+  useEffect(() => {
+    if (mode !== 'browse') return;
+    const el = listScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      if (listScrollRef.current) {
+        listScrollRef.current.scrollTop = scrollTop;
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // Persist view state across tab switches and restarts
+  useEffect(() => {
+    writeStorage<PersistedWordsState>(WORDS_STATE_KEY, {
+      searchQuery,
+      activeFilter,
+      initialLetter,
+      sortOrder,
+      showNiqqud,
+      showCursive,
+      mode,
+      mobileSubView,
+      selectedWordId,
+      cardsPage,
+      scrollTop,
+    });
+  }, [
+    searchQuery,
+    activeFilter,
+    initialLetter,
+    sortOrder,
+    showNiqqud,
+    showCursive,
+    mode,
+    mobileSubView,
+    selectedWordId,
+    cardsPage,
+    scrollTop,
+  ]);
 
   useEffect(() => {
     const el = listScrollRef.current;
@@ -299,7 +385,11 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   return (
     <div className="view-container words-view">
       {/* Top Toolbar */}
-      <div className="toolbar-card">
+      <div
+        className={`toolbar-card ${
+          mode === 'browse' && mobileSubView === 'detail' ? 'mobile-hide-toolbar' : ''
+        }`}
+      >
         <div className="toolbar-top-row">
           <div className="search-box">
             <Search size={15} />
@@ -450,7 +540,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             </button>
           </div>
         ) : (
-          <div className="words-workbench">
+          <div className={`words-workbench ${mobileSubView === 'detail' ? 'mobile-detail-active' : 'mobile-list-active'}`}>
             {/* Left Virtualized Word List */}
             <aside className="words-list-pane" aria-label="单词列表">
               <div className="words-list-header">
@@ -483,11 +573,15 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                           right: 0,
                           height: ROW_HEIGHT,
                         }}
-                        onClick={() => setSelectedWordId(word.id)}
+                        onClick={() => {
+                          setSelectedWordId(word.id);
+                          setMobileSubView('detail');
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             setSelectedWordId(word.id);
+                            setMobileSubView('detail');
                           }
                         }}
                       >
@@ -532,6 +626,44 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             {/* Right Detail Workspace */}
             {selectedWord && (
               <section className="word-detail-pane">
+                <div className="mobile-detail-topbar">
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    onClick={() => setMobileSubView('list')}
+                  >
+                    <ChevronLeft size={15} />
+                    <span>返回词表</span>
+                  </button>
+                  <div className="word-nav-arrows">
+                    <span className="muted-caption">
+                      {selectedIndex + 1} / {filteredWords.length}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => {
+                        const prevIdx =
+                          selectedIndex > 0 ? selectedIndex - 1 : filteredWords.length - 1;
+                        selectAndScrollToIndex(prevIdx);
+                      }}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => {
+                        const nextIdx =
+                          selectedIndex < filteredWords.length - 1 ? selectedIndex + 1 : 0;
+                        selectAndScrollToIndex(nextIdx);
+                      }}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+
                 <div className="word-detail-header">
                   <div className="word-badges-row">
                     <span className="meta-badge gematria">
@@ -768,12 +900,14 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                     onClick={() => {
                       setSelectedWordId(word.id);
                       setMode('browse');
+                      setMobileSubView('detail');
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setSelectedWordId(word.id);
                         setMode('browse');
+                        setMobileSubView('detail');
                       }
                     }}
                   >

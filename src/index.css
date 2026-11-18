@@ -2779,6 +2779,10 @@ button {
   gap: 10px;
 }
 
+.mobile-detail-topbar {
+  display: none;
+}
+
 .word-badges-row {
   display: flex;
   flex-wrap: wrap;
@@ -2993,7 +2997,33 @@ button {
 
   .words-list-pane {
     position: static;
-    max-height: 300px;
+    max-height: none;
+  }
+
+  .words-workbench.mobile-list-active .word-detail-pane {
+    display: none;
+  }
+
+  .words-workbench.mobile-detail-active .words-list-pane {
+    display: none;
+  }
+
+  .words-workbench.mobile-detail-active .word-detail-header .word-nav-arrows {
+    display: none;
+  }
+
+  .mobile-detail-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .words-workbench.mobile-list-active .words-list-scroll.virtual-scroll {
+    height: calc(100vh - 340px);
+    min-height: 320px;
   }
 
   .btn-label-desktop {
@@ -3040,8 +3070,31 @@ button {
     flex-direction: column;
     justify-content: center;
     gap: 3px;
-    padding: 6px 4px;
-    font-size: 11px;
+    padding: 6px 2px;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .mobile-hide-toolbar {
+    display: none !important;
+  }
+
+  .word-detail-pane {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .word-hero-block {
+    font-size: 46px;
+  }
+
+  .word-hero-cursive {
+    font-size: 42px;
+  }
+
+  .word-stage-card {
+    min-height: 118px;
+    padding: 14px 12px;
   }
 
   .main-scroll-area {

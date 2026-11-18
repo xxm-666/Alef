@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Volume2 } from 'lucide-react';
 import {
   ConfusableGroup,
@@ -7,6 +7,7 @@ import {
 } from '../types/hebrew';
 import { HebrewGlyphSvg } from './HebrewGlyphSvg';
 import { speakHebrew } from '../utils/audio';
+import { readStorage, writeStorage } from '../utils/storage';
 
 interface SpecialRulesViewProps {
   letters: HebrewLetter[];
@@ -18,6 +19,8 @@ interface SpecialRulesViewProps {
 
 type RulesTab = 'sofit' | 'begadkefat' | 'confusable' | 'guttural' | 'niqqud';
 
+const RULES_TAB_KEY = 'alef.rulesTab.v1';
+
 export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
   letters,
   confusableGroups,
@@ -25,7 +28,13 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
   onSelectLetter,
   speechRate,
 }) => {
-  const [activeTab, setActiveTab] = useState<RulesTab>('sofit');
+  const [activeTab, setActiveTab] = useState<RulesTab>(() =>
+    readStorage<RulesTab>(RULES_TAB_KEY, 'sofit')
+  );
+
+  useEffect(() => {
+    writeStorage(RULES_TAB_KEY, activeTab);
+  }, [activeTab]);
 
   const sofitLetters = letters.filter((l) => Boolean(l.sofitInfo));
   const begadkefatLetters = letters.filter((l) => Boolean(l.begadkefat));
