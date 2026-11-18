@@ -7,7 +7,41 @@ export type LetterCategory =
 
 export type MasteryLevel = 'unlearned' | 'learning' | 'mastered';
 
-export type StudyViewMode = 'grid' | 'detail' | 'flashcards' | 'rules';
+export type StudyViewMode = 'grid' | 'detail' | 'words' | 'flashcards' | 'rules';
+
+export type WordCategory =
+  | 'greetings'
+  | 'family'
+  | 'time'
+  | 'daily'
+  | 'nature'
+  | 'verbs'
+  | 'adjectives'
+  | 'city'
+  | 'body'
+  | 'work'
+  | 'biblical';
+
+export interface WordSentenceExample {
+  hebrew: string;
+  transliteration: string;
+  meaningZh: string;
+}
+
+export interface HebrewWord {
+  id: string;
+  hebrew: string;
+  hebrewUnpointed: string;
+  transliteration: string;
+  ipa: string;
+  meaningZh: string;
+  partOfSpeech: string;
+  grammarTag: string;
+  category: WordCategory;
+  root?: string;
+  note: string;
+  sentence?: WordSentenceExample;
+}
 
 export type ThemeMode = 'dark' | 'parchment';
 

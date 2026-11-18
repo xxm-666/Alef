@@ -3,6 +3,7 @@ import {
   BookOpen,
   CreditCard,
   Grid,
+  Languages,
   Layers,
   Maximize2,
   Minimize2,
@@ -40,6 +41,7 @@ interface TitleBarProps {
 const NAV_ITEMS: { id: StudyViewMode; label: string; icon: React.ReactNode }[] = [
   { id: 'grid', label: '全字母表', icon: <Grid size={15} /> },
   { id: 'detail', label: '单字卡片', icon: <CreditCard size={15} /> },
+  { id: 'words', label: '高频单词', icon: <Languages size={15} /> },
   { id: 'flashcards', label: '闪卡自测', icon: <Layers size={15} /> },
   { id: 'rules', label: '规则对比', icon: <BookOpen size={15} /> },
 ];

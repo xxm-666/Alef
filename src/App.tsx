@@ -4,6 +4,7 @@ import {
   HEBREW_LETTERS,
   NIQQUD_ITEMS,
 } from './data/hebrewLetters';
+import { HEBREW_WORDS } from './data/hebrewWords';
 import {
   AlphabetOrder,
   CustomDisplayConfig,
@@ -19,10 +20,12 @@ import { LetterDetailView } from './components/LetterDetailView';
 import { FlashcardStudyView } from './components/FlashcardStudyView';
 import { SpecialRulesView } from './components/SpecialRulesView';
 import { MiniWidgetView } from './components/MiniWidgetView';
+import { WordsStudyView } from './components/WordsStudyView';
 
 const STORAGE_KEYS = {
   displayConfig: 'alef.displayConfig.v1',
   mastery: 'alef.mastery.v1',
+  wordMastery: 'alef.wordMastery.v1',
   theme: 'alef.theme.v1',
   order: 'alef.order.v1',
   speechRate: 'alef.speechRate.v1',
@@ -64,6 +67,9 @@ export const App: React.FC = () => {
   const [masteryMap, setMasteryMap] = useState<Record<string, MasteryLevel>>(() =>
     readStorage(STORAGE_KEYS.mastery, {})
   );
+  const [wordMasteryMap, setWordMasteryMap] = useState<Record<string, MasteryLevel>>(() =>
+    readStorage(STORAGE_KEYS.wordMastery, {})
+  );
   const [theme, setTheme] = useState<ThemeMode>(() =>
     readStorage(STORAGE_KEYS.theme, 'dark')
   );
@@ -92,6 +98,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.mastery, JSON.stringify(masteryMap));
   }, [masteryMap]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.wordMastery, JSON.stringify(wordMasteryMap));
+  }, [wordMasteryMap]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.order, JSON.stringify(order));
@@ -143,6 +153,10 @@ export const App: React.FC = () => {
 
   function handleSetMastery(letterId: string, level: MasteryLevel) {
     setMasteryMap((prev) => ({ ...prev, [letterId]: level }));
+  }
+
+  function handleSetWordMastery(wordId: string, level: MasteryLevel) {
+    setWordMasteryMap((prev) => ({ ...prev, [wordId]: level }));
   }
 
   function handleOpenDetail(letterId: string) {
@@ -260,6 +274,17 @@ export const App: React.FC = () => {
             order={order}
             masteryMap={masteryMap}
             onSetMastery={handleSetMastery}
+            speechRate={speechRate}
+          />
+        )}
+
+        {activeView === 'words' && (
+          <WordsStudyView
+            words={HEBREW_WORDS}
+            letters={HEBREW_LETTERS}
+            wordMasteryMap={wordMasteryMap}
+            onSetWordMastery={handleSetWordMastery}
+            onOpenLetterDetail={handleOpenDetail}
             speechRate={speechRate}
           />
         )}
