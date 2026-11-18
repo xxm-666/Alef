@@ -1,5 +1,7 @@
+import { AUDIO_FILE_MAP, HUMAN_AUDIO_KEYS } from '../data/audioManifest';
+
 export interface SpeakResult {
-  mode: 'hebrew-tts' | 'phonetic-tts' | 'unavailable';
+  mode: 'recorded' | 'hebrew-tts' | 'phonetic-tts' | 'unavailable';
   voiceName?: string;
 }
 
@@ -148,7 +150,67 @@ function dispatchUtterance(utterance: SpeechSynthesisUtterance): void {
   synth.speak(utterance);
 }
 
+let currentClip: HTMLAudioElement | null = null;
+
+function stopClip(): void {
+  if (currentClip) {
+    try {
+      currentClip.pause();
+    } catch {
+      // ignore
+    }
+    currentClip = null;
+  }
+}
+
+/** 优先播放内置的真人 / 神经网络录音；成功发起播放返回 true。 */
+function playRecordedClip(hebrewText: string, rate: number, onFail: () => void): boolean {
+  const rel = AUDIO_FILE_MAP[hebrewText.trim()];
+  if (!rel || typeof Audio === 'undefined') return false;
+  try {
+    stopClip();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    const clip = new Audio(new URL(rel, document.baseURI).toString());
+    const safe = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 1));
+    clip.playbackRate = safe;
+    (clip as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    clip.volume = 1;
+    currentClip = clip;
+    clip.addEventListener('error', () => {
+      if (currentClip === clip) currentClip = null;
+      onFail();
+    });
+    clip.addEventListener('ended', () => {
+      if (currentClip === clip) currentClip = null;
+    });
+    void clip.play().catch(() => {
+      if (currentClip === clip) currentClip = null;
+      onFail();
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function speakHebrew(
+  hebrewText: string,
+  phoneticFallback?: string,
+  rate = 0.9
+): SpeakResult {
+  const recorded = playRecordedClip(hebrewText, rate, () =>
+    speakWithSynthesis(hebrewText, phoneticFallback, rate)
+  );
+  if (recorded) {
+    return {
+      mode: 'recorded',
+      voiceName: HUMAN_AUDIO_KEYS.has(hebrewText.trim()) ? '真人录音' : '以色列神经网络语音',
+    };
+  }
+  return speakWithSynthesis(hebrewText, phoneticFallback, rate);
+}
+
+function speakWithSynthesis(
   hebrewText: string,
   phoneticFallback?: string,
   rate = 0.9
