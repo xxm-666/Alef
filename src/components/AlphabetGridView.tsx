@@ -166,7 +166,9 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<GridFilter>('all');
-  const [showCustomPanel, setShowCustomPanel] = useState(true);
+  const [showCustomPanel, setShowCustomPanel] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth > 768 : true
+  );
 
   const filteredLetters = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
