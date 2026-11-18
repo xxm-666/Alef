@@ -4,12 +4,18 @@ export interface SpeakResult {
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+let speakTimer: number | null = null;
+let sharedAudioCtx: AudioContext | null = null;
 
 function refreshVoices(): SpeechSynthesisVoice[] {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     return [];
   }
-  cachedVoices = window.speechSynthesis.getVoices();
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    cachedVoices = voices;
+  }
   return cachedVoices;
 }
 
@@ -19,12 +25,22 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
 }
 
 export function getHebrewVoice(): SpeechSynthesisVoice | null {
-  const voices = cachedVoices.length > 0 ? cachedVoices : refreshVoices();
+  const voices = refreshVoices();
   return (
     voices.find((v) => {
       const lang = v.lang.toLowerCase();
       return lang === 'he-il' || lang.startsWith('he') || lang.startsWith('iw');
     }) ?? null
+  );
+}
+
+function getEnglishFallbackVoice(): SpeechSynthesisVoice | null {
+  const voices = refreshVoices();
+  return (
+    voices.find((v) => v.lang.toLowerCase() === 'en-us') ??
+    voices.find((v) => v.lang.toLowerCase().startsWith('en')) ??
+    voices[0] ??
+    null
   );
 }
 
@@ -40,6 +56,26 @@ export function getSpeechStatus(): { available: boolean; hasHebrewVoice: boolean
   };
 }
 
+function dispatchUtterance(utterance: SpeechSynthesisUtterance): void {
+  const synth = window.speechSynthesis;
+  activeUtterance = utterance;
+  utterance.onend = () => {
+    if (activeUtterance === utterance) {
+      activeUtterance = null;
+    }
+  };
+  utterance.onerror = () => {
+    if (activeUtterance === utterance) {
+      activeUtterance = null;
+    }
+  };
+
+  if (synth.paused) {
+    synth.resume();
+  }
+  synth.speak(utterance);
+}
+
 export function speakHebrew(
   hebrewText: string,
   phoneticFallback?: string,
@@ -50,36 +86,86 @@ export function speakHebrew(
   }
 
   try {
-    window.speechSynthesis.cancel();
-    const heVoice = getHebrewVoice();
-
-    if (heVoice) {
-      const utterance = new SpeechSynthesisUtterance(hebrewText);
-      utterance.voice = heVoice;
-      utterance.lang = heVoice.lang || 'he-IL';
-      utterance.rate = rate;
-      window.speechSynthesis.speak(utterance);
-      return { mode: 'hebrew-tts', voiceName: heVoice.name };
+    const synth = window.speechSynthesis;
+    if (speakTimer !== null) {
+      window.clearTimeout(speakTimer);
+      speakTimer = null;
     }
 
-    const fallbackText = phoneticFallback || hebrewText;
-    const utterance = new SpeechSynthesisUtterance(fallbackText);
-    utterance.lang = phoneticFallback ? 'en-US' : 'he-IL';
-    utterance.rate = rate;
-    window.speechSynthesis.speak(utterance);
-    return { mode: phoneticFallback ? 'phonetic-tts' : 'hebrew-tts' };
+    const voices = refreshVoices();
+    const heVoice = getHebrewVoice();
+    const safeRate = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 0.9));
+
+    let utterance: SpeechSynthesisUtterance;
+    let result: SpeakResult;
+
+    if (heVoice) {
+      utterance = new SpeechSynthesisUtterance(hebrewText);
+      utterance.voice = heVoice;
+      utterance.lang = heVoice.lang || 'he-IL';
+      result = { mode: 'hebrew-tts', voiceName: heVoice.name };
+    } else if (voices.length === 0) {
+      // On iOS Safari / PWA, getVoices() may be empty on first tap even though he-IL is built in
+      utterance = new SpeechSynthesisUtterance(hebrewText);
+      utterance.lang = 'he-IL';
+      result = { mode: 'hebrew-tts' };
+    } else {
+      const fallbackText = phoneticFallback || hebrewText;
+      utterance = new SpeechSynthesisUtterance(fallbackText);
+      if (phoneticFallback) {
+        const enVoice = getEnglishFallbackVoice();
+        if (enVoice) utterance.voice = enVoice;
+        utterance.lang = enVoice?.lang || 'en-US';
+        result = { mode: 'phonetic-tts', voiceName: enVoice?.name };
+      } else {
+        utterance.lang = 'he-IL';
+        result = { mode: 'hebrew-tts' };
+      }
+    }
+
+    utterance.rate = safeRate;
+    utterance.volume = 1;
+
+    // Avoid calling cancel() synchronously before speak() when idle, as iOS WebKit / Chromium
+    // can silently drop the newly queued utterance.
+    if (synth.speaking || synth.pending) {
+      synth.cancel();
+      speakTimer = window.setTimeout(() => {
+        speakTimer = null;
+        dispatchUtterance(utterance);
+      }, 45);
+    } else {
+      dispatchUtterance(utterance);
+    }
+
+    return result;
   } catch {
     return { mode: 'unavailable' };
   }
 }
 
-export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
-  if (typeof window === 'undefined') return;
-  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioCtx) return;
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (sharedAudioCtx && sharedAudioCtx.state !== 'closed') {
+    return sharedAudioCtx;
+  }
+  const AudioCtx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtx) return null;
+  sharedAudioCtx = new AudioCtx();
+  return sharedAudioCtx;
+}
 
+export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
   try {
-    const ctx = new AudioCtx();
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -110,9 +196,6 @@ export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
       osc.start(now);
       osc.stop(now + 0.08);
     }
-    osc.onended = () => {
-      void ctx.close();
-    };
   } catch {
     // Ignore audio context errors on restricted autoplay contexts
   }
