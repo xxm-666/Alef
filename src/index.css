@@ -291,6 +291,7 @@ body,
 .main-scroll-area {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding: 16px 20px 28px;
 }
@@ -611,6 +612,8 @@ button {
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .letter-card:hover {
@@ -2569,12 +2572,61 @@ button {
 
 @media (max-width: 520px) {
   .alphabet-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
   .letter-card {
-    padding: 12px 10px;
+    padding: 10px 9px;
+    gap: 7px;
+  }
+
+  .card-top-meta {
+    gap: 4px;
+  }
+
+  .card-top-actions {
+    gap: 3px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .gematria-pill {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+
+  .card-mini-icon-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  .mastery-pill {
+    padding: 2px 5px;
+    font-size: 10px;
+    gap: 2px;
+  }
+
+  .card-glyph-showcase {
+    gap: 8px;
+    min-height: 58px;
+    padding: 4px 0 2px;
+  }
+
+  .hebrew-glyph-main {
+    font-size: 40px;
+  }
+
+  .sofit-corner-badge {
+    font-size: 20px;
+    top: 8px;
+    margin-left: 3px;
+    padding: 1px 5px;
+  }
+
+  .card-glyph-showcase svg {
+    width: 44px;
+    height: 44px;
   }
 
   .rules-cards-grid,
