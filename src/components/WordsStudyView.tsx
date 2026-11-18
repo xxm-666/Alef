@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Search,
   Sparkles,
+  Star,
   Volume2,
 } from 'lucide-react';
 import {
@@ -38,12 +39,15 @@ interface WordsStudyViewProps {
   letters: HebrewLetter[];
   wordMasteryMap: Record<string, MasteryLevel>;
   wordSrsMap: Record<string, WordSrsRecord>;
+  favoriteWordIds: string[];
+  onToggleFavoriteWord: (wordId: string) => void;
   onSetWordMastery: (wordId: string, level: MasteryLevel) => void;
+  onRecordActivity: () => void;
   onOpenLetterDetail: (letterId: string) => void;
   speechRate: number;
 }
 
-type WordFilter = 'all' | 'needs_review' | 'due_srs' | WordCategory;
+type WordFilter = 'all' | 'favorites' | 'needs_review' | 'due_srs' | WordCategory;
 type WordsMode = 'browse' | 'cards' | 'phrases' | 'quiz';
 type WordQuizKind = 'meaning' | 'listening' | 'spelling';
 type WordSortOrder = 'default' | 'alpha';
@@ -131,7 +135,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   letters,
   wordMasteryMap,
   wordSrsMap,
+  favoriteWordIds,
+  onToggleFavoriteWord,
   onSetWordMastery,
+  onRecordActivity,
   onOpenLetterDetail,
   speechRate,
 }) => {
@@ -204,10 +211,13 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     return counts;
   }, [words]);
 
+  const favoriteSet = useMemo(() => new Set(favoriteWordIds), [favoriteWordIds]);
+
   const filteredWords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = words.filter((word) => {
       const mastery = wordMasteryMap[word.id] ?? 'unlearned';
+      if (activeFilter === 'favorites' && !favoriteSet.has(word.id)) return false;
       if (activeFilter === 'needs_review' && mastery === 'mastered') return false;
       if (activeFilter === 'due_srs') {
         const rec = wordSrsMap[word.id];
@@ -215,6 +225,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
       }
       if (
         activeFilter !== 'all' &&
+        activeFilter !== 'favorites' &&
         activeFilter !== 'needs_review' &&
         activeFilter !== 'due_srs' &&
         word.category !== activeFilter
@@ -241,7 +252,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
       );
     }
     return list;
-  }, [words, activeFilter, initialLetter, searchQuery, wordMasteryMap, sortOrder]);
+  }, [words, activeFilter, initialLetter, searchQuery, wordMasteryMap, wordSrsMap, favoriteSet, sortOrder]);
 
   useEffect(() => {
     if (!didMountFiltersRef.current) {
@@ -420,6 +431,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   function handleCheckSpelling() {
     if (spellingSubmitted || !spellingInput.trim()) return;
     setSpellingSubmitted(true);
+    onRecordActivity();
     const isCorrect = spellingInput.trim() === quizTarget.hebrewUnpointed;
     playFeedbackTone(isCorrect ? 'correct' : 'wrong');
     setQuizScore((prev) => ({
@@ -431,12 +443,23 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   function handleAnswerQuiz(optionId: string) {
     if (selectedOptionId) return;
     setSelectedOptionId(optionId);
+    onRecordActivity();
     const isCorrect = optionId === quizTarget.id;
     playFeedbackTone(isCorrect ? 'correct' : 'wrong');
     setQuizScore((prev) => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
       total: prev.total + 1,
     }));
+  }
+
+  function handleJumpToWord(wordId: string) {
+    const inCurrent = filteredWords.some((w) => w.id === wordId);
+    if (!inCurrent) {
+      setActiveFilter('all');
+      setInitialLetter('all');
+      setSearchQuery('');
+    }
+    setSelectedWordId(wordId);
   }
 
   function handleCycleMastery(wordId: string) {
@@ -535,40 +558,49 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
           </div>
         </div>
 
-        {/* Category filter pills */}
-        <div className="filter-pills-row">
-          <button
-            type="button"
-            className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('all')}
-          >
-            全部 ({words.length})
-          </button>
-          {(Object.keys(WORD_CATEGORY_META) as WordCategory[]).map((cat) => (
+        {/* Category filter pills (hidden in phrases mode) */}
+        {mode !== 'phrases' && (
+          <div className="filter-pills-row">
             <button
-              key={cat}
               type="button"
-              className={`filter-pill ${activeFilter === cat ? 'active' : ''}`}
-              onClick={() => setActiveFilter(cat)}
+              className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('all')}
             >
-              {WORD_CATEGORY_META[cat].label} ({categoryCounts[cat] ?? 0})
+              全部 ({words.length})
             </button>
-          ))}
-          <button
-            type="button"
-            className={`filter-pill ${activeFilter === 'needs_review' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('needs_review')}
-          >
-            待掌握
-          </button>
-          <button
-            type="button"
-            className={`filter-pill ${activeFilter === 'due_srs' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('due_srs')}
-          >
-            今日待复习 ({dueSrsCount})
-          </button>
-        </div>
+            <button
+              type="button"
+              className={`filter-pill ${activeFilter === 'favorites' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('favorites')}
+            >
+              ★ 重点收藏 ({favoriteWordIds.length})
+            </button>
+            {(Object.keys(WORD_CATEGORY_META) as WordCategory[]).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={`filter-pill ${activeFilter === cat ? 'active' : ''}`}
+                onClick={() => setActiveFilter(cat)}
+              >
+                {WORD_CATEGORY_META[cat].label} ({categoryCounts[cat] ?? 0})
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`filter-pill ${activeFilter === 'needs_review' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('needs_review')}
+            >
+              待掌握
+            </button>
+            <button
+              type="button"
+              className={`filter-pill ${activeFilter === 'due_srs' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('due_srs')}
+            >
+              今日待复习 ({dueSrsCount})
+            </button>
+          </div>
+        )}
 
         {/* Alef-Bet Initial Letter Jump Strip */}
         {(mode === 'browse' || mode === 'cards') && (
@@ -674,6 +706,22 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                           </div>
                         </div>
                         <div className="word-item-actions">
+                          <button
+                            type="button"
+                            className={`card-mini-icon-btn ${
+                              favoriteSet.has(word.id) ? 'star-active' : ''
+                            }`}
+                            title={favoriteSet.has(word.id) ? '取消收藏' : '加入重点收藏'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleFavoriteWord(word.id);
+                            }}
+                          >
+                            <Star
+                              size={12}
+                              fill={favoriteSet.has(word.id) ? 'currentColor' : 'none'}
+                            />
+                          </button>
                           <button
                             type="button"
                             className="card-mini-icon-btn"
@@ -838,6 +886,21 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                   <div className="word-cta-group">
                     <button
                       type="button"
+                      className={`btn-secondary ${
+                        favoriteSet.has(selectedWord.id) ? 'star-active-btn' : ''
+                      }`}
+                      onClick={() => onToggleFavoriteWord(selectedWord.id)}
+                      title={favoriteSet.has(selectedWord.id) ? '取消重点收藏' : '加入重点收藏'}
+                    >
+                      <Star
+                        size={16}
+                        fill={favoriteSet.has(selectedWord.id) ? 'currentColor' : 'none'}
+                      />
+                      <span>{favoriteSet.has(selectedWord.id) ? '已收藏' : '收藏'}</span>
+                    </button>
+
+                    <button
+                      type="button"
                       className="btn-primary"
                       onClick={() =>
                         speakHebrew(selectedWord.hebrew, selectedWord.transliteration, speechRate)
@@ -919,7 +982,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                           key={sib.id}
                           type="button"
                           className="root-sibling-chip"
-                          onClick={() => setSelectedWordId(sib.id)}
+                          onClick={() => handleJumpToWord(sib.id)}
                         >
                           <span className="root-sib-hebrew" dir="rtl">
                             {showNiqqud ? sib.hebrew : sib.hebrewUnpointed}
@@ -936,29 +999,77 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                   <div className="word-section-box">
                     <h4>性数变形速查（点击即可发音）</h4>
                     {wordInflection.kind === 'four-form' ? (
-                      <div className="inflection-four-grid">
-                        {(
-                          [
-                            ['阳性单数', wordInflection.ms],
-                            ['阴性单数', wordInflection.fs],
-                            ['阳性复数', wordInflection.mp],
-                            ['阴性复数', wordInflection.fp],
-                          ] as const
-                        ).map(([label, form]) => (
-                          <button
-                            key={label}
-                            type="button"
-                            className="inflection-cell-btn"
-                            onClick={() => speakHebrew(form.hebrew, form.translit, speechRate)}
-                          >
-                            <span className="inflection-label">{label}</span>
-                            <span className="inflection-hebrew" dir="rtl">
-                              {form.hebrew}
-                            </span>
-                            <span className="inflection-translit">{form.translit}</span>
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <div className="inflection-four-grid">
+                          {(
+                            [
+                              ['阳性单数', wordInflection.ms],
+                              ['阴性单数', wordInflection.fs],
+                              ['阳性复数', wordInflection.mp],
+                              ['阴性复数', wordInflection.fp],
+                            ] as const
+                          ).map(([label, form]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className="inflection-cell-btn"
+                              onClick={() => speakHebrew(form.hebrew, form.translit, speechRate)}
+                            >
+                              <span className="inflection-label">{label}</span>
+                              <span className="inflection-hebrew" dir="rtl">
+                                {form.hebrew}
+                              </span>
+                              <span className="inflection-translit">{form.translit}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {(wordInflection.infinitive || wordInflection.past3ms) && (
+                          <div className="inflection-two-grid" style={{ marginTop: 8 }}>
+                            {wordInflection.infinitive && (
+                              <button
+                                type="button"
+                                className="inflection-cell-btn"
+                                onClick={() =>
+                                  speakHebrew(
+                                    wordInflection.infinitive!.hebrew,
+                                    wordInflection.infinitive!.translit,
+                                    speechRate
+                                  )
+                                }
+                              >
+                                <span className="inflection-label">不定式 (原形)</span>
+                                <span className="inflection-hebrew" dir="rtl">
+                                  {wordInflection.infinitive.hebrew}
+                                </span>
+                                <span className="inflection-translit">
+                                  {wordInflection.infinitive.translit}
+                                </span>
+                              </button>
+                            )}
+                            {wordInflection.past3ms && (
+                              <button
+                                type="button"
+                                className="inflection-cell-btn"
+                                onClick={() =>
+                                  speakHebrew(
+                                    wordInflection.past3ms!.hebrew,
+                                    wordInflection.past3ms!.translit,
+                                    speechRate
+                                  )
+                                }
+                              >
+                                <span className="inflection-label">过去时 (他)</span>
+                                <span className="inflection-hebrew" dir="rtl">
+                                  {wordInflection.past3ms.hebrew}
+                                </span>
+                                <span className="inflection-translit">
+                                  {wordInflection.past3ms.translit}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="inflection-two-grid">
                         {[wordInflection.singular, wordInflection.plural].map((form) => (

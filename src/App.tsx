@@ -10,6 +10,7 @@ import {
   CustomDisplayConfig,
   ElectronWindowState,
   MasteryLevel,
+  StudyStats,
   StudyViewMode,
   ThemeMode,
   WordSrsRecord,
@@ -30,6 +31,8 @@ const STORAGE_KEYS = {
   mastery: 'alef.mastery.v1',
   wordMastery: 'alef.wordMastery.v1',
   wordSrs: 'alef.wordSrs.v1',
+  favoriteWords: 'alef.favoriteWords.v1',
+  studyStats: 'alef.studyStats.v1',
   theme: 'alef.theme.v1',
   order: 'alef.order.v1',
   speechRate: 'alef.speechRate.v1',
@@ -53,6 +56,14 @@ const DEFAULT_DISPLAY_CONFIG: CustomDisplayConfig = {
   showCategoryBadges: false,
 };
 
+function getLocalDateKey(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<StudyViewMode>(() =>
     readStorage<StudyViewMode>(STORAGE_KEYS.activeView, 'grid')
@@ -74,6 +85,17 @@ export const App: React.FC = () => {
   );
   const [wordSrsMap, setWordSrsMap] = useState<Record<string, WordSrsRecord>>(() =>
     readStorage(STORAGE_KEYS.wordSrs, {})
+  );
+  const [favoriteWordIds, setFavoriteWordIds] = useState<string[]>(() =>
+    readStorage<string[]>(STORAGE_KEYS.favoriteWords, [])
+  );
+  const [studyStats, setStudyStats] = useState<StudyStats>(() =>
+    readStorage<StudyStats>(STORAGE_KEYS.studyStats, {
+      streakDays: 0,
+      lastActiveDate: '',
+      todayReviews: 0,
+      totalReviews: 0,
+    })
   );
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() =>
@@ -112,6 +134,14 @@ export const App: React.FC = () => {
   useEffect(() => {
     writeStorage(STORAGE_KEYS.wordSrs, wordSrsMap);
   }, [wordSrsMap]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.favoriteWords, favoriteWordIds);
+  }, [favoriteWordIds]);
+
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.studyStats, studyStats);
+  }, [studyStats]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.order, JSON.stringify(order));
@@ -164,7 +194,34 @@ export const App: React.FC = () => {
     [masteryMap]
   );
 
+  function recordStudyActivity() {
+    const today = getLocalDateKey(0);
+    const yesterday = getLocalDateKey(-1);
+    setStudyStats((prev) => {
+      const isSameDay = prev.lastActiveDate === today;
+      const isConsecutive = prev.lastActiveDate === yesterday;
+      const nextStreak = isSameDay
+        ? Math.max(1, prev.streakDays)
+        : isConsecutive
+        ? prev.streakDays + 1
+        : 1;
+      return {
+        streakDays: nextStreak,
+        lastActiveDate: today,
+        todayReviews: isSameDay ? prev.todayReviews + 1 : 1,
+        totalReviews: prev.totalReviews + 1,
+      };
+    });
+  }
+
+  function handleToggleFavoriteWord(wordId: string) {
+    setFavoriteWordIds((prev) =>
+      prev.includes(wordId) ? prev.filter((id) => id !== wordId) : [...prev, wordId]
+    );
+  }
+
   function handleCycleMastery(letterId: string) {
+    recordStudyActivity();
     setMasteryMap((prev) => {
       const curr = prev[letterId] ?? 'unlearned';
       const next: MasteryLevel =
@@ -178,10 +235,12 @@ export const App: React.FC = () => {
   }
 
   function handleSetMastery(letterId: string, level: MasteryLevel) {
+    recordStudyActivity();
     setMasteryMap((prev) => ({ ...prev, [letterId]: level }));
   }
 
   function handleSetWordMastery(wordId: string, level: MasteryLevel) {
+    recordStudyActivity();
     setWordMasteryMap((prev) => ({ ...prev, [wordId]: level }));
     const now = Date.now();
     const DAY_MS = 86_400_000;
@@ -306,6 +365,7 @@ export const App: React.FC = () => {
         onOpenBackup={() => setIsBackupOpen(true)}
         masteredCount={masteredCount}
         totalCount={HEBREW_LETTERS.length}
+        studyStats={studyStats}
       />
 
       <main ref={mainScrollRef} className="main-scroll-area">
@@ -342,7 +402,10 @@ export const App: React.FC = () => {
             letters={HEBREW_LETTERS}
             wordMasteryMap={wordMasteryMap}
             wordSrsMap={wordSrsMap}
+            favoriteWordIds={favoriteWordIds}
+            onToggleFavoriteWord={handleToggleFavoriteWord}
             onSetWordMastery={handleSetWordMastery}
+            onRecordActivity={recordStudyActivity}
             onOpenLetterDetail={handleOpenDetail}
             speechRate={speechRate}
           />

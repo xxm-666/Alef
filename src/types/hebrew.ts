@@ -176,3 +176,10 @@ export interface WordSrsRecord {
   nextReviewAt: number;
   intervalDays: number;
 }
+
+export interface StudyStats {
+  streakDays: number;
+  lastActiveDate: string;
+  todayReviews: number;
+  totalReviews: number;
+}

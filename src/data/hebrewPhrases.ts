@@ -79,7 +79,7 @@ export const HEBREW_PHRASES: HebrewPhrase[] = [
   {
     id: 'p-greet-7',
     scenario: 'greetings',
-    hebrew: 'שיהיה לְךָ יוֹם נִפְלָא!',
+    hebrew: 'שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!',
     hebrewUnpointed: 'שיהיה לך יום נפלא!',
     transliteration: 'She-yihyeh lekha yom nifla!',
     meaningZh: '祝你今天愉快！',

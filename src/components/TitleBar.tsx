@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   ElectronWindowState,
+  StudyStats,
   StudyViewMode,
   ThemeMode,
 } from '../types/hebrew';
@@ -38,6 +39,7 @@ interface TitleBarProps {
   onOpenBackup: () => void;
   masteredCount: number;
   totalCount: number;
+  studyStats: StudyStats;
 }
 
 const NAV_ITEMS: { id: StudyViewMode; label: string; icon: React.ReactNode }[] = [
@@ -63,7 +65,16 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onOpenBackup,
   masteredCount,
   totalCount,
+  studyStats,
 }) => {
+  const todayKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  })();
+  const todayCount = studyStats.lastActiveDate === todayKey ? studyStats.todayReviews : 0;
+
   return (
     <header className="titlebar">
       <div className="titlebar-left">
@@ -74,6 +85,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <span className="brand-name">Alef</span>
           <span className="brand-sub">
             已掌握 {masteredCount}/{totalCount}
+            {studyStats.streakDays > 0 ? ` · 连续${studyStats.streakDays}天` : ''}
+            {todayCount > 0 ? ` · 今日${todayCount}` : ''}
           </span>
         </div>
       </div>

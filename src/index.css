@@ -674,6 +674,18 @@ button {
   border-color: var(--accent);
 }
 
+.card-mini-icon-btn.star-active {
+  color: var(--gold);
+  border-color: rgba(251, 191, 36, 0.45);
+  background: var(--gold-soft);
+}
+
+.btn-secondary.star-active-btn {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
 .mastery-pill {
   display: inline-flex;
   align-items: center;

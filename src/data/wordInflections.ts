@@ -4,6 +4,8 @@ export interface FourFormInflection {
   fs: { hebrew: string; translit: string };
   mp: { hebrew: string; translit: string };
   fp: { hebrew: string; translit: string };
+  infinitive?: { hebrew: string; translit: string };
+  past3ms?: { hebrew: string; translit: string };
 }
 
 export interface NounPluralInflection {
@@ -22,6 +24,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'לוֹמֶדֶת', translit: 'lomedet' },
     mp: { hebrew: 'לוֹמְדִים', translit: 'lomdim' },
     fp: { hebrew: 'לוֹמְדוֹת', translit: 'lomdot' },
+    infinitive: { hebrew: 'לִלְמֹד', translit: 'lilmod' },
+    past3ms: { hebrew: 'לָמַד', translit: 'lamad' },
   },
   kotev: {
     kind: 'four-form',
@@ -29,6 +33,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'כּוֹתֶבֶת', translit: 'kotevet' },
     mp: { hebrew: 'כּוֹתְבִים', translit: 'kotvim' },
     fp: { hebrew: 'כּוֹתְבוֹת', translit: 'kotvot' },
+    infinitive: { hebrew: 'לִכְתֹּב', translit: 'likhtov' },
+    past3ms: { hebrew: 'כָּתַב', translit: 'katav' },
   },
   kore: {
     kind: 'four-form',
@@ -36,6 +42,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'קוֹרֵאת', translit: 'koret' },
     mp: { hebrew: 'קוֹרְאִים', translit: 'korim' },
     fp: { hebrew: 'קוֹרְאוֹת', translit: 'korot' },
+    infinitive: { hebrew: 'לִקְרֹא', translit: 'likro' },
+    past3ms: { hebrew: 'קָרָא', translit: 'kara' },
   },
   medaber: {
     kind: 'four-form',
@@ -43,6 +51,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'מְדַבֶּרֶת', translit: 'medaberet' },
     mp: { hebrew: 'מְדַבְּרִים', translit: 'medabrim' },
     fp: { hebrew: 'מְדַבְּרוֹת', translit: 'medabrot' },
+    infinitive: { hebrew: 'לְדַבֵּר', translit: 'ledaber' },
+    past3ms: { hebrew: 'דִּבֵּר', translit: 'diber' },
   },
   ohev: {
     kind: 'four-form',
@@ -50,6 +60,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'אוֹהֶבֶת', translit: 'ohevet' },
     mp: { hebrew: 'אוֹהֲבִים', translit: 'ohavim' },
     fp: { hebrew: 'אוֹהֲבוֹת', translit: 'ohavot' },
+    infinitive: { hebrew: 'לֶאֱהֹב', translit: 'leehov' },
+    past3ms: { hebrew: 'אָהַב', translit: 'ahav' },
   },
   holech: {
     kind: 'four-form',
@@ -57,6 +69,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'הוֹלֶכֶת', translit: 'holechet' },
     mp: { hebrew: 'הוֹלְכִים', translit: 'holkhim' },
     fp: { hebrew: 'הוֹלְכוֹת', translit: 'holkhot' },
+    infinitive: { hebrew: 'לָלֶכֶת', translit: 'lalekhet' },
+    past3ms: { hebrew: 'הָלַךְ', translit: 'halach' },
   },
   rotzeh: {
     kind: 'four-form',
@@ -64,6 +78,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'רוֹצָה', translit: 'rotzah' },
     mp: { hebrew: 'רוֹצִים', translit: 'rotzim' },
     fp: { hebrew: 'רוֹצוֹת', translit: 'rotzot' },
+    infinitive: { hebrew: 'לִרְצוֹת', translit: 'lirtzot' },
+    past3ms: { hebrew: 'רָצָה', translit: 'ratzah' },
   },
   shomea: {
     kind: 'four-form',
@@ -71,6 +87,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'שׁוֹמַעַת', translit: 'shomaat' },
     mp: { hebrew: 'שׁוֹמְעִים', translit: 'shomim' },
     fp: { hebrew: 'שׁוֹמְעוֹת', translit: 'shomot' },
+    infinitive: { hebrew: 'לִשְׁמֹעַ', translit: 'lishmoa' },
+    past3ms: { hebrew: 'שָׁמַע', translit: 'shama' },
   },
   roeh: {
     kind: 'four-form',
@@ -78,6 +96,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'רוֹאָה', translit: 'roah' },
     mp: { hebrew: 'רוֹאִים', translit: 'roim' },
     fp: { hebrew: 'רוֹאוֹת', translit: 'root' },
+    infinitive: { hebrew: 'לִרְאוֹת', translit: 'lirot' },
+    past3ms: { hebrew: 'רָאָה', translit: 'raah' },
   },
   yodea: {
     kind: 'four-form',
@@ -85,6 +105,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'יוֹדַעַת', translit: 'yodaat' },
     mp: { hebrew: 'יוֹדְעִים', translit: 'yodim' },
     fp: { hebrew: 'יוֹדְעוֹת', translit: 'yodot' },
+    infinitive: { hebrew: 'לָדַעַת', translit: 'ladaat' },
+    past3ms: { hebrew: 'יָדַע', translit: 'yada' },
   },
   'ochel-verb': {
     kind: 'four-form',
@@ -92,6 +114,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'אוֹכֶלֶת', translit: 'okhelet' },
     mp: { hebrew: 'אוֹכְלִים', translit: 'okhlim' },
     fp: { hebrew: 'אוֹכְלוֹת', translit: 'okhlot' },
+    infinitive: { hebrew: 'לֶאֱכֹל', translit: 'leekhol' },
+    past3ms: { hebrew: 'אָכַל', translit: 'akhal' },
   },
   shoteh: {
     kind: 'four-form',
@@ -99,6 +123,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'שׁוֹתָה', translit: 'shotah' },
     mp: { hebrew: 'שׁוֹתִים', translit: 'shotim' },
     fp: { hebrew: 'שׁוֹתוֹת', translit: 'shotot' },
+    infinitive: { hebrew: 'לִשְׁתּוֹת', translit: 'lishtot' },
+    past3ms: { hebrew: 'שָׁתָה', translit: 'shatah' },
   },
   ba: {
     kind: 'four-form',
@@ -106,6 +132,8 @@ export const WORD_INFLECTIONS: Record<string, WordInflection> = {
     fs: { hebrew: 'בָּאָה', translit: 'baah' },
     mp: { hebrew: 'בָּאִים', translit: 'baim' },
     fp: { hebrew: 'בָּאוֹת', translit: 'baot' },
+    infinitive: { hebrew: 'לָבוֹא', translit: 'lavo' },
+    past3ms: { hebrew: 'בָּא', translit: 'ba' },
   },
   gar: {
     kind: 'four-form',
