@@ -4,6 +4,78 @@ export interface SpeakResult {
 }
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
+
+/**
+ * iOS Safari 默认把网页音频(Web Audio / speechSynthesis)归为“环境音”,
+ * 会被静音键静音。将音频会话切到 "playback" 类别即可无视静音键。
+ */
+let silentAudio: HTMLAudioElement | null = null;
+let unlocked = false;
+
+function buildSilentWavUrl(): string {
+  const sampleRate = 8000;
+  const samples = 800; // 0.1s
+  const buffer = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buffer);
+  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF');
+  v.setUint32(4, 36 + samples * 2, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  w(36, 'data');
+  v.setUint32(40, samples * 2, true);
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+export function unlockAudio(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
+  } catch {
+    // ignore
+  }
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') void ctx.resume();
+  if (unlocked) return;
+  try {
+    silentAudio = new Audio(buildSilentWavUrl());
+    silentAudio.setAttribute('playsinline', '');
+    silentAudio.loop = true;
+    silentAudio.volume = 0.01;
+    void silentAudio
+      .play()
+      .then(() => {
+        unlocked = true;
+      })
+      .catch(() => {
+        // 需要用户手势,下次交互再试
+      });
+  } catch {
+    // ignore
+  }
+}
+
+if (typeof window !== 'undefined') {
+  const handler = () => {
+    unlockAudio();
+    if (unlocked) {
+      window.removeEventListener('touchend', handler, true);
+      window.removeEventListener('pointerdown', handler, true);
+      window.removeEventListener('click', handler, true);
+    }
+  };
+  window.addEventListener('touchend', handler, true);
+  window.addEventListener('pointerdown', handler, true);
+  window.addEventListener('click', handler, true);
+}
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let speakTimer: number | null = null;
 let sharedAudioCtx: AudioContext | null = null;
@@ -86,6 +158,7 @@ export function speakHebrew(
   }
 
   try {
+    unlockAudio();
     const synth = window.speechSynthesis;
     if (speakTimer !== null) {
       window.clearTimeout(speakTimer);
@@ -159,6 +232,7 @@ function getAudioContext(): AudioContext | null {
 
 export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
   try {
+    unlockAudio();
     const ctx = getAudioContext();
     if (!ctx) return;
 
