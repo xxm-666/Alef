@@ -22,6 +22,15 @@ type RulesTab = 'syllables' | 'sofit' | 'begadkefat' | 'confusable' | 'guttural'
 
 const RULES_TAB_KEY = 'alef.rulesTab.v1';
 
+const RULES_TABS: { id: RulesTab; badge: string; title: string; sub: string }[] = [
+  { id: 'syllables', badge: 'בָּ', title: '音节拼读', sub: '辅音+元音练习' },
+  { id: 'sofit', badge: 'ךםן', title: '词尾变形', sub: 'Sofit · כמנפ״ץ' },
+  { id: 'begadkefat', badge: 'בּב', title: 'Dagesh 音变', sub: '软硬音 · בגדכפ״ת' },
+  { id: 'confusable', badge: 'ד↔ר', title: '易混淆对比', sub: '形近字母辨析' },
+  { id: 'guttural', badge: 'אהח', title: '喉音字母', sub: 'אהחע״ר 特性' },
+  { id: 'niqqud', badge: 'אָאֶ', title: '元音速查', sub: 'Niqqud 符号表' },
+];
+
 export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
   letters,
   confusableGroups,
@@ -43,51 +52,28 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
 
   return (
     <div className="view-container rules-view">
-      <div className="toolbar-card rules-tabs-bar">
-        <div className="segmented-control rules-tabs">
-          <button
-            type="button"
-            className={activeTab === 'syllables' ? 'active' : ''}
-            onClick={() => setActiveTab('syllables')}
-          >
-            音节拼读练习
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'sofit' ? 'active' : ''}
-            onClick={() => setActiveTab('sofit')}
-          >
-            词尾变形 Sofit (כמנפ״ץ)
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'begadkefat' ? 'active' : ''}
-            onClick={() => setActiveTab('begadkefat')}
-          >
-            Dagesh 音变 (בגדכפ״ת)
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'confusable' ? 'active' : ''}
-            onClick={() => setActiveTab('confusable')}
-          >
-            易混淆字母对比
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'guttural' ? 'active' : ''}
-            onClick={() => setActiveTab('guttural')}
-          >
-            喉音字母 (אהחע״ר)
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'niqqud' ? 'active' : ''}
-            onClick={() => setActiveTab('niqqud')}
-          >
-            元音符号 Niqqud 速查
-          </button>
-        </div>
+      <div className="rules-tabs-grid" role="tablist" aria-label="规则分类切换">
+        {RULES_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`rules-tab-btn ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="rules-tab-badge" dir="rtl">
+                {tab.badge}
+              </span>
+              <span className="rules-tab-text">
+                <strong>{tab.title}</strong>
+                <span>{tab.sub}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === 'syllables' && <SyllableLab speechRate={speechRate} />}
