@@ -3779,7 +3779,7 @@ button {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
-    padding: 6px 8px;
+    padding: 9px 10px;
     border: 1px solid var(--dock-rim);
     border-radius: 999px;
     background: var(--bg-surface);
@@ -3855,19 +3855,19 @@ button {
 
   .titlebar-nav .nav-pill {
     min-width: 0;
-    min-height: 46px;
+    min-height: 54px;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     gap: 0;
-    padding: 6px;
+    padding: 8px;
     border-radius: 999px;
     color: var(--text-primary);
   }
 
   .titlebar-nav .nav-pill > svg {
-    width: 24px;
-    height: 24px;
+    width: 25px;
+    height: 25px;
     stroke-width: 1.9;
     transition: transform 0.16s ease;
   }
@@ -3887,7 +3887,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: -14px;
+    margin-top: -16px;
     min-width: 0;
   }
 
@@ -3895,8 +3895,8 @@ button {
     position: relative;
     padding: 0;
     min-height: 0;
-    width: 56px;
-    height: 56px;
+    width: 62px;
+    height: 62px;
     border-radius: 50%;
     color: var(--text-primary);
     background: transparent;
@@ -3910,8 +3910,8 @@ button {
   .nav-center-glyph {
     display: grid;
     place-items: center;
-    width: 56px;
-    height: 56px;
+    width: 62px;
+    height: 62px;
     border: 1.5px solid var(--dock-rim);
     border-radius: 50%;
     background: radial-gradient(ellipse at 32% 14%, rgba(255, 255, 255, 0.28), transparent 52%),
@@ -3923,7 +3923,7 @@ button {
       0 8px 20px rgba(2, 6, 23, 0.36),
       0 0 14px var(--dock-center-glow);
     color: var(--dock-center-ink);
-    font: 700 34px/1 var(--font-hebrew);
+    font: 700 36px/1 var(--font-hebrew);
     transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, transform 0.16s ease;
   }
 
