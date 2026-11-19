@@ -1,0 +1,46 @@
+name: Build Alef iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build and sync web assets
+        run: |
+          npm ci --replace-registry-host=always
+          npm run build
+          npx cap sync ios
+
+      - name: Build unsigned device app
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/alef-ios" \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Package IPA with the daily letter widget
+        run: |
+          app="$RUNNER_TEMP/alef-ios/Build/Products/Release-iphoneos/App.app"
+          test -f "$app/public/index.html"
+          test -x "$app/PlugIns/DailyLetterWidget.appex/DailyLetterWidget"
+          mkdir Payload
+          ditto "$app" Payload/App.app
+          ditto -c -k --keepParent Payload Alef.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alef-iOS
+          path: Alef.ipa
+          if-no-files-found: error
