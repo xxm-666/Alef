@@ -17,6 +17,7 @@ import {
 } from './types/hebrew';
 import { DEFAULT_WINDOW_STATE, getElectronAPI } from './utils/electronBridge';
 import { readStorage, writeStorage } from './utils/storage';
+import { useSwipeBack } from './utils/useSwipeBack';
 import { TitleBar } from './components/TitleBar';
 import { AlphabetGridView } from './components/AlphabetGridView';
 import { LetterDetailView } from './components/LetterDetailView';
@@ -75,6 +76,10 @@ export const App: React.FC = () => {
   );
   const mainScrollRef = useRef<HTMLElement | null>(null);
   const viewScrollPositionsRef = useRef<Partial<Record<StudyViewMode, number>>>({});
+  const letterDetailReturnView = useRef<StudyViewMode>('grid');
+  const letterSwipeBack = useSwipeBack(
+    activeView === 'detail' ? () => handleSelectView(letterDetailReturnView.current) : undefined
+  );
 
   const [displayConfig, setDisplayConfig] = useState<CustomDisplayConfig>(() =>
     readStorage(STORAGE_KEYS.displayConfig, DEFAULT_DISPLAY_CONFIG)
@@ -273,6 +278,9 @@ export const App: React.FC = () => {
   }
 
   function handleSelectView(nextView: StudyViewMode) {
+    if (nextView === 'detail' && activeView !== 'detail') {
+      letterDetailReturnView.current = activeView;
+    }
     if (mainScrollRef.current) {
       viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
     }
@@ -280,12 +288,9 @@ export const App: React.FC = () => {
   }
 
   function handleOpenDetail(letterId: string) {
-    if (mainScrollRef.current) {
-      viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
-    }
     viewScrollPositionsRef.current.detail = 0;
     setSelectedLetterId(letterId);
-    setActiveView('detail');
+    handleSelectView('detail');
   }
 
   async function handleToggleAlwaysOnTop() {
@@ -373,7 +378,7 @@ export const App: React.FC = () => {
         onOpenBackup={() => setIsBackupOpen(true)}
       />
 
-      <main ref={mainScrollRef} className="main-scroll-area">
+      <main ref={mainScrollRef} className="main-scroll-area" {...letterSwipeBack}>
         {activeView === 'grid' && (
           <AlphabetGridView
             letters={HEBREW_LETTERS}

@@ -33,6 +33,7 @@ import { WORD_INFLECTIONS } from '../data/wordInflections';
 import { HEBREW_PHRASES, PHRASE_SCENARIO_META, PhraseScenario } from '../data/hebrewPhrases';
 import { playFeedbackTone, speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
+import { useSwipeBack } from '../utils/useSwipeBack';
 
 interface WordsStudyViewProps {
   words: HebrewWord[];
@@ -171,6 +172,9 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   const [mode, setMode] = useState<WordsMode>(initialSaved.mode);
   const [mobileSubView, setMobileSubView] = useState<'list' | 'detail'>(
     initialSaved.mobileSubView ?? 'list'
+  );
+  const wordSwipeBack = useSwipeBack(
+    mode === 'browse' && mobileSubView === 'detail' ? () => setMobileSubView('list') : undefined
   );
   const [selectedWordId, setSelectedWordId] = useState<string>(initialSaved.selectedWordId);
   const [cardsPage, setCardsPage] = useState(initialSaved.cardsPage);
@@ -534,6 +538,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   return (
     <div
       ref={mobileViewRef}
+      {...wordSwipeBack}
       className={`view-container words-view ${
         isMobileListScroll ? 'words-mobile-list-lock' : ''
       }`}
