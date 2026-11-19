@@ -52,10 +52,10 @@ struct AlphabetView: View {
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
-                .background(Color(uiColor: .systemGroupedBackground))
+                .background(progress.theme.canvas)
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
         .navigationTitle("希伯来字母")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: setting(\.searchQuery), placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索字母、名称或读音")
@@ -103,7 +103,7 @@ struct AlphabetView: View {
                         progress.setLetter(letter.id, mastery: mastery.next)
                     } label: {
                         Image(systemName: mastery.symbol)
-                            .foregroundStyle(mastery == .unlearned ? Color.secondary : Color.accentColor)
+                            .foregroundStyle(mastery == .unlearned ? Color.secondary : progress.theme.accent)
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
@@ -115,7 +115,7 @@ struct AlphabetView: View {
             .padding(.horizontal, 4)
         }
         .environment(\.layoutDirection, .leftToRight)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
+        .background(progress.theme.cardSurface, in: shape)
         .overlay { shape.strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1).allowsHitTesting(false) }
     }
 
@@ -309,6 +309,7 @@ struct LetterStudyView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .id(letter.id)
         .navigationTitle("\(letter.hebrew) · \(letter.nameChinese)")
         .navigationBarTitleDisplayMode(.inline)
@@ -362,7 +363,7 @@ struct LetterStudyView: View {
     private func letterForm(cursive: Bool) -> some View {
         VStack(spacing: 4) {
             HebrewText(text: letter.hebrew, cursive: cursive, size: 62, style: .largeTitle)
-                .foregroundStyle(cursive ? Color.primary : Color.accentColor)
+                .foregroundStyle(cursive ? Color.primary : progress.theme.accent)
             Text(cursive ? "手写体" : "印刷体").font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
@@ -408,6 +409,7 @@ struct WordExampleRow: View {
 }
 
 private struct LetterWritingView: View {
+    @Environment(StudyProgress.self) private var progress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -462,9 +464,10 @@ private struct LetterWritingView: View {
                     }
                 }
             }
+            .studyGroupedBackground()
             .contentMargins(.vertical, 8, for: .scrollContent)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
         .navigationTitle("笔顺与手写")
         .onChange(of: shape) { _, _ in
             animationStart = nil
@@ -557,6 +560,7 @@ private struct LetterWritingView: View {
 }
 
 private struct StrokeDiagram: View {
+    @Environment(StudyProgress.self) private var studyProgress
     let strokes: [StudyStrokes.Stroke]
     var selectedStroke: Int?
     var progress: Double?
@@ -564,6 +568,7 @@ private struct StrokeDiagram: View {
     var tracing = false
 
     var body: some View {
+        let accent = studyProgress.theme.accent
         Canvas { context, size in
             let scale = min(size.width, size.height) / 100
             let xOffset = (size.width - 100 * scale) / 2
@@ -582,18 +587,18 @@ private struct StrokeDiagram: View {
                 let whole = path(stroke.d).applying(transform)
                 let highlighted = selectedStroke == index
                 let dimmed = selectedStroke != nil || progress != nil
-                let baseColor: Color = tracing ? .accentColor.opacity(0.24) : (highlighted ? .accentColor : .primary.opacity(dimmed ? 0.27 : 1))
+                let baseColor = tracing ? accent.opacity(0.24) : (highlighted ? accent : Color.primary.opacity(dimmed ? 0.27 : 1))
                 context.stroke(whole, with: .color(baseColor), style: line)
                 if let progress {
                     let fraction = CGFloat(min(1, max(0, progress - Double(index))))
                     if fraction > 0 {
                         let visible = reduceMotion || fraction == 1 ? whole : whole.trimmedPath(from: 0, to: fraction)
-                        context.stroke(visible, with: .color(.accentColor), style: line)
+                        context.stroke(visible, with: .color(accent), style: line)
                     }
                 }
                 guard !tracing else { continue }
                 let start = CGPoint(x: stroke.startX, y: stroke.startY).applying(transform)
-                context.draw(Text("\(index + 1)").font(.caption2.bold()).foregroundColor(.accentColor), at: CGPoint(x: start.x, y: start.y - 10))
+                context.draw(Text("\(index + 1)").font(.caption2.bold()).foregroundColor(accent), at: CGPoint(x: start.x, y: start.y - 10))
             }
         }
         .accessibilityLabel("笔顺示意图")

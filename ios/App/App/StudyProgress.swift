@@ -31,11 +31,13 @@ enum Mastery: String, Codable, CaseIterable, Identifiable {
 }
 
 enum StudyTheme: String, Codable, CaseIterable, Identifiable {
-    case parchment, rose, violet, dark
+    case system, white, parchment, rose, violet, dark
 
     var id: Self { self }
     var title: String {
         switch self {
+        case .system: "跟随系统"
+        case .white: "白色"
         case .parchment: "羊皮纸"
         case .rose: "玫瑰"
         case .violet: "紫罗兰"
@@ -91,6 +93,12 @@ struct StudyStatistics: Codable {
     private static let storageKey = "alef.native.progress.v1"
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
+    // Keep the shared theme keys readable by Alef's web and desktop versions.
+    private static let appearanceKey = "alef.native.appearance.v1"
+    private enum AppearanceOverride: String, Codable {
+        case manual, system, white
+    }
+
     private let defaults: UserDefaults
     private var entries: [String: Data]
     private(set) var restorePoint: BackupUndo?
@@ -108,13 +116,29 @@ struct StudyStatistics: Codable {
     var statistics: StudyStatistics { read("alef.studyStats.v1", default: StudyStatistics()) }
     var needsLegacyMigration: Bool { !defaults.bool(forKey: Self.migrationKey) }
 
+    private var appearanceOverride: AppearanceOverride { read(Self.appearanceKey, default: .manual) }
+
     var theme: StudyTheme {
-        get { read("alef.theme.v1", default: .parchment) }
+        get {
+            switch appearanceOverride {
+            case .system: .system
+            case .white: .white
+            case .manual: read("alef.theme.v1", default: .system)
+            }
+        }
         set {
             update { values, encoder in
-                let theme = try encoder.encode(newValue)
-                values["alef.theme.v1"] = theme
-                if newValue != .dark { values["alef.dayTheme.v1"] = theme }
+                switch newValue {
+                case .system:
+                    values[Self.appearanceKey] = try encoder.encode(AppearanceOverride.system)
+                case .white:
+                    values[Self.appearanceKey] = try encoder.encode(AppearanceOverride.white)
+                case .parchment, .rose, .violet, .dark:
+                    values.removeValue(forKey: Self.appearanceKey)
+                    let theme = try encoder.encode(newValue)
+                    values["alef.theme.v1"] = theme
+                    if newValue != .dark { values["alef.dayTheme.v1"] = theme }
+                }
             }
         }
     }
@@ -235,6 +259,10 @@ struct StudyStatistics: Codable {
             try validateBackupEntry(key, data: data)
             restored[key] = data
         }
+        // A backup made before native appearance overrides can still restore its theme.
+        if restored["alef.theme.v1"] != nil, restored[Self.appearanceKey] == nil, appearanceOverride != .manual {
+            restored[Self.appearanceKey] = try JSONEncoder().encode(AppearanceOverride.manual)
+        }
         guard !restored.isEmpty else { throw BackupError.invalid }
         return restored
     }
@@ -300,7 +328,10 @@ struct StudyStatistics: Codable {
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }
         case "alef.theme.v1", "alef.dayTheme.v1":
-            _ = try decoder.decode(StudyTheme.self, from: data)
+            let theme = try decoder.decode(StudyTheme.self, from: data)
+            guard theme != .system, theme != .white else { throw BackupError.invalid }
+        case Self.appearanceKey:
+            _ = try decoder.decode(AppearanceOverride.self, from: data)
         case "alef.speechRate.v1":
             let rate = try decoder.decode(Double.self, from: data)
             guard (0.5...1.5).contains(rate) else { throw BackupError.invalid }

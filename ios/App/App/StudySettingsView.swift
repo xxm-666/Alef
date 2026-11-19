@@ -9,7 +9,7 @@ struct StudySettingsView: View {
     var body: some View {
         @Bindable var progress = progress
         Form {
-            Section("外观") {
+            Section {
                 Picker("主题", selection: $progress.theme) {
                     ForEach(StudyTheme.allCases) { theme in Text(theme.title).tag(theme) }
                 }
@@ -18,6 +18,12 @@ struct StudySettingsView: View {
                     StudyLetterDisplayView(content: content)
                 } label: {
                     Label("字母表显示", systemImage: "rectangle.3.group")
+                }
+            } header: {
+                Text("外观")
+            } footer: {
+                if progress.theme == .system {
+                    Text("随 iOS 外观自动切换，浅色时使用白色主题，深色时使用深色主题。")
                 }
             }
             Section("发音") {
@@ -43,6 +49,7 @@ struct StudySettingsView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -65,6 +72,7 @@ private struct StudyStatisticsView: View {
                 LabeledContent("累计练习", value: String(progress.statistics.totalReviews))
             }
         }
+        .studyGroupedBackground()
         .navigationTitle("学习统计")
     }
 }
@@ -132,7 +140,7 @@ private struct StudyLetterDisplayView: View {
                         .padding(.horizontal, 4)
                     }
                     .frame(idealWidth: 180, maxWidth: 300)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                    .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 18))
                     .overlay {
                         RoundedRectangle(cornerRadius: 18)
                             .strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1)
@@ -152,6 +160,7 @@ private struct StudyLetterDisplayView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle("字母表显示")
     }
 
@@ -226,6 +235,7 @@ private struct StudyBackupView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle("备份与恢复")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json], onCompletion: prepareImport)
         .fileExporter(isPresented: $exporting, document: backup, contentType: .json, defaultFilename: "alef-backup") { outcome in
@@ -242,6 +252,7 @@ private struct StudyBackupView: View {
                     Text("导入后可以从备份页撤销本次恢复。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                .studyGroupedBackground()
                 .navigationTitle("恢复预览")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -321,6 +332,7 @@ private struct StudyBackupView: View {
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.studyStats.v1": "学习统计"
         case "alef.theme.v1": "主题"
+        case "alef.native.appearance.v1": "iOS 外观模式"
         case "alef.dayTheme.v1": "日间主题"
         case "alef.order.v1": "阅读方向"
         case "alef.speechRate.v1": "朗读速度"

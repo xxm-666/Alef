@@ -60,7 +60,7 @@ struct WordsView: View {
             default: library
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
         .navigationTitle("词库")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -204,6 +204,7 @@ struct WordsView: View {
                 .contextMenu { wordActions(word) }
             }
         }
+        .studyGroupedBackground()
         .contentMargins(.vertical, 8, for: .scrollContent)
         .searchable(text: setting(\.searchQuery), prompt: "搜索希伯来语、音译或中文")
     }
@@ -227,7 +228,7 @@ struct WordsView: View {
                         }
                     }
                     .padding(12)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                    .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 16))
                 }
             }
             .padding()
@@ -296,6 +297,7 @@ struct WordsView: View {
                 }
             }
         }
+        .studyGroupedBackground()
     }
 
     private func phraseRow(_ phrase: StudyPhrase) -> some View {
@@ -340,6 +342,7 @@ struct WordsView: View {
                 }
             }
         }
+        .studyGroupedBackground()
     }
 }
 
@@ -417,6 +420,7 @@ private struct WordDetailView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle(word.hebrewUnpointed)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -499,6 +503,7 @@ private struct StudyReadingView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle(reading.title)
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: showNiqqud) { _, _ in selectedGloss = nil }
@@ -526,7 +531,7 @@ private struct StudyReadingView: View {
                     .font(.subheadline)
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .background(progress.theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
             PronunciationButton(hebrew: sentence.hebrew, fallback: sentence.transliteration,
                                 title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
@@ -541,7 +546,7 @@ private struct StudyReadingView: View {
             var term = AttributedString(String(text[gloss.range]))
             term.link = URL(string: "alef-gloss://term/\(index)")
             term.underlineStyle = .single
-            if index == selectedTerm { term.backgroundColor = Color.accentColor.opacity(0.16) }
+            if index == selectedTerm { term.backgroundColor = progress.theme.accent.opacity(0.16) }
             contents += term
             next = gloss.range.upperBound
         }
@@ -609,6 +614,7 @@ private struct WordQuizView: View {
                                                description: reviewing && answered > 0 ? Text("答对 \(correct) / \(answered) 个单词") : nil)
                     }
                 }
+                .studyGroupedBackground()
                 .contentMargins(.vertical, 8, for: .scrollContent)
                 .onChange(of: target?.id) { _, _ in scroll.scrollTo("word-question", anchor: .top) }
                 .onChange(of: result) { _, value in

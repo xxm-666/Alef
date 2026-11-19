@@ -41,7 +41,7 @@ struct StudyFlashcardsView: View {
                 deckView
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
         .navigationTitle("闪卡")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -185,7 +185,7 @@ struct StudyFlashcardsView: View {
             PronunciationButton(hebrew: current.nameHebrew, fallback: current.nameEnglish, minimumHitSize: 44)
                 .padding(.vertical, 4)
         }
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
+        .background(progress.theme.cardSurface, in: shape)
         .overlay { shape.strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1).allowsHitTesting(false) }
     }
 
@@ -265,7 +265,7 @@ struct StudyFlashcardsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var preferences: FlashcardPreferences { progress.read("alef.flashcardState.v1", default: FlashcardPreferences()) }
@@ -403,6 +403,7 @@ private struct FlashQuizView: View {
                         ContentUnavailableView("没有可用题目", systemImage: "rectangle.on.rectangle")
                     }
                 }
+                .studyGroupedBackground()
                 .contentMargins(.vertical, 8, for: .scrollContent)
                 .onChange(of: question?.letter.id) { _, _ in scroll.scrollTo("flash-question", anchor: .top) }
                 .onChange(of: answer) { _, value in

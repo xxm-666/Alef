@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct StudyRootView: View {
     @Environment(StudyProgress.self) private var progress
@@ -24,7 +25,7 @@ struct StudyRootView: View {
                 .tag("settings")
         }
         .tint(progress.theme.accent)
-        .preferredColorScheme(progress.theme == .dark ? .dark : .light)
+        .preferredColorScheme(progress.theme.preferredScheme)
         .onChange(of: selectedTab) { _, _ in audio.stop() }
         .alert("发音", isPresented: Binding(get: { audio.playbackError != nil }, set: { visible in
             if !visible { audio.dismissError() }
@@ -41,14 +42,79 @@ struct StudyRootView: View {
     }
 }
 
-private extension StudyTheme {
+extension StudyTheme {
+    var preferredScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .dark: .dark
+        case .white, .parchment, .rose, .violet: .light
+        }
+    }
+
     var accent: Color {
         switch self {
+        case .system:
+            Color(uiColor: UIColor { traits in
+                let color: UIColor = traits.userInterfaceStyle == .dark ? .systemCyan : .systemBlue
+                return color.resolvedColor(with: traits)
+            })
+        case .white: Color(uiColor: .systemBlue)
         case .parchment: .blue
         case .rose: Color(red: 0.65, green: 0.12, blue: 0.28)
         case .violet: Color(red: 0.40, green: 0.22, blue: 0.66)
-        case .dark: .cyan
+        case .dark: Color(uiColor: .systemCyan)
         }
+    }
+
+    var canvas: Color {
+        Color(uiColor: usesWhitePalette ? Self.whiteCanvas : .systemGroupedBackground)
+    }
+
+    var cardSurface: Color {
+        guard usesWhitePalette else { return Color(uiColor: .secondarySystemGroupedBackground) }
+        return Color(uiColor: Self.whiteCardSurface)
+    }
+
+    fileprivate var usesWhitePalette: Bool { self == .system || self == .white }
+
+    private static let whiteCanvas = UIColor { traits in
+        let color: UIColor = traits.userInterfaceStyle == .dark ? .systemGroupedBackground : .systemBackground
+        return color.resolvedColor(with: traits)
+    }
+
+    private static let whiteCardSurface = UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor.secondarySystemGroupedBackground.resolvedColor(with: traits)
+        }
+        return UIColor(red: 0.965, green: 0.969, blue: 0.977, alpha: 1)
+    }
+
+    fileprivate var groupedCanvas: Color {
+        guard usesWhitePalette else { return Color(uiColor: .systemGroupedBackground) }
+        return Color(uiColor: Self.whiteGroupedCanvas)
+    }
+
+    private static let whiteGroupedCanvas = UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor.systemGroupedBackground.resolvedColor(with: traits)
+        }
+        return UIColor(white: 0.977, alpha: 1)
+    }
+}
+
+private struct StudyGroupedBackground: ViewModifier {
+    @Environment(StudyProgress.self) private var progress
+
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(progress.theme.usesWhitePalette ? .hidden : .automatic)
+            .background(progress.theme.groupedCanvas)
+    }
+}
+
+extension View {
+    func studyGroupedBackground() -> some View {
+        modifier(StudyGroupedBackground())
     }
 }
 
@@ -108,6 +174,7 @@ struct MasteryPicker: View {
 }
 
 struct StudyActionBar<Content: View>: View {
+    @Environment(StudyProgress.self) private var progress
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -119,7 +186,7 @@ struct StudyActionBar<Content: View>: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
     }
 }
 

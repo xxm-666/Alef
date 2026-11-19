@@ -34,6 +34,7 @@ struct StudyRulesView: View {
                 }
             }
         }
+        .studyGroupedBackground()
         .navigationTitle("拼读与规则")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -53,6 +54,7 @@ struct StudyRulesView: View {
                     Text(item.note).foregroundStyle(.secondary)
                 }
             }
+            .studyGroupedBackground()
         case "confusable":
             List(content.confusables) { group in
                 let letters = content.letters.filter { group.letterIds.contains($0.id) }
@@ -73,6 +75,7 @@ struct StudyRulesView: View {
                     Text(group.tip).foregroundStyle(.secondary)
                 }
             }
+            .studyGroupedBackground()
         case "sofit":
             List {
                 Section("词尾规则") {
@@ -93,6 +96,7 @@ struct StudyRulesView: View {
                     }
                 }
             }
+            .studyGroupedBackground()
         case "begadkefat":
             List {
                 Section("带点与不带点") {
@@ -112,6 +116,7 @@ struct StudyRulesView: View {
                     }
                 }
             }
+            .studyGroupedBackground()
         default:
             List {
                 Section("发音规则") {
@@ -131,6 +136,7 @@ struct StudyRulesView: View {
                     }
                 }
             }
+            .studyGroupedBackground()
         }
     }
 
@@ -237,6 +243,7 @@ private struct StudySyllablesView: View {
                         }
                     }
                 }
+                .studyGroupedBackground()
                 .contentMargins(.vertical, 8, for: .scrollContent)
                 .onChange(of: answer) { _, newAnswer in
                     if quizzing {
@@ -246,7 +253,7 @@ private struct StudySyllablesView: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(progress.theme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if quizzing && answer != nil {
                 StudyActionBar {
