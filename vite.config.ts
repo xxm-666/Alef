@@ -13,7 +13,7 @@ function collectDistFiles(dir: string, baseDir = dir): string[] {
       files.push(...collectDistFiles(fullPath, baseDir));
     } else if (entry.isFile()) {
       const rel = path.relative(baseDir, fullPath).replace(/\\/g, '/');
-      if (rel !== 'sw.js' && !rel.endsWith('.map')) {
+      if (rel !== 'sw.js' && !rel.endsWith('.map') && !rel.startsWith('audio/')) {
         files.push(`./${rel}`);
       }
     }
