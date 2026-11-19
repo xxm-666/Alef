@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Check, Copy, Download, Upload, X } from 'lucide-react';
+import { applyBackup, BackupPreview, parseBackup, readRestorePoint } from '../utils/backup';
 
 interface BackupModalProps {
   isOpen: boolean;
@@ -21,8 +22,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const [pasteText, setPasteText] = useState('');
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [preview, setPreview] = useState<BackupPreview | null>(null);
+  const readRequest = useRef(0);
 
   if (!isOpen) return null;
+  const restorePoint = readRestorePoint();
 
   function buildBackupPayload(): string {
     const data: Record<string, unknown> = {};
@@ -71,39 +75,46 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     }
   }
 
-  function applyBackupJson(raw: string) {
+  function prepareBackup(raw: string) {
+    setStatusMsg(null);
+    setPreview(null);
     try {
-      const parsed = JSON.parse(raw) as { app?: string; data?: Record<string, unknown> };
-      if (!parsed || typeof parsed !== 'object' || !parsed.data || typeof parsed.data !== 'object') {
-        setStatusMsg('格式无效：请确保导入的是 Alef 导出的 JSON 备份。');
-        return;
-      }
-      let restoredCount = 0;
-      for (const [key, val] of Object.entries(parsed.data)) {
-        if (key.startsWith(BACKUP_PREFIX)) {
-          localStorage.setItem(key, JSON.stringify(val));
-          restoredCount += 1;
-        }
-      }
-      setStatusMsg(`成功恢复 ${restoredCount} 项配置与进度，正在刷新页面...`);
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 800);
-    } catch {
-      setStatusMsg('JSON 解析失败，请检查内容是否完整。');
+      setPreview(parseBackup(raw));
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : '无法读取备份。');
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        applyBackupJson(reader.result);
-      }
-    };
-    reader.readAsText(file);
+    e.target.value = '';
+    const request = ++readRequest.current;
+    setPreview(null);
+    setStatusMsg(null);
+    try {
+      const raw = await file.text();
+      if (request === readRequest.current) prepareBackup(raw);
+    } catch {
+      if (request === readRequest.current) setStatusMsg('无法读取此备份文件。');
+    }
+  }
+
+  function confirmRestore() {
+    if (!preview || preview.labels.length === 0) return;
+    try {
+      applyBackup(preview);
+      window.location.reload();
+    } catch {
+      setStatusMsg('无法写入备份，请检查设备存储空间后重试。');
+    }
+  }
+
+  function close() {
+    readRequest.current++;
+    setPreview(null);
+    setStatusMsg(null);
+    onClose();
   }
 
   return (
@@ -116,7 +127,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               已掌握字母 {lettersMastered} · 已掌握单词 {wordsMastered} · 复习计划 {srsCount} 项
             </p>
           </div>
-          <button type="button" className="win-btn" onClick={onClose} title="关闭">
+          <button type="button" className="win-btn" onClick={close} title="关闭">
             <X size={16} />
           </button>
         </div>
@@ -146,21 +157,59 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             className="backup-textarea"
             rows={4}
             value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
+            onChange={(e) => {
+              readRequest.current++;
+              setPreview(null);
+              setPasteText(e.target.value);
+            }}
             placeholder="或直接粘贴从另一台设备复制的 JSON 备份文本..."
           />
           {pasteText.trim() && (
             <button
               type="button"
               className="btn-primary btn-sm"
-              onClick={() => applyBackupJson(pasteText)}
+              onClick={() => {
+                readRequest.current++;
+                prepareBackup(pasteText);
+              }}
             >
-              确认恢复粘贴的备份
+              预览粘贴的备份
             </button>
           )}
         </div>
 
-        {statusMsg && <p className="backup-status-msg">{statusMsg}</p>}
+        {restorePoint && restorePoint.labels.length > 0 && (
+          <div className="modal-actions-row">
+            <button type="button" className="btn-secondary btn-sm" onClick={() => {
+              readRequest.current++;
+              setStatusMsg(null);
+              setPreview(restorePoint);
+            }}>
+              预览上次恢复前的状态
+            </button>
+          </div>
+        )}
+
+        {preview && (
+          <section className="modal-section" aria-label="恢复预览">
+            <h4>{preview.restorePoint ? '撤销上次恢复' : '恢复预览'}</h4>
+            <p className="muted-caption">
+              {preview.labels.length
+                ? `将更改 ${preview.labels.length} 项：${preview.labels.join('、')}。`
+                : '备份内容与当前数据相同。'}
+            </p>
+            {preview.ignored > 0 && <p className="muted-caption">已忽略 {preview.ignored} 项无法识别的数据。</p>}
+            {preview.labels.length > 0 && <p className="muted-caption">确认后会在本机保存当前状态，便于撤销。</p>}
+            <div className="modal-actions-row">
+              <button type="button" className="btn-secondary btn-sm" onClick={() => setPreview(null)}>取消预览</button>
+              <button type="button" className="btn-primary btn-sm" disabled={!preview.labels.length} onClick={confirmRestore}>
+                {preview.restorePoint ? '确认撤销' : '确认恢复'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {statusMsg && <p className="backup-status-msg" role="status">{statusMsg}</p>}
       </div>
     </div>
   );

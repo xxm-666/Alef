@@ -21,6 +21,7 @@ import {
   ThemeMode,
 } from '../types/hebrew';
 import { speakHebrew } from '../utils/audio';
+import { OfflineAudioSettings } from './OfflineAudioSettings';
 
 const THEME_CHOICES: { id: ThemeMode; label: string }[] = [
   { id: 'parchment', label: '羊皮纸日间' },
@@ -244,6 +245,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
         </section>
+
+        {!windowState.isElectron && <OfflineAudioSettings />}
 
         {/* Desktop Window Controls */}
         <section className="settings-card desktop-only-control">

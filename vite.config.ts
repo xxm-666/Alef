@@ -60,6 +60,33 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function audioRangeResponse(response, range) {
+  const match = /^bytes=([0-9]*)-([0-9]*)$/i.exec(range);
+  if (!match || (!match[1] && !match[2]) || response.status !== 200) return response;
+
+  const body = await response.arrayBuffer();
+  const size = body.byteLength;
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+
+  if (start >= size || end < start) {
+    return new Response(null, {
+      status: 416,
+      headers: { 'Content-Range': 'bytes */' + size },
+    });
+  }
+
+  return new Response(body.slice(start, end + 1), {
+    status: 206,
+    headers: {
+      'Content-Type': response.headers.get('Content-Type') || 'audio/mpeg',
+      'Content-Length': String(end - start + 1),
+      'Content-Range': 'bytes ' + start + '-' + end + '/' + size,
+      'Accept-Ranges': 'bytes',
+    },
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -82,11 +109,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const audioRange = url.pathname.endsWith('.mp3') && request.headers.get('Range');
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
+      if (cached) return audioRange ? audioRangeResponse(cached, audioRange) : cached;
       return fetch(request).then((response) => {
-        if (response && response.ok && response.type === 'basic') {
+        if (response && response.status === 200 && response.type === 'basic' && request.cache !== 'no-store') {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }

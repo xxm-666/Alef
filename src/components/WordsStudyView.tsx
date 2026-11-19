@@ -208,6 +208,8 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   );
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [quizScore, setQuizScore] = useState({ correct: 0, total: 0 });
+  const [review, setReview] = useState<{ queue: HebrewWord[]; index: number; correct: number } | null>(null);
+  const reviewComplete = review !== null && review.index === review.queue.length;
   const [spellingInput, setSpellingInput] = useState('');
   const [spellingSubmitted, setSpellingSubmitted] = useState(false);
 
@@ -215,13 +217,14 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   const [phraseScenario, setPhraseScenario] = useState<'all' | PhraseScenario>('all');
   const [hidePhraseZh, setHidePhraseZh] = useState(false);
 
-  const dueSrsCount = useMemo(() => {
+  function getDueWords() {
     const now = Date.now();
-    return words.filter((w) => {
-      const rec = wordSrsMap[w.id];
-      return Boolean(rec && rec.nextReviewAt <= now);
-    }).length;
-  }, [words, wordSrsMap]);
+    return words
+      .filter((word) => wordSrsMap[word.id]?.nextReviewAt <= now)
+      .sort((a, b) => wordSrsMap[a.id].nextReviewAt - wordSrsMap[b.id].nextReviewAt);
+  }
+
+  const dueSrsCount = getDueWords().length;
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -484,14 +487,50 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
         : pool;
     const safePool = effectivePool.length > 0 ? effectivePool : words;
     const next = safePool[Math.floor(Math.random() * safePool.length)];
-    setQuizTargetId(next.id);
-    setQuizOptions(pickQuizOptions(next, words));
-    setSelectedOptionId(null);
-    setSpellingInput('');
-    setSpellingSubmitted(false);
+    showQuizWord(next);
     if (targetKind === 'listening') {
       speakHebrew(next.hebrew, next.transliteration, speechRate);
     }
+  }
+
+  function showQuizWord(word: HebrewWord, reviewing = false) {
+    const optionsPool = reviewing
+      ? [...new Map(words.filter((item) => item.meaningZh !== word.meaningZh).map((item) => [item.meaningZh, item])).values()]
+      : words;
+    setQuizTargetId(word.id);
+    setQuizOptions(pickQuizOptions(word, optionsPool));
+    setSelectedOptionId(null);
+    setSpellingInput('');
+    setSpellingSubmitted(false);
+  }
+
+  function startReview() {
+    const queue = getDueWords();
+    if (!queue.length) return;
+    setReview({ queue, index: 0, correct: 0 });
+    setQuizKind('meaning');
+    selectQuizMode();
+    showQuizWord(queue[0], true);
+  }
+
+  function selectQuizMode() {
+    setMode('quiz');
+    mobileViewRef.current?.scrollTo({ top: 0 });
+    mobileViewRef.current?.closest('main')?.scrollTo({ top: 0 });
+  }
+
+  function nextReviewWord() {
+    if (!review || !selectedOptionId || reviewComplete) return;
+    const index = review.index + 1;
+    setReview({ ...review, index });
+    const next = review.queue[index];
+    if (next) showQuizWord(next, true);
+  }
+
+  function returnToWordList() {
+    setReview(null);
+    setMode('browse');
+    setMobileSubView('list');
   }
 
   function handleCheckSpelling() {
@@ -509,13 +548,18 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   function handleAnswerQuiz(optionId: string) {
     if (selectedOptionId) return;
     setSelectedOptionId(optionId);
-    onRecordActivity();
     const isCorrect = optionId === quizTarget.id;
+    if (review) {
+      onSetWordMastery(quizTarget.id, isCorrect ? 'mastered' : 'learning');
+      if (isCorrect) setReview({ ...review, correct: review.correct + 1 });
+    } else {
+      onRecordActivity();
+      setQuizScore((prev) => ({
+        correct: prev.correct + (isCorrect ? 1 : 0),
+        total: prev.total + 1,
+      }));
+    }
     playFeedbackTone(isCorrect ? 'correct' : 'wrong');
-    setQuizScore((prev) => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      total: prev.total + 1,
-    }));
   }
 
   function handleJumpToWord(wordId: string) {
@@ -558,7 +602,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             type="button"
             aria-pressed={mode === 'browse'}
             className={mode === 'browse' ? 'active' : ''}
-            onClick={() => setMode('browse')}
+            onClick={review ? returnToWordList : () => setMode('browse')}
           >
             <BookOpen size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
             词表
@@ -568,7 +612,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             type="button"
             aria-pressed={mode === 'cards'}
             className={mode === 'cards' ? 'active' : ''}
-            onClick={() => setMode('cards')}
+            onClick={() => {
+              setReview(null);
+              setMode('cards');
+            }}
           >
             <LayoutGrid size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
             卡片墙
@@ -577,7 +624,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             type="button"
             aria-pressed={mode === 'phrases'}
             className={mode === 'phrases' ? 'active' : ''}
-            onClick={() => setMode('phrases')}
+            onClick={() => {
+              setReview(null);
+              setMode('phrases');
+            }}
           >
             <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
             短句
@@ -587,7 +637,8 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             aria-pressed={mode === 'quiz'}
             className={mode === 'quiz' ? 'active' : ''}
             onClick={() => {
-              setMode('quiz');
+              setReview(null);
+              selectQuizMode();
               loadNextQuiz();
             }}
           >
@@ -595,140 +646,149 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             自测
           </button>
         </div>
-        <div className="toolbar-top-row">
-          {mode !== 'phrases' && (
-            <div className="search-box">
-              <Search size={15} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="搜索希伯来语、中文释义、转写或词根"
-                placeholder={`搜索 ${words.length} 个词`}
-              />
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn-secondary btn-sm word-options-toggle"
-            aria-expanded={showWordOptions}
-            aria-controls="word-options"
-            onClick={() => setShowWordOptions((open) => !open)}
-          >
-            词汇选项
-            {(mode === 'browse' || mode === 'cards') && initialLetter !== 'all' && (
-              <span>· {initialLetter}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Category filter pills (hidden in phrases mode) */}
-        {mode !== 'phrases' && (
-          <div className="filter-pills-row">
-            <button
-              type="button"
-              className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('all')}
-            >
-              全部 ({words.length})
-            </button>
-            <button
-              type="button"
-              className={`filter-pill ${activeFilter === 'favorites' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('favorites')}
-            >
-              ★ 重点收藏 ({favoriteWordIds.length})
-            </button>
-            {(Object.keys(WORD_CATEGORY_META) as WordCategory[]).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`filter-pill ${activeFilter === cat ? 'active' : ''}`}
-                onClick={() => setActiveFilter(cat)}
-              >
-                {WORD_CATEGORY_META[cat].label} ({categoryCounts[cat] ?? 0})
-              </button>
-            ))}
-            <button
-              type="button"
-              className={`filter-pill ${activeFilter === 'needs_review' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('needs_review')}
-            >
-              待掌握
-            </button>
-            <button
-              type="button"
-              className={`filter-pill ${activeFilter === 'due_srs' ? 'active' : ''}`}
-              onClick={() => setActiveFilter('due_srs')}
-            >
-              今日待复习 ({dueSrsCount})
+        {mode === 'browse' && dueSrsCount > 0 && (
+          <div className="word-review-entry">
+            <button type="button" className="btn-primary btn-sm" onClick={startReview}>
+              开始今日复习 · {dueSrsCount} 词
             </button>
           </div>
         )}
-
-        <div id="word-options" className={`word-options ${showWordOptions ? 'word-options-open' : ''}`}>
-          <div className="toolbar-right-controls">
+        <div className="word-quiz-filters" hidden={Boolean(review)}>
+          <div className="toolbar-top-row">
             {mode !== 'phrases' && (
-              <button
-                type="button"
-                className={`btn-secondary btn-sm ${sortOrder === 'alpha' ? 'active-btn' : ''}`}
-                onClick={() => setSortOrder((s) => (s === 'default' ? 'alpha' : 'default'))}
-                title="切换排序方式"
-              >
-                <ArrowUpDown size={14} />
-                <span>{sortOrder === 'alpha' ? '按 א-ת 排序' : '按主题排序'}</span>
-              </button>
+              <div className="search-box">
+                <Search size={15} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="搜索希伯来语、中文释义、转写或词根"
+                  placeholder={`搜索 ${words.length} 个词`}
+                />
+              </div>
             )}
-
             <button
               type="button"
-              className={`btn-secondary btn-sm ${showNiqqud ? 'active-btn' : ''}`}
-              onClick={() => setShowNiqqud((v) => !v)}
-              title="切换是否显示元音符号 (Niqqud)"
+              className="btn-secondary btn-sm word-options-toggle"
+              aria-expanded={showWordOptions}
+              aria-controls="word-options"
+              onClick={() => setShowWordOptions((open) => !open)}
             >
-              {showNiqqud ? <Eye size={14} /> : <EyeOff size={14} />}
-              <span>{showNiqqud ? '元音点' : '无点拼写'}</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-secondary btn-sm ${showCursive ? 'active-btn' : ''}`}
-              onClick={() => setShowCursive((v) => !v)}
-            >
-              <Sparkles size={14} />
-              <span>手写体</span>
+              词汇选项
+              {(mode === 'browse' || mode === 'cards') && initialLetter !== 'all' && (
+                <span>· {initialLetter}</span>
+              )}
             </button>
           </div>
-          {/* Alef-Bet Initial Letter Jump Strip */}
-          {(mode === 'browse' || mode === 'cards') && (
-            <div className="alefbet-jump-row" aria-label="按希伯来首字母筛选">
-              <span className="muted-caption" style={{ flexShrink: 0 }}>
-                首字母索引：
-              </span>
+
+          {/* Category filter pills (hidden in phrases mode) */}
+          {mode !== 'phrases' && (
+            <div className="filter-pills-row">
               <button
                 type="button"
-                className={`initial-chip ${initialLetter === 'all' ? 'active' : ''}`}
-                onClick={() => setInitialLetter('all')}
+                className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('all')}
               >
-                全部
+                全部 ({words.length})
               </button>
-              <div className="initial-chips-scroll" dir="rtl">
-                {letters.map((l) => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    className={`initial-chip hebrew-init ${initialLetter === l.hebrew ? 'active' : ''}`}
-                    onClick={() =>
-                      setInitialLetter((prev) => (prev === l.hebrew ? 'all' : l.hebrew))
-                    }
-                    title={`筛选以 ${l.hebrew} (${l.nameEnglish}) 开头的单词`}
-                  >
-                    {l.hebrew}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                className={`filter-pill ${activeFilter === 'favorites' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('favorites')}
+              >
+                ★ 重点收藏 ({favoriteWordIds.length})
+              </button>
+              {(Object.keys(WORD_CATEGORY_META) as WordCategory[]).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`filter-pill ${activeFilter === cat ? 'active' : ''}`}
+                  onClick={() => setActiveFilter(cat)}
+                >
+                  {WORD_CATEGORY_META[cat].label} ({categoryCounts[cat] ?? 0})
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`filter-pill ${activeFilter === 'needs_review' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('needs_review')}
+              >
+                待掌握
+              </button>
+              <button
+                type="button"
+                className={`filter-pill ${activeFilter === 'due_srs' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('due_srs')}
+              >
+                今日待复习 ({dueSrsCount})
+              </button>
             </div>
           )}
+
+          <div id="word-options" className={`word-options ${showWordOptions ? 'word-options-open' : ''}`}>
+            <div className="toolbar-right-controls">
+              {mode !== 'phrases' && (
+                <button
+                  type="button"
+                  className={`btn-secondary btn-sm ${sortOrder === 'alpha' ? 'active-btn' : ''}`}
+                  onClick={() => setSortOrder((s) => (s === 'default' ? 'alpha' : 'default'))}
+                  title="切换排序方式"
+                >
+                  <ArrowUpDown size={14} />
+                  <span>{sortOrder === 'alpha' ? '按 א-ת 排序' : '按主题排序'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={`btn-secondary btn-sm ${showNiqqud ? 'active-btn' : ''}`}
+                onClick={() => setShowNiqqud((v) => !v)}
+                title="切换是否显示元音符号 (Niqqud)"
+              >
+                {showNiqqud ? <Eye size={14} /> : <EyeOff size={14} />}
+                <span>{showNiqqud ? '元音点' : '无点拼写'}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`btn-secondary btn-sm ${showCursive ? 'active-btn' : ''}`}
+                onClick={() => setShowCursive((v) => !v)}
+              >
+                <Sparkles size={14} />
+                <span>手写体</span>
+              </button>
+            </div>
+            {/* Alef-Bet Initial Letter Jump Strip */}
+            {(mode === 'browse' || mode === 'cards') && (
+              <div className="alefbet-jump-row" aria-label="按希伯来首字母筛选">
+                <span className="muted-caption" style={{ flexShrink: 0 }}>
+                  首字母索引：
+                </span>
+                <button
+                  type="button"
+                  className={`initial-chip ${initialLetter === 'all' ? 'active' : ''}`}
+                  onClick={() => setInitialLetter('all')}
+                >
+                  全部
+                </button>
+                <div className="initial-chips-scroll" dir="rtl">
+                  {letters.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className={`initial-chip hebrew-init ${initialLetter === l.hebrew ? 'active' : ''}`}
+                      onClick={() =>
+                        setInitialLetter((prev) => (prev === l.hebrew ? 'all' : l.hebrew))
+                      }
+                      title={`筛选以 ${l.hebrew} (${l.nameEnglish}) 开头的单词`}
+                    >
+                      {l.hebrew}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1414,50 +1474,67 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             ))}
           </div>
         </div>
+      ) : reviewComplete ? (
+        <div className="quiz-stage">
+          <section className="quiz-card" aria-labelledby="word-review-result">
+            <h3 id="word-review-result">今日复习完成</h3>
+            <p>已复习 {review.queue.length} 词，答对 {review.correct} 词，需巩固 {review.queue.length - review.correct} 词。</p>
+            <button type="button" className="btn-primary" onClick={returnToWordList}>返回词表</button>
+          </section>
+        </div>
       ) : (
         /* Word Quiz Mode */
         <div className="quiz-stage">
           <div className="quiz-card">
             <div className="quiz-prompt-header">
-              <div className="segmented-control">
-                <button
-                  type="button"
-                  className={quizKind === 'meaning' ? 'active' : ''}
-                  onClick={() => {
-                    setQuizKind('meaning');
-                    loadNextQuiz(undefined, 'meaning');
-                  }}
-                >
-                  看词选义
-                </button>
-                <button
-                  type="button"
-                  className={quizKind === 'listening' ? 'active' : ''}
-                  onClick={() => {
-                    setQuizKind('listening');
-                    loadNextQuiz(undefined, 'listening');
-                  }}
-                >
-                  听音辨词
-                </button>
-                <button
-                  type="button"
-                  className={quizKind === 'spelling' ? 'active' : ''}
-                  onClick={() => {
-                    setQuizKind('spelling');
-                    loadNextQuiz(undefined, 'spelling');
-                  }}
-                >
-                  拼写练习
-                </button>
-              </div>
+              {review ? (
+                <>
+                  <h3>今日复习</h3>
+                  <span className="quiz-score-badge">第 {review.index + 1} / {review.queue.length} 词</span>
+                </>
+              ) : (
+                <>
+                  <div className="segmented-control">
+                    <button
+                      type="button"
+                      className={quizKind === 'meaning' ? 'active' : ''}
+                      onClick={() => {
+                        setQuizKind('meaning');
+                        loadNextQuiz(undefined, 'meaning');
+                      }}
+                    >
+                      看词选义
+                    </button>
+                    <button
+                      type="button"
+                      className={quizKind === 'listening' ? 'active' : ''}
+                      onClick={() => {
+                        setQuizKind('listening');
+                        loadNextQuiz(undefined, 'listening');
+                      }}
+                    >
+                      听音辨词
+                    </button>
+                    <button
+                      type="button"
+                      className={quizKind === 'spelling' ? 'active' : ''}
+                      onClick={() => {
+                        setQuizKind('spelling');
+                        loadNextQuiz(undefined, 'spelling');
+                      }}
+                    >
+                      拼写练习
+                    </button>
+                  </div>
 
-              <div className="quiz-score-badge">
-                <Layers size={14} />
-                <span>
-                  得分 {quizScore.correct} / {quizScore.total}
-                </span>
-              </div>
+                  <div className="quiz-score-badge">
+                    <Layers size={14} />
+                    <span>
+                      得分 {quizScore.correct} / {quizScore.total}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             {quizKind === 'spelling' ? (
@@ -1636,24 +1713,26 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() =>
-                          onSetWordMastery(
-                            quizTarget.id,
-                            selectedOptionId === quizTarget.id ? 'mastered' : 'learning'
-                          )
-                        }
-                      >
-                        {selectedOptionId === quizTarget.id ? '标为已掌握' : '加入学习中'}
-                      </button>
+                      {!review && (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() =>
+                            onSetWordMastery(
+                              quizTarget.id,
+                              selectedOptionId === quizTarget.id ? 'mastered' : 'learning'
+                            )
+                          }
+                        >
+                          {selectedOptionId === quizTarget.id ? '标为已掌握' : '加入学习中'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn-primary btn-sm"
-                        onClick={() => loadNextQuiz()}
+                        onClick={review ? nextReviewWord : () => loadNextQuiz()}
                       >
-                        下一题
+                        {review && review.index === review.queue.length - 1 ? '查看结果' : '下一题'}
                       </button>
                     </div>
                   </div>
