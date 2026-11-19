@@ -47,6 +47,7 @@ jobs:
           test -s "$app/StudyAssets/content.json"
           test -s "$app/StudyAssets/GveretLevin-Regular.ttf"
           test -s "$app/StudyAssets/audio/he_2e0fc6efece8.mp3"
+          test -s "$app/StudyAssets/audio/correct.wav"
           test -x "$app/PlugIns/DailyLetterWidget.appex/DailyLetterWidget"
           mkdir Payload
           ditto "$app" Payload/App.app

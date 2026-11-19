@@ -22,15 +22,7 @@ struct AlphabetView: View {
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)], spacing: 12) {
                     ForEach(letters) { letter in
-                        NavigationLink {
-                            LetterStudyView(letter: letter, content: content)
-                        } label: {
-                            card(letter)
-                                .frame(maxWidth: .infinity, minHeight: 106)
-                                .padding(8)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("\(letter.nameChinese) \(letter.nameEnglish)")
+                        letterTile(letter)
                     }
                 }
                 .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
@@ -48,6 +40,34 @@ struct AlphabetView: View {
                 Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
             }
         }
+    }
+
+    private func letterTile(_ letter: StudyLetter) -> some View {
+        let mastery = progress.letterMastery[letter.id] ?? .unlearned
+        return VStack(spacing: 6) {
+            NavigationLink {
+                LetterStudyView(letter: letter, content: content)
+            } label: {
+                card(letter).frame(maxWidth: .infinity, minHeight: 106)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("\(letter.nameChinese) \(letter.nameEnglish)")
+            HStack(spacing: 14) {
+                PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish, iconOnly: true)
+                if progress.display("showMastery") {
+                    Button {
+                        progress.setLetter(letter.id, mastery: mastery.next)
+                    } label: {
+                        Image(systemName: mastery.symbol)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("掌握度：\(mastery.title)")
+                    .accessibilityHint("切换为\(mastery.next.title)")
+                }
+            }
+        }
+        .padding(8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var filter: Filter { progress.read("alef.gridState.v1", default: Filter()) }
@@ -95,7 +115,10 @@ struct AlphabetView: View {
             if progress.display("showModernSound") { Text(letter.modernIpa).font(.caption) }
             if progress.display("showBiblicalDiff", default: false) { Text(letter.biblicalIpa).font(.caption) }
             if progress.display("showTransliteration") { Text(letter.transliteration).font(.caption) }
-            if progress.display("showGematria") { Text(letter.gematria, format: .number).font(.caption) }
+            if progress.display("showGematria") {
+                let numbers = letter.sofitInfo.map { "\(letter.gematria) / \($0.sofitGematria)" } ?? String(letter.gematria)
+                Text(numbers).font(.caption)
+            }
             if progress.display("showCategoryBadges", default: false) {
                 let tags = filters.filter { letter.categories.contains($0.0) }.map(\.1)
                 Text(tags.joined(separator: " · ")).font(.caption2)
@@ -114,11 +137,29 @@ struct AlphabetView: View {
 
 struct LetterStudyView: View {
     @Environment(StudyProgress.self) private var progress
-    let letter: StudyLetter
     let content: StudyContent
+    @State private var letter: StudyLetter
+    @State private var showDagesh = true
+
+    init(letter: StudyLetter, content: StudyContent) {
+        self.content = content
+        _letter = State(initialValue: letter)
+    }
 
     var body: some View {
         List {
+            Section {
+                HStack {
+                    Button("上一个字母", systemImage: "chevron.left") { move(-1) }
+                        .keyboardShortcut(progress.alphabetFromRight ? .rightArrow : .leftArrow, modifiers: [])
+                    Spacer()
+                    Button("下一个字母", systemImage: "chevron.right") { move(1) }
+                        .keyboardShortcut(progress.alphabetFromRight ? .leftArrow : .rightArrow, modifiers: [])
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
+            }
             Section {
                 HStack {
                     HebrewText(text: letter.hebrew, size: 74, style: .largeTitle)
@@ -141,14 +182,34 @@ struct LetterStudyView: View {
             }
             if let variants = letter.begadkefat {
                 Section("达盖什 · Begadkefat") {
-                    LabeledContent(variants.withDagesh.glyph, value: variants.withDagesh.modernIpa)
-                    LabeledContent(variants.withoutDagesh.glyph, value: variants.withoutDagesh.modernIpa)
+                    Picker("字形预览", selection: $showDagesh) {
+                        Text("带点 \(variants.withDagesh.glyph)").tag(true)
+                        Text("无点 \(variants.withoutDagesh.glyph)").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    let variant = showDagesh ? variants.withDagesh : variants.withoutDagesh
+                    HStack {
+                        HebrewText(text: variant.glyph, size: 44)
+                        Spacer()
+                        Text(variant.name).font(.headline)
+                    }
+                    LabeledContent("现代 \(variant.modernSound)", value: variant.modernIpa)
+                    LabeledContent("古典读音", value: variant.biblicalIpa)
                     Text(variants.note)
                 }
             }
             if let sofit = letter.sofitInfo {
                 Section("词尾形 · Sofit") {
-                    LabeledContent("词尾字形", value: sofit.finalGlyph)
+                    HStack {
+                        HebrewText(text: sofit.medialGlyph, size: 36)
+                        HebrewText(text: sofit.medialGlyph, cursive: true, size: 36)
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                        Spacer()
+                        HebrewText(text: sofit.finalGlyph, size: 36)
+                        HebrewText(text: sofit.finalGlyph, cursive: true, size: 36)
+                    }
+                    LabeledContent("词尾数值", value: String(sofit.sofitGematria))
                     Text(sofit.rule)
                     WordExampleRow(example: sofit.exampleWord)
                 }
@@ -176,9 +237,16 @@ struct LetterStudyView: View {
                 }
             }
         }
+        .id(letter.id)
         .navigationTitle("\(letter.hebrew) · \(letter.nameChinese)")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { progress.write(letter.id, for: "alef.selectedLetterId.v1") }
+        .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }
+    }
+
+    private func move(_ offset: Int) {
+        guard let index = content.letters.firstIndex(where: { $0.id == letter.id }) else { return }
+        letter = content.letters[(index + offset + content.letters.count) % content.letters.count]
+        showDagesh = true
     }
 }
 
@@ -200,9 +268,15 @@ struct WordExampleRow: View {
 }
 
 private struct LetterWritingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let guide: StudyStrokes
-    @State private var shape = "block"
+    @State private var shape = "cursive"
     @State private var practiceID = UUID()
+    @State private var showTracing = true
+    @State private var selectedStroke: Int?
+    @State private var animationStart: Date?
+
+    private let secondsPerStroke = 1.15
 
     var body: some View {
         List {
@@ -215,16 +289,58 @@ private struct LetterWritingView: View {
             .pickerStyle(.segmented)
 
             Section("笔顺") {
-                StrokeDiagram(strokes: selectedStrokes).frame(height: 164)
-                ForEach(Array(selectedSteps.enumerated()), id: \.offset) { _, step in Text(step) }
+                TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 30, paused: animationStart == nil)) { timeline in
+                    let position = animationStart.map { max(0, timeline.date.timeIntervalSince($0) / secondsPerStroke) }
+                    StrokeDiagram(strokes: selectedStrokes, selectedStroke: selectedStroke, progress: position,
+                                  reduceMotion: reduceMotion)
+                }
+                .frame(height: 164)
+                Button(animationStart == nil ? "动画演示" : "重播笔顺", systemImage: animationStart == nil ? "play" : "arrow.counterclockwise") {
+                    selectedStroke = nil
+                    animationStart = .now
+                }
+                .disabled(selectedStrokes.isEmpty)
+                ForEach(Array(selectedSteps.enumerated()), id: \.offset) { index, step in
+                    Button {
+                        animationStart = nil
+                        selectedStroke = selectedStroke == index ? nil : index
+                    } label: {
+                        HStack {
+                            Text(step).foregroundStyle(.primary)
+                            Spacer()
+                            if selectedStroke == index { Image(systemName: "checkmark") }
+                        }
+                    }
+                    .accessibilityAddTraits(selectedStroke == index ? .isSelected : [])
+                }
             }
             Section("手写练习") {
-                DrawingPad().id(practiceID).frame(height: 240)
+                ZStack {
+                    StrokeDiagram(strokes: showTracing ? selectedStrokes : [], tracing: true)
+                        .accessibilityHidden(true)
+                    DrawingPad().id(practiceID)
+                }
+                .frame(height: 240)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                Toggle("显示描红字形", isOn: $showTracing)
                 Button("清空练习", systemImage: "eraser") { practiceID = UUID() }
             }
         }
         .navigationTitle("笔顺与手写")
-        .onChange(of: shape) { _, _ in practiceID = UUID() }
+        .onChange(of: shape) { _, _ in
+            animationStart = nil
+            selectedStroke = nil
+            practiceID = UUID()
+        }
+        .task(id: animationStart) {
+            guard let started = animationStart else { return }
+            do {
+                try await Task.sleep(for: .seconds(secondsPerStroke * Double(selectedStrokes.count)))
+                if animationStart == started { animationStart = nil }
+            } catch {
+                // A replay, a selection change, or leaving the view cancels the current animation.
+            }
+        }
     }
 
     private var selectedSteps: [String] {
@@ -248,16 +364,40 @@ private struct LetterWritingView: View {
 
 private struct StrokeDiagram: View {
     let strokes: [StudyStrokes.Stroke]
+    var selectedStroke: Int?
+    var progress: Double?
+    var reduceMotion = false
+    var tracing = false
 
     var body: some View {
         Canvas { context, size in
             let scale = min(size.width, size.height) / 100
             let xOffset = (size.width - 100 * scale) / 2
             let yOffset = (size.height - 100 * scale) / 2
+            let transform = CGAffineTransform(a: scale, b: 0, c: 0, d: scale, tx: xOffset, ty: yOffset)
+            var guides = Path()
+            for coordinate in [20.0, 50.0, 80.0] {
+                guides.move(to: CGPoint(x: 8, y: coordinate))
+                guides.addLine(to: CGPoint(x: 92, y: coordinate))
+                guides.move(to: CGPoint(x: coordinate, y: 8))
+                guides.addLine(to: CGPoint(x: coordinate, y: 92))
+            }
+            context.stroke(guides.applying(transform), with: .color(.secondary.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            let line = StrokeStyle(lineWidth: tracing ? 5 : 3, lineCap: .round, lineJoin: .round)
             for (index, stroke) in strokes.enumerated() {
-                let transform = CGAffineTransform(a: scale, b: 0, c: 0, d: scale, tx: xOffset, ty: yOffset)
-                context.stroke(path(stroke.d).applying(transform), with: .foreground,
-                               style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                let whole = path(stroke.d).applying(transform)
+                let highlighted = selectedStroke == index
+                let dimmed = selectedStroke != nil || progress != nil
+                let baseColor: Color = tracing ? .accentColor.opacity(0.24) : (highlighted ? .accentColor : .primary.opacity(dimmed ? 0.27 : 1))
+                context.stroke(whole, with: .color(baseColor), style: line)
+                if let progress {
+                    let fraction = CGFloat(min(1, max(0, progress - Double(index))))
+                    if fraction > 0 {
+                        let visible = reduceMotion || fraction == 1 ? whole : whole.trimmedPath(from: 0, to: fraction)
+                        context.stroke(visible, with: .color(.accentColor), style: line)
+                    }
+                }
+                guard !tracing else { continue }
                 let start = CGPoint(x: stroke.startX, y: stroke.startY).applying(transform)
                 context.draw(Text("\(index + 1)").font(.caption2.bold()).foregroundColor(.accentColor), at: CGPoint(x: start.x, y: start.y - 10))
             }
@@ -293,7 +433,9 @@ private struct DrawingPad: UIViewRepresentable {
     func makeUIView(context: Context) -> PKCanvasView {
         let view = PKCanvasView()
         view.drawingPolicy = .anyInput
-        view.backgroundColor = .secondarySystemGroupedBackground
+        view.backgroundColor = .clear
+        view.isOpaque = false
+        view.isScrollEnabled = false
         view.tool = PKInkingTool(.pen, color: .label, width: 5)
         return view
     }

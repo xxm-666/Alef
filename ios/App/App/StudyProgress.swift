@@ -12,6 +12,22 @@ enum Mastery: String, Codable, CaseIterable, Identifiable {
         case .mastered: "已掌握"
         }
     }
+
+    var next: Self {
+        switch self {
+        case .unlearned: .learning
+        case .learning: .mastered
+        case .mastered: .unlearned
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .unlearned: "circle"
+        case .learning: "circle.lefthalf.filled"
+        case .mastered: "checkmark.circle.fill"
+        }
+    }
 }
 
 enum StudyTheme: String, Codable, CaseIterable, Identifiable {
@@ -221,6 +237,22 @@ struct StudyStatistics: Codable {
         }
         guard !restored.isEmpty else { throw BackupError.invalid }
         return restored
+    }
+
+    func backupChanges(_ restored: [String: Data]) -> [String] {
+        restored.keys.filter { key in
+            guard let old = entries[key], let new = restored[key] else { return true }
+            return canonicalJSON(old) != canonicalJSON(new)
+        }.sorted()
+    }
+
+    private func canonicalJSON(_ data: Data) -> Data {
+        do {
+            let value = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
+            return try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys])
+        } catch {
+            return data
+        }
     }
 
     func applyBackup(_ restored: [String: Data]) {

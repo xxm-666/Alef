@@ -14,10 +14,12 @@ struct StudyContent: Decodable {
     let audio: [String: String]
     let consonants: [StudyConsonant]
     let vowels: [StudyVowel]
+    let defaultDisplay: [String: Bool]
+    let displayPresets: [StudyDisplayPreset]
 
     enum CodingKeys: CodingKey {
         case letters, words, wordCategories, phrases, phraseCategories, readings, readingCategories
-        case niqqud, confusables, inflections, audio, consonants, vowels
+        case niqqud, confusables, inflections, audio, consonants, vowels, defaultDisplay, displayPresets
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +37,8 @@ struct StudyContent: Decodable {
         audio = try container.decode([String: String].self, forKey: .audio)
         consonants = try container.decode([StudyConsonant].self, forKey: .consonants)
         vowels = try container.decode([StudyVowel].self, forKey: .vowels)
+        defaultDisplay = try container.decode([String: Bool].self, forKey: .defaultDisplay)
+        displayPresets = try container.decode([StudyDisplayPreset].self, forKey: .displayPresets)
     }
 
     static func load() throws -> Self {
@@ -43,6 +47,12 @@ struct StudyContent: Decodable {
         }
         return try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
     }
+}
+
+struct StudyDisplayPreset: Decodable, Identifiable {
+    let id: String
+    let label: String
+    let config: [String: Bool]
 }
 
 struct StudyCategory: Decodable {
@@ -86,6 +96,7 @@ struct StudyDagesh: Decodable {
 
     let withDagesh: Variant
     let withoutDagesh: Variant
+    let modernPreserved: Bool
     let note: String
 }
 
@@ -176,6 +187,11 @@ struct StudyPhrase: Decodable, Identifiable {
 }
 
 struct StudyReading: Decodable, Identifiable {
+    struct Gloss {
+        let range: Range<String.Index>
+        let definition: String
+    }
+
     struct Sentence: Decodable {
         let hebrew: String
         let unpointed: String
@@ -196,6 +212,21 @@ struct StudyReading: Decodable, Identifiable {
     let sentences: [Sentence]
     let glosses: [String: String]
     let question: Question
+
+    private static let hebrewWords = try? NSRegularExpression(pattern: #"(?:[א-ת]\p{M}*)+"#)
+
+    func inlineGlosses(in text: String) -> [Gloss] {
+        let matches = Self.hebrewWords?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? []
+        return matches.compactMap { match in
+            guard let range = Range(match.range, in: text),
+                  let definition = glosses[withoutHebrewMarks(String(text[range]))] else { return nil }
+            return Gloss(range: range, definition: definition)
+        }
+    }
+}
+
+func withoutHebrewMarks(_ text: String) -> String {
+    text.replacingOccurrences(of: #"\p{M}"#, with: "", options: .regularExpression)
 }
 
 struct StudyNiqqud: Decodable, Identifiable {

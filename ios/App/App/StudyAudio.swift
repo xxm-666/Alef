@@ -2,9 +2,12 @@ import AVFAudio
 import SwiftUI
 
 final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
+    enum Feedback: String { case correct, wrong, flip }
+
     private let recordings: [String: String]
     private let synthesizer = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
+    private var feedbackPlayer: AVAudioPlayer?
     private var utterance: AVSpeechUtterance?
     private var sessionActive = false
 
@@ -15,17 +18,16 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         super.init()
         synthesizer.delegate = self
         synthesizer.usesApplicationAudioSession = true
+        NotificationCenter.default.addObserver(self, selector: #selector(interrupted(_:)),
+                                               name: AVAudioSession.interruptionNotification, object: nil)
     }
 
     func speak(_ text: String, fallback: String? = nil, rate: Double) {
-        stop()
+        stopPronunciation()
         playbackError = nil
         let safeRate = min(1.5, max(0.5, rate.isFinite ? rate : 1))
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, options: .mixWithOthers)
-            try session.setActive(true)
-            sessionActive = true
+            try activateSession()
 
             if let asset = recordings[text.trimmingCharacters(in: .whitespacesAndNewlines)],
                let folder = Bundle.main.resourceURL?.appendingPathComponent("StudyAssets", isDirectory: true),
@@ -48,31 +50,73 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
             synthesizer.speak(spoken)
         } catch {
             playbackError = "暂时无法播放发音。"
-            stop()
+            releaseSessionIfIdle()
+        }
+    }
+
+    func playFeedback(_ kind: Feedback) {
+        guard let url = Bundle.main.url(forResource: kind.rawValue, withExtension: "wav", subdirectory: "StudyAssets/audio"),
+              let feedback = try? AVAudioPlayer(contentsOf: url) else { return }
+        do {
+            try activateSession()
+            feedbackPlayer?.stop()
+            feedbackPlayer = nil
+            feedback.delegate = self
+            if feedback.play() { feedbackPlayer = feedback }
+            releaseSessionIfIdle()
+        } catch {
+            releaseSessionIfIdle()
         }
     }
 
     func stop() {
+        stopPronunciation()
+        feedbackPlayer?.stop()
+        feedbackPlayer = nil
+        releaseSessionIfIdle()
+    }
+
+    private func stopPronunciation() {
         let current = player
         player = nil
         utterance = nil
         current?.stop()
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .immediate) }
-        if sessionActive {
-            sessionActive = false
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
+    }
+
+    private func activateSession() throws {
+        guard !sessionActive else { return }
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, options: .mixWithOthers)
+        try session.setActive(true)
+        sessionActive = true
+    }
+
+    private func releaseSessionIfIdle() {
+        guard sessionActive, player == nil, utterance == nil, feedbackPlayer == nil else { return }
+        sessionActive = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func dismissError() {
         playbackError = nil
     }
 
+    @objc private func interrupted(_ notification: Notification) {
+        guard let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              type == AVAudioSession.InterruptionType.began.rawValue else { return }
+        DispatchQueue.main.async { self.stop() }
+    }
+
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
-            guard self.player === player else { return }
-            if !flag { self.playbackError = "录音播放失败。" }
-            self.stop()
+            if self.player === player {
+                self.player = nil
+                if !flag { self.playbackError = "录音播放失败。" }
+            } else if self.feedbackPlayer === player {
+                self.feedbackPlayer = nil
+            }
+            self.releaseSessionIfIdle()
         }
     }
 
@@ -83,7 +127,8 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
             guard self.utterance === utterance else { return }
-            self.stop()
+            self.utterance = nil
+            self.releaseSessionIfIdle()
         }
     }
 

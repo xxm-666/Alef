@@ -10,7 +10,7 @@ struct StudyRootView: View {
             NavigationStack { WordsView(content: content) }
                 .tabItem { Label("单词", systemImage: "character.book.closed") }
                 .tag("words")
-            NavigationStack { StudyFlashcardsView(letters: content.letters) }
+            NavigationStack { StudyFlashcardsView(content: content) }
                 .tabItem { Label("闪卡", systemImage: "rectangle.on.rectangle") }
                 .tag("flashcards")
             NavigationStack { AlphabetView(content: content) }
@@ -19,7 +19,7 @@ struct StudyRootView: View {
             NavigationStack { StudyRulesView(content: content) }
                 .tabItem { Label("规则", systemImage: "book") }
                 .tag("rules")
-            NavigationStack { StudySettingsView() }
+            NavigationStack { StudySettingsView(content: content) }
                 .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag("settings")
         }
@@ -58,19 +58,21 @@ struct PronunciationButton: View {
     let hebrew: String
     var fallback: String?
     var iconOnly = false
+    var rate: Double?
+    var title = "播放发音"
 
     var body: some View {
         Button {
-            audio.speak(hebrew, fallback: fallback, rate: progress.speechRate)
+            audio.speak(hebrew, fallback: fallback, rate: rate ?? progress.speechRate)
         } label: {
             if iconOnly {
                 Image(systemName: "speaker.wave.2")
             } else {
-                Label("播放发音", systemImage: "speaker.wave.2")
+                Label(title, systemImage: "speaker.wave.2")
             }
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel("播放发音")
+        .accessibilityLabel(title)
     }
 }
 

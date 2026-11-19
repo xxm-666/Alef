@@ -5,6 +5,7 @@ import {
   NIQQUD_ITEMS,
 } from './data/hebrewLetters';
 import { HEBREW_WORDS } from './data/hebrewWords';
+import { DEFAULT_DISPLAY_CONFIG } from './data/letterDisplay';
 import {
   AlphabetOrder,
   CustomDisplayConfig,
@@ -53,22 +54,6 @@ const STORAGE_KEYS = {
   speechRate: 'alef.speechRate.v1',
   activeView: 'alef.activeView.v1',
   selectedLetterId: 'alef.selectedLetterId.v1',
-};
-
-const DEFAULT_DISPLAY_CONFIG: CustomDisplayConfig = {
-  showBlock: true,
-  showCursive: true,
-  showSofit: true,
-  showBegadkefat: true,
-  showHebrewName: true,
-  showEnglishName: true,
-  showChineseName: true,
-  showModernSound: true,
-  showBiblicalDiff: false,
-  showTransliteration: true,
-  showGematria: true,
-  showMastery: true,
-  showCategoryBadges: false,
 };
 
 function getLocalDateKey(offsetDays = 0): string {
