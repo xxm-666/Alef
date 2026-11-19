@@ -3563,6 +3563,19 @@ button {
     inset: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
+  }
+
+  [data-theme='parchment'] .app-root::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.42) 0%, rgba(30, 41, 59, 0) 100%);
+    pointer-events: none;
+    z-index: 60;
   }
 
   .titlebar {

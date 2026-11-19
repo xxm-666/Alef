@@ -116,7 +116,7 @@ export const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(theme));
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      themeMeta.setAttribute('content', theme === 'dark' ? '#0b1120' : '#fbf8f1');
+      themeMeta.setAttribute('content', theme === 'dark' ? '#0b1120' : '#f3ede1');
     }
   }, [theme]);
 
