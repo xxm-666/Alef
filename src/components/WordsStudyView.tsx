@@ -279,7 +279,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // Persist view state across tab switches and restarts
+  // Persist view state across tab switches and restarts (debounce scrollTop to keep scrolling smooth)
+  const scrollTopRef = useRef(scrollTop);
+  scrollTopRef.current = scrollTop;
+
   useEffect(() => {
     writeStorage<PersistedWordsState>(WORDS_STATE_KEY, {
       searchQuery,
@@ -292,7 +295,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
       mobileSubView,
       selectedWordId,
       cardsPage,
-      scrollTop,
+      scrollTop: scrollTopRef.current,
     });
   }, [
     searchQuery,
@@ -305,8 +308,27 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     mobileSubView,
     selectedWordId,
     cardsPage,
-    scrollTop,
   ]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      writeStorage<PersistedWordsState>(WORDS_STATE_KEY, {
+        searchQuery,
+        activeFilter,
+        initialLetter,
+        sortOrder,
+        showNiqqud,
+        showCursive,
+        mode,
+        mobileSubView,
+        selectedWordId,
+        cardsPage,
+        scrollTop,
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollTop]);
 
   useEffect(() => {
     const el = listScrollRef.current;
@@ -470,7 +492,13 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   }
 
   return (
-    <div className="view-container words-view">
+    <div
+      className={`view-container words-view ${
+        mode === 'browse' && mobileSubView === 'list' && filteredWords.length > 0
+          ? 'words-mobile-list-lock'
+          : ''
+      }`}
+    >
       {/* Top Toolbar */}
       <div
         className={`toolbar-card ${
