@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock,
@@ -28,6 +28,8 @@ type CardFrontType = 'block' | 'cursive' | 'both' | 'sofit';
 type DeckScope = 'all' | 'needs_review' | 'sofit' | 'begadkefat';
 type QuizType = 'block-to-sound' | 'cursive-to-block' | 'sofit-match' | 'dagesh-quiz';
 
+const CORRECT_ANSWER_DELAY_MS = 700;
+
 interface QuizQuestion {
   promptTitle: string;
   promptHebrew?: string;
@@ -47,10 +49,21 @@ function shuffleArray<T>(items: T[]): T[] {
   return copy;
 }
 
-function buildQuizQuestion(letters: HebrewLetter[], quizType: QuizType): QuizQuestion {
+function buildQuizQuestion(
+  letters: HebrewLetter[],
+  quizType: QuizType,
+  previousAnswer?: string
+): QuizQuestion {
+  function pickTarget(pool: HebrewLetter[]) {
+    const previousLetterId = quizType === 'dagesh-quiz' ? previousAnswer?.replace(/-(hard|soft)$/, '') : previousAnswer;
+    const alternatives = pool.filter((letter) => letter.id !== previousLetterId);
+    const candidates = alternatives.length ? alternatives : pool;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
   if (quizType === 'sofit-match') {
     const sofitPool = letters.filter((l) => Boolean(l.sofit));
-    const target = sofitPool[Math.floor(Math.random() * sofitPool.length)];
+    const target = pickTarget(sofitPool);
     const distractors = shuffleArray(sofitPool.filter((l) => l.id !== target.id)).slice(0, 3);
     const options = shuffleArray([target, ...distractors]).map((item) => ({
       id: item.id,
@@ -69,7 +82,7 @@ function buildQuizQuestion(letters: HebrewLetter[], quizType: QuizType): QuizQue
 
   if (quizType === 'dagesh-quiz') {
     const dageshPool = letters.filter((l) => Boolean(l.begadkefat));
-    const target = dageshPool[Math.floor(Math.random() * dageshPool.length)];
+    const target = pickTarget(dageshPool);
     const askWithDagesh = Math.random() > 0.5;
     const variant = askWithDagesh
       ? target.begadkefat!.withDagesh
@@ -114,7 +127,7 @@ function buildQuizQuestion(letters: HebrewLetter[], quizType: QuizType): QuizQue
     };
   }
 
-  const target = letters[Math.floor(Math.random() * letters.length)];
+  const target = pickTarget(letters);
   const distractors = shuffleArray(letters.filter((l) => l.id !== target.id)).slice(0, 3);
 
   if (quizType === 'cursive-to-block') {
@@ -275,10 +288,16 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
     goNext();
   }
 
-  function startNewQuestion(nextType: QuizType = quizType) {
+  const startNewQuestion = useCallback((nextType: QuizType = quizType) => {
     setSelectedOptionId(null);
-    setQuestion(buildQuizQuestion(letters, nextType));
-  }
+    setQuestion(buildQuizQuestion(letters, nextType, nextType === quizType ? question.correctId : undefined));
+  }, [letters, quizType, question.correctId]);
+
+  useEffect(() => {
+    if (subMode !== 'quiz' || selectedOptionId !== question.correctId) return;
+    const timer = window.setTimeout(startNewQuestion, CORRECT_ANSWER_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [subMode, selectedOptionId, question.correctId, startNewQuestion]);
 
   function handleSelectQuizAnswer(optionId: string) {
     if (selectedOptionId !== null) return;
