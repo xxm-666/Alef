@@ -1,8 +1,7 @@
 import { useRef } from 'react';
 import type { TouchEvent } from 'react';
 
-const EDGE_WIDTH = 40;
-const SWIPE_DISTANCE = 76;
+const SWIPE_DISTANCE = 54;
 const MAX_VERTICAL_DRIFT = 42;
 
 export function useSwipeBack(onBack?: () => void) {
@@ -16,7 +15,7 @@ export function useSwipeBack(onBack?: () => void) {
         'input, textarea, select, canvas, [contenteditable], .quick-letter-bar, .stroke-pad-card'
       )) return;
       const touch = event.touches[0];
-      if (touch.clientX < window.innerWidth - EDGE_WIDTH) return;
+      if (touch.clientX < window.innerWidth / 2) return;
       start.current = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
     },
     onTouchMove(event: TouchEvent<HTMLElement>) {
@@ -34,7 +33,7 @@ export function useSwipeBack(onBack?: () => void) {
       if (!touch) return;
       const left = origin.x - touch.clientX;
       const vertical = Math.abs(origin.y - touch.clientY);
-      if (left >= SWIPE_DISTANCE && vertical <= Math.min(MAX_VERTICAL_DRIFT, left * 0.45)) onBack?.();
+      if (left >= SWIPE_DISTANCE && vertical <= Math.min(MAX_VERTICAL_DRIFT, left * 0.6)) onBack?.();
     },
     onTouchCancel() {
       start.current = null;
