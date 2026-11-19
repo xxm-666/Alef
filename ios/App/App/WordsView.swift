@@ -1,0 +1,428 @@
+import SwiftUI
+
+private struct WordPreferences: Codable {
+    var searchQuery = ""
+    var activeFilter = "all"
+    var initialLetter = "all"
+    var sortOrder = "default"
+    var showNiqqud = true
+    var showCursive = false
+    var mode = "browse"
+    var mobileSubView: String? = nil
+    var selectedWordId = "shalom"
+    var cardsPage = 1
+    var scrollTop: Double = 0
+}
+
+struct WordsView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+
+    var body: some View {
+        Group {
+            switch preferences.mode {
+            case "phrases": phrases
+            case "reading": readings
+            case "quiz":
+                WordQuizView(words: preferences.activeFilter == "due_srs" ? dueWords : filteredWords,
+                             reviewing: preferences.activeFilter == "due_srs")
+                    .id(preferences.activeFilter)
+            case "cards": cards
+            default: library
+            }
+        }
+        .navigationTitle("希伯来语词库")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("学习方式", selection: setting(\.mode)) {
+                        Text("词表").tag("browse")
+                        Text("单词卡片").tag("cards")
+                        Text("情景短语").tag("phrases")
+                        Text("阅读练习").tag("reading")
+                        Text("单词测验").tag("quiz")
+                    }
+                    Toggle("显示元音点", isOn: setting(\.showNiqqud))
+                    Toggle("手写体", isOn: setting(\.showCursive))
+                    Button("复习到期单词（\(dueWords.count)）", systemImage: "calendar.badge.clock") {
+                        var state = preferences
+                        state.activeFilter = "due_srs"
+                        state.mode = "quiz"
+                        progress.write(state, for: "alef.wordsState.v1")
+                    }
+                    .disabled(preferences.mode == "quiz" && preferences.activeFilter == "due_srs")
+                    if ["browse", "cards"].contains(preferences.mode) {
+                        Menu("筛选单词") {
+                            Picker("词表范围", selection: setting(\.activeFilter)) {
+                                Text("全部").tag("all")
+                                Text("我的收藏").tag("favorites")
+                                Text("需复习").tag("needs_review")
+                                Text("到期复习").tag("due_srs")
+                                ForEach(content.wordCategories.keys.sorted(), id: \.self) { key in
+                                    Text(content.wordCategories[key]?.label ?? key).tag(key)
+                                }
+                            }
+                        }
+                        Picker("排序", selection: setting(\.sortOrder)) {
+                            Text("默认").tag("default")
+                            Text("字母顺序").tag("alpha")
+                        }
+                        Menu("首字母") {
+                            Picker("首字母", selection: setting(\.initialLetter)) {
+                                Text("不限").tag("all")
+                                ForEach(content.letters) { letter in Text(letter.hebrew).tag(letter.hebrew) }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("词库选项", systemImage: "ellipsis.circle")
+                }
+            }
+        }
+    }
+
+    private var preferences: WordPreferences { progress.read("alef.wordsState.v1", default: WordPreferences()) }
+
+    private var dueWords: [StudyWord] {
+        let schedule = progress.schedule
+        return content.words.filter { schedule[$0.id]?.isDue == true }.sorted {
+            (schedule[$0.id]?.nextReviewAt ?? 0) < (schedule[$1.id]?.nextReviewAt ?? 0)
+        }
+    }
+
+    private func setting<Value>(_ path: WritableKeyPath<WordPreferences, Value>) -> Binding<Value> {
+        Binding(get: { preferences[keyPath: path] }, set: { value in
+            var state = preferences
+            state[keyPath: path] = value
+            progress.write(state, for: "alef.wordsState.v1")
+        })
+    }
+
+    private var filteredWords: [StudyWord] {
+        let settings = preferences
+        let favorites = Set(progress.favorites)
+        let mastery = progress.wordMastery
+        let schedule = progress.schedule
+        let query = settings.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = content.words.filter { word in
+            let include = switch settings.activeFilter {
+            case "all": true
+            case "favorites": favorites.contains(word.id)
+            case "needs_review": mastery[word.id] != .mastered
+            case "due_srs": schedule[word.id]?.isDue == true
+            default: word.category == settings.activeFilter
+            }
+            let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
+            return include && (settings.initialLetter == "all" || word.hebrewUnpointed.hasPrefix(settings.initialLetter))
+                && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) })
+        }
+        return settings.sortOrder == "alpha" ? words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed } : words
+    }
+
+    private var library: some View {
+        List {
+            if filteredWords.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
+            ForEach(filteredWords) { word in
+                HStack(spacing: 14) {
+                    wordLink(word)
+                    PronunciationButton(hebrew: word.hebrew, fallback: word.transliteration, iconOnly: true)
+                }
+            }
+        }
+        .searchable(text: setting(\.searchQuery), prompt: "搜索希伯来语、音译或中文")
+    }
+
+    private var cards: some View {
+        ScrollView {
+            if filteredWords.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
+                ForEach(filteredWords) { word in
+                    wordLink(word)
+                        .buttonStyle(.bordered)
+                }
+            }
+            .padding()
+        }
+        .searchable(text: setting(\.searchQuery), prompt: "搜索单词")
+    }
+
+    private func wordLink(_ word: StudyWord) -> some View {
+        NavigationLink {
+            WordDetailView(word: word, content: content, showNiqqud: preferences.showNiqqud,
+                           showCursive: preferences.showCursive)
+                .onAppear { setting(\.selectedWordId).wrappedValue = word.id }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HebrewText(text: preferences.showNiqqud ? word.hebrew : word.hebrewUnpointed, cursive: preferences.showCursive)
+                Text(word.meaningZh).font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var phrases: some View {
+        List {
+            ForEach(content.phraseCategories.keys.sorted(), id: \.self) { category in
+                Section(content.phraseCategories[category]?.label ?? category) {
+                    ForEach(content.phrases.filter { $0.scenario == category }) { phrase in
+                        WordExampleRow(example: StudyExample(hebrew: phrase.hebrew, transliteration: phrase.transliteration,
+                                                             meaning: phrase.meaningZh, note: phrase.note))
+                    }
+                }
+            }
+        }
+    }
+
+    private var readings: some View {
+        List {
+            ForEach(content.readingCategories.keys.sorted(), id: \.self) { category in
+                Section(content.readingCategories[category] ?? category) {
+                    ForEach(content.readings.filter { $0.category == category }) { reading in
+                        NavigationLink(reading.title) { StudyReadingView(reading: reading, showNiqqud: preferences.showNiqqud) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct WordDetailView: View {
+    @Environment(StudyProgress.self) private var progress
+    let word: StudyWord
+    let content: StudyContent
+    let showNiqqud: Bool
+    let showCursive: Bool
+
+    private let formLabels = [("ms", "阳性单数"), ("fs", "阴性单数"), ("mp", "阳性复数"), ("fp", "阴性复数"),
+                              ("infinitive", "不定式"), ("past3ms", "过去式"), ("singular", "单数"), ("plural", "复数")]
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed, cursive: showCursive, size: 42)
+                    Spacer()
+                    PronunciationButton(hebrew: word.hebrew, fallback: word.transliteration, iconOnly: true)
+                }
+                Text(word.meaningZh).font(.title3)
+                LabeledContent("音译", value: word.transliteration)
+                LabeledContent("国际音标", value: word.ipa)
+                LabeledContent("词性", value: word.partOfSpeech)
+                LabeledContent("语法", value: word.grammarTag)
+                if let root = word.root { LabeledContent("词根", value: root) }
+                MasteryPicker(value: Binding(get: { progress.wordMastery[word.id] ?? .unlearned }, set: {
+                    progress.setWord(word.id, mastery: $0)
+                }))
+            }
+            if !word.note.isEmpty { Section("用法") { Text(word.note) } }
+            if !letters.isEmpty {
+                Section("字母拆解") {
+                    ForEach(Array(letters.enumerated()), id: \.offset) { _, entry in
+                        NavigationLink {
+                            LetterStudyView(letter: entry.letter, content: content)
+                        } label: {
+                            LabeledContent(String(entry.character), value: entry.letter.nameChinese)
+                        }
+                    }
+                }
+            }
+            if let root = word.root {
+                let related = content.words.filter { $0.root == root && $0.id != word.id }
+                if !related.isEmpty {
+                    Section("同词根") {
+                        ForEach(related) { item in
+                            NavigationLink {
+                                WordDetailView(word: item, content: content, showNiqqud: showNiqqud, showCursive: showCursive)
+                            } label: {
+                                LabeledContent(item.hebrew, value: item.meaningZh)
+                            }
+                        }
+                    }
+                }
+            }
+            let forms = content.inflections[word.id] ?? [:]
+            if !forms.isEmpty {
+                Section("词形变化") {
+                    ForEach(formLabels, id: \.0) { key, label in
+                        if let form = forms[key] {
+                            HStack {
+                                LabeledContent(form.label ?? label, value: form.hebrew)
+                                PronunciationButton(hebrew: form.hebrew, fallback: form.translit, iconOnly: true)
+                            }
+                        }
+                    }
+                }
+            }
+            if let sentence = word.sentence {
+                Section("例句") {
+                    WordExampleRow(example: StudyExample(hebrew: sentence.hebrew, transliteration: sentence.transliteration,
+                                                         meaning: sentence.meaningZh, note: nil))
+                }
+            }
+        }
+        .navigationTitle(word.hebrewUnpointed)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Button {
+                progress.toggleFavorite(word.id)
+            } label: {
+                let saved = progress.favorites.contains(word.id)
+                Label(saved ? "取消收藏" : "收藏", systemImage: saved ? "star.fill" : "star")
+            }
+        }
+    }
+
+    private var letters: [(character: Character, letter: StudyLetter)] {
+        word.hebrewUnpointed.compactMap { character in
+            let glyph = String(character)
+            guard let letter = content.letters.first(where: { $0.hebrew == glyph || $0.sofit == glyph }) else { return nil }
+            return (character, letter)
+        }
+    }
+}
+
+private struct StudyReadingView: View {
+    @Environment(StudyProgress.self) private var progress
+    let reading: StudyReading
+    let showNiqqud: Bool
+    @State private var showTranslation = true
+    @State private var answer: Int?
+
+    var body: some View {
+        List {
+            if let source = reading.source { Text(source).foregroundStyle(.secondary) }
+            Toggle("显示译文", isOn: $showTranslation)
+            Section("朗读") {
+                ForEach(Array(reading.sentences.enumerated()), id: \.offset) { _, sentence in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HebrewText(text: showNiqqud ? sentence.hebrew : sentence.unpointed)
+                            if showTranslation {
+                                Text(sentence.transliteration).foregroundStyle(.secondary)
+                                Text(sentence.chinese)
+                            }
+                        }
+                        Spacer()
+                        PronunciationButton(hebrew: sentence.hebrew, fallback: sentence.transliteration, iconOnly: true)
+                    }
+                }
+            }
+            Section("词汇注解") {
+                ForEach(reading.glosses.keys.sorted(), id: \.self) { key in
+                    DisclosureGroup(key) { Text(reading.glosses[key] ?? "").foregroundStyle(.secondary) }
+                }
+            }
+            Section("阅读理解") {
+                Text(reading.question.prompt)
+                ForEach(Array(reading.question.choices.enumerated()), id: \.offset) { index, choice in
+                    Button(choice) {
+                        answer = index
+                        progress.recordStudy()
+                    }
+                    .disabled(answer != nil)
+                }
+                if let answer {
+                    let correct = answer == reading.question.correctIndex
+                    Label(correct ? "答对了" : "正确答案：\(reading.question.choices[reading.question.correctIndex])",
+                          systemImage: correct ? "checkmark.circle" : "info.circle")
+                    Button("再答一次") { self.answer = nil }
+                }
+            }
+        }
+        .navigationTitle(reading.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct WordQuizView: View {
+    @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
+    let words: [StudyWord]
+    let reviewing: Bool
+    @State private var kind = "meaning"
+    @State private var target: StudyWord?
+    @State private var options: [StudyWord] = []
+    @State private var spelling = ""
+    @State private var result: Bool?
+    @State private var correct = 0
+    @State private var answered = 0
+    @State private var reviewQueue: [StudyWord]?
+    @State private var reviewIndex = 0
+
+    var body: some View {
+        List {
+            Picker("题型", selection: $kind) {
+                Text("词义").tag("meaning")
+                Text("听力").tag("listening")
+                Text("拼写").tag("spelling")
+            }
+            .pickerStyle(.segmented)
+            LabeledContent("当前得分", value: "\(correct) / \(answered)")
+            if let target {
+                Section {
+                    switch kind {
+                    case "listening": PronunciationButton(hebrew: target.hebrew, fallback: target.transliteration)
+                    case "spelling": Text(target.meaningZh).font(.title3)
+                    default: HebrewText(text: target.hebrew, size: 44)
+                    }
+                    if kind == "spelling" {
+                        TextField("输入希伯来语单词", text: $spelling)
+                            .autocorrectionDisabled()
+                            .environment(\.layoutDirection, .rightToLeft)
+                        Button("确认答案") {
+                            let normalized = spelling.folding(options: .diacriticInsensitive, locale: Locale(identifier: "he"))
+                            grade(normalized.trimmingCharacters(in: .whitespacesAndNewlines) == target.hebrewUnpointed)
+                        }
+                        .disabled(result != nil || spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    } else {
+                        ForEach(options) { option in
+                            Button(option.meaningZh) { grade(option.id == target.id) }
+                                .disabled(result != nil)
+                        }
+                    }
+                    if let result {
+                        Label(result ? "答对了" : "正确答案：\(target.hebrew) · \(target.meaningZh)",
+                              systemImage: result ? "checkmark.circle" : "info.circle")
+                        Button("下一题", systemImage: "arrow.right") {
+                            if reviewing { reviewIndex += 1 }
+                            next(play: true)
+                        }
+                    }
+                }
+            } else {
+                ContentUnavailableView(reviewing && answered > 0 ? "已完成到期复习" : "没有可用单词",
+                                       systemImage: reviewing && answered > 0 ? "checkmark.circle" : "character.book.closed")
+            }
+        }
+        .task {
+            if reviewing && reviewQueue == nil { reviewQueue = words }
+            if target == nil { next(play: false) }
+        }
+        .onChange(of: kind) { _, _ in next(play: true) }
+    }
+
+    private func next(play: Bool) {
+        let pool = reviewQueue ?? words
+        if reviewing {
+            target = pool.indices.contains(reviewIndex) ? pool[reviewIndex] : nil
+        } else {
+            let others = pool.filter { $0.id != target?.id }
+            target = (others.isEmpty ? pool : others).randomElement()
+        }
+        result = nil
+        spelling = ""
+        guard let target else { return }
+        var meanings: Set<String> = [target.meaningZh]
+        let distractors = pool.shuffled().filter { meanings.insert($0.meaningZh).inserted }
+        options = ([target] + Array(distractors.prefix(3))).shuffled()
+        if kind == "listening", play { audio.speak(target.hebrew, fallback: target.transliteration, rate: progress.speechRate) }
+    }
+
+    private func grade(_ success: Bool) {
+        guard let target, result == nil else { return }
+        result = success
+        answered += 1
+        if success { correct += 1 }
+        progress.setWord(target.id, mastery: success ? .mastered : .learning)
+    }
+}

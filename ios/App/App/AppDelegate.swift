@@ -1,29 +1,42 @@
+import SwiftUI
 import UIKit
-import Capacitor
 
 @UIApplicationMain
 final class AppDelegate: UIResponder, UIApplicationDelegate {}
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var audio: StudyAudio?
+    private var legacyImport: LegacyStudyImport?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        self.scene(scene, openURLContexts: connectionOptions.urlContexts)
-        for activity in connectionOptions.userActivities {
-            self.scene(scene, continue: activity)
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let window = UIWindow(windowScene: windowScene)
+        self.window = window
+
+        do {
+            let content = try StudyContent.load()
+            let progress = StudyProgress()
+            let audio = StudyAudio(recordings: content.audio)
+            self.audio = audio
+            window.rootViewController = UIHostingController(rootView: StudyRootView(content: content)
+                .environment(progress)
+                .environmentObject(audio))
+            if progress.needsLegacyMigration {
+                let migration = LegacyStudyImport(progress: progress)
+                legacyImport = migration
+                migration.start()
+            }
+        } catch {
+            window.rootViewController = UIHostingController(rootView: ContentUnavailableView(
+                "无法载入学习资料", systemImage: "book.closed", description: Text("此版本的学习资料缺失或损坏。")
+            ))
+            NSLog("Alef could not load its study resources: %@", error.localizedDescription)
         }
+        window.makeKeyAndVisible()
     }
 
-    func scene(_ scene: UIScene, openURLContexts urlContexts: Set<UIOpenURLContext>) {
-        for context in urlContexts {
-            var options: [UIApplication.OpenURLOptionsKey: Any] = [.openInPlace: context.options.openInPlace]
-            options[.sourceApplication] = context.options.sourceApplication
-            options[.annotation] = context.options.annotation
-            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: options)
-        }
-    }
-
-    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, continue: userActivity, restorationHandler: { _ in })
+    func sceneWillResignActive(_ scene: UIScene) {
+        audio?.stop()
     }
 }

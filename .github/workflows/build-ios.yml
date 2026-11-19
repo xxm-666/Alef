@@ -25,11 +25,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Build and sync web assets
+      - name: Prepare native study content and audio
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
           npm ci --replace-registry-host=always
-          npm run build
-          npx cap sync ios
+          npm run prepare:ios
 
       - name: Build unsigned device app
         run: |
@@ -43,7 +44,9 @@ jobs:
       - name: Package IPA with the daily letter widget
         run: |
           app="$RUNNER_TEMP/alef-ios/Build/Products/Release-iphoneos/App.app"
-          test -f "$app/public/index.html"
+          test -s "$app/StudyAssets/content.json"
+          test -s "$app/StudyAssets/GveretLevin-Regular.ttf"
+          test -s "$app/StudyAssets/audio/he_2e0fc6efece8.mp3"
           test -x "$app/PlugIns/DailyLetterWidget.appex/DailyLetterWidget"
           mkdir Payload
           ditto "$app" Payload/App.app
