@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   CreditCard,
@@ -38,8 +38,6 @@ interface TitleBarProps {
   onClose: () => void;
   onOpenBackup: () => void;
 }
-
-const GlassLetterLens = lazy(() => import('./GlassLetterLens'));
 
 const NAV_ITEMS: { id: StudyViewMode; label: string; shortLabel: string; icon: React.ReactNode }[] = [
   { id: 'grid', label: '全字母表', shortLabel: '字母', icon: <Grid size={15} /> },
@@ -103,12 +101,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           );
           return isCenter ? (
             <div className="nav-center-slot" key={item.id}>
-              {/* Chromium renders displacement. Other browsers use the CSS lens below. */}
-              {CSS.supports('appearance', 'base-select') && (
-                <Suspense fallback={null}>
-                  <GlassLetterLens />
-                </Suspense>
-              )}
               {button}
             </div>
           ) : button;
