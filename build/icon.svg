@@ -1,113 +1,113 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <!-- iOS 26 Deep Liquid Sapphire-Obsidian Base -->
+    <!-- iOS 26 Deep Royal Violet-Obsidian Base -->
     <linearGradient id="iosBg" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0%" stop-color="#1a3875"/>
-      <stop offset="36%" stop-color="#0d1d42"/>
-      <stop offset="76%" stop-color="#070f24"/>
-      <stop offset="100%" stop-color="#040712"/>
+      <stop offset="0%" stop-color="#431c87"/>
+      <stop offset="36%" stop-color="#220f4f"/>
+      <stop offset="76%" stop-color="#11072c"/>
+      <stop offset="100%" stop-color="#070314"/>
     </linearGradient>
 
-    <!-- Top-Left Specular Cyan Caustic -->
+    <!-- Top-Left Specular Lavender-Orchid Caustic -->
     <radialGradient id="causticTopLeft" cx="0.18" cy="0.12" r="0.68">
-      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.48"/>
-      <stop offset="45%" stop-color="#0284c7" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#c084fc" stop-opacity="0.52"/>
+      <stop offset="45%" stop-color="#9333ea" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#7e22ce" stop-opacity="0"/>
     </radialGradient>
 
-    <!-- Bottom-Right Indigo-Amber Subsurface Glow -->
-    <radialGradient id="causticBottomRight" cx="0.84" cy="0.88" r="0.62">
-      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.38"/>
-      <stop offset="48%" stop-color="#f59e0b" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    <!-- Bottom-Right Magenta-Indigo Subsurface Glow -->
+    <radialGradient id="causticBottomRight" cx="0.84" cy="0.88" r="0.64">
+      <stop offset="0%" stop-color="#ec4899" stop-opacity="0.34"/>
+      <stop offset="48%" stop-color="#7c3aed" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0"/>
     </radialGradient>
 
-    <!-- Center Warm Gold Backlight behind Alef -->
-    <radialGradient id="centerGoldGlow" cx="0.5" cy="0.52" r="0.44">
-      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.32"/>
-      <stop offset="52%" stop-color="#f59e0b" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    <!-- Center Luminous Violet-Rose Backlight behind Alef -->
+    <radialGradient id="centerVioletGlow" cx="0.5" cy="0.52" r="0.45">
+      <stop offset="0%" stop-color="#e879f9" stop-opacity="0.32"/>
+      <stop offset="52%" stop-color="#a855f7" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#7e22ce" stop-opacity="0"/>
     </radialGradient>
 
     <!-- iOS 26 Outer Squircle Specular Rim -->
     <linearGradient id="outerRim" x1="0.05" y1="0.02" x2="0.95" y2="0.98">
-      <stop offset="0%" stop-color="#e0f2fe" stop-opacity="0.9"/>
-      <stop offset="28%" stop-color="#38bdf8" stop-opacity="0.42"/>
-      <stop offset="55%" stop-color="#1e293b" stop-opacity="0.22"/>
-      <stop offset="82%" stop-color="#818cf8" stop-opacity="0.38"/>
-      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.6"/>
+      <stop offset="0%" stop-color="#f5d0fe" stop-opacity="0.92"/>
+      <stop offset="28%" stop-color="#c084fc" stop-opacity="0.46"/>
+      <stop offset="55%" stop-color="#2e1065" stop-opacity="0.26"/>
+      <stop offset="82%" stop-color="#a855f7" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0.62"/>
     </linearGradient>
 
     <!-- iOS 26 Inner Floating Liquid Glass Plaque Fill -->
     <linearGradient id="glassPlaqueFill" x1="0.12" y1="0.06" x2="0.88" y2="0.94">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="32%" stop-color="#bae6fd" stop-opacity="0.07"/>
-      <stop offset="68%" stop-color="#0f172a" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.11"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.2"/>
+      <stop offset="32%" stop-color="#e9d5ff" stop-opacity="0.08"/>
+      <stop offset="68%" stop-color="#1e1b4b" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ec4899" stop-opacity="0.12"/>
     </linearGradient>
 
     <!-- iOS 26 Inner Floating Liquid Glass Plaque Border -->
     <linearGradient id="glassPlaqueRim" x1="0.08" y1="0.04" x2="0.92" y2="0.96">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.72"/>
-      <stop offset="28%" stop-color="#7dd3fc" stop-opacity="0.3"/>
-      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#fcd34d" stop-opacity="0.44"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.76"/>
+      <stop offset="28%" stop-color="#d8b4fe" stop-opacity="0.36"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0.46"/>
     </linearGradient>
 
     <!-- Top Glass Sheen Gradient -->
     <linearGradient id="topSheen" x1="0.25" y1="0" x2="0.65" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
-      <stop offset="45%" stop-color="#e0f2fe" stop-opacity="0.06"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.26"/>
+      <stop offset="45%" stop-color="#f3e8ff" stop-opacity="0.07"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- 3D Liquid Gold-Glass Main Gradient for Alef Spine -->
-    <linearGradient id="alefGold" x1="0.18" y1="0.1" x2="0.82" y2="0.9">
+    <!-- 3D Liquid Pearl-Amethyst Main Gradient for Alef Spine -->
+    <linearGradient id="alefSpine" x1="0.18" y1="0.1" x2="0.82" y2="0.9">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="18%" stop-color="#fef08a"/>
-      <stop offset="50%" stop-color="#fbbf24"/>
-      <stop offset="80%" stop-color="#ea580c"/>
-      <stop offset="100%" stop-color="#9a3412"/>
+      <stop offset="20%" stop-color="#fdf4ff"/>
+      <stop offset="48%" stop-color="#f0abfc"/>
+      <stop offset="78%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#581c87"/>
     </linearGradient>
 
-    <!-- Translucent Liquid Glass Gold for Right Yod & Left Leg -->
-    <linearGradient id="alefWingGold" x1="0.15" y1="0.08" x2="0.85" y2="0.92">
-      <stop offset="0%" stop-color="#fffbeb"/>
-      <stop offset="26%" stop-color="#fde047"/>
-      <stop offset="66%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#b45309"/>
+    <!-- Translucent Rose-Lavender Glass for Right Yod & Left Leg -->
+    <linearGradient id="alefWing" x1="0.15" y1="0.08" x2="0.85" y2="0.92">
+      <stop offset="0%" stop-color="#fff1f2"/>
+      <stop offset="26%" stop-color="#fbcfe8"/>
+      <stop offset="66%" stop-color="#d946ef"/>
+      <stop offset="100%" stop-color="#701a75"/>
     </linearGradient>
 
     <!-- Specular Rim on Alef Strokes -->
     <linearGradient id="alefSpecular" x1="0" y1="0" x2="0.9" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="45%" stop-color="#fef9c3" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.15"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.96"/>
+      <stop offset="45%" stop-color="#fae8ff" stop-opacity="0.54"/>
+      <stop offset="100%" stop-color="#e879f9" stop-opacity="0.2"/>
     </linearGradient>
 
     <!-- Frosted Glass Echo Offset Layer behind Alef -->
     <linearGradient id="glassEcho" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.05"/>
+      <stop offset="0%" stop-color="#e9d5ff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#c084fc" stop-opacity="0.06"/>
     </linearGradient>
 
     <!-- Drop Shadow for Inner Glass Tile -->
     <filter id="plaqueShadow" x="-20%" y="-20%" width="140%" height="145%">
-      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#01040d" flood-opacity="0.74"/>
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#04010d" flood-opacity="0.76"/>
     </filter>
 
     <!-- 3D Elevation Shadow for Alef Glyph -->
     <filter id="alefShadow" x="-20%" y="-20%" width="140%" height="145%">
-      <feDropShadow dx="0" dy="20" stdDeviation="16" flood-color="#020617" flood-opacity="0.7"/>
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#f59e0b" flood-opacity="0.26"/>
+      <feDropShadow dx="0" dy="20" stdDeviation="16" flood-color="#090218" flood-opacity="0.72"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="9" flood-color="#e879f9" flood-opacity="0.32"/>
     </filter>
   </defs>
 
-  <!-- Outer Squircle Container (Direct rx=226, no clipPath bug) -->
+  <!-- Outer Squircle Container -->
   <rect class="outer-box" x="40" y="40" width="944" height="944" rx="226" fill="url(#iosBg)"/>
   <rect class="outer-box" x="40" y="40" width="944" height="944" rx="226" fill="url(#causticTopLeft)"/>
   <rect class="outer-box" x="40" y="40" width="944" height="944" rx="226" fill="url(#causticBottomRight)"/>
-  <rect class="outer-box" x="40" y="40" width="944" height="944" rx="226" fill="url(#centerGoldGlow)"/>
+  <rect class="outer-box" x="40" y="40" width="944" height="944" rx="226" fill="url(#centerVioletGlow)"/>
 
   <!-- Outer Squircle Specular Rim -->
   <rect class="outer-rim" x="43" y="43" width="938" height="938" rx="224" fill="none" stroke="url(#outerRim)" stroke-width="6"/>
@@ -122,12 +122,11 @@
 
   <!-- Plaque Specular Rim & Inner Bevel -->
   <rect x="160" y="160" width="704" height="704" rx="176" fill="none" stroke="url(#glassPlaqueRim)" stroke-width="3.5"/>
-  <rect x="172" y="172" width="680" height="680" rx="166" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1.5"/>
+  <rect x="172" y="172" width="680" height="680" rx="166" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1.5"/>
 
-  <!-- Authentic Hebrew Calligraphic Alef (א) with iOS 26 3D Liquid Glass Depth -->
-  <!-- Notice true Hebrew anatomy: Left leg branches from UPPER-LEFT (370, 385), Right Yod joins LOWER-MIDDLE (590, 565) -->
+  <!-- Authentic Hebrew Calligraphic Alef (א) with iOS 26 Violet Liquid Glass Depth -->
   <g filter="url(#alefShadow)">
-    <!-- Subtle Translucent Cyan-Glass Echo Layer (iOS 26 refraction signature) -->
+    <!-- Subtle Translucent Lavender-Glass Echo Layer -->
     <g transform="translate(12, -10)">
       <path
         d="M 264 268 L 386 268 C 402 268, 416 276, 428 292 L 736 688 C 748 704, 756 718, 756 734 C 756 748, 744 756, 726 756 L 614 756 C 596 756, 582 746, 570 730 L 262 334 C 250 318, 244 302, 244 288 C 244 274, 252 268, 264 268 Z"
@@ -135,7 +134,7 @@
       />
     </g>
 
-    <!-- 1. Upper-Right Yod Arm (starts at top-right crown, drops down and joins LOWER-MIDDLE of spine at 575,555) -->
+    <!-- 1. Upper-Right Yod Arm -->
     <path
       d="M 622 268
          L 728 268
@@ -148,13 +147,13 @@
          L 618 310
          C 604 304, 598 294, 600 282
          C 602 272, 610 268, 622 268 Z"
-      fill="url(#alefWingGold)"
+      fill="url(#alefWing)"
       stroke="url(#alefSpecular)"
       stroke-width="2.5"
       stroke-linejoin="round"
     />
 
-    <!-- 2. Lower-Left Pillar Leg (branches from UPPER-LEFT of spine at 385,395, drops vertically to flared foot at y=756) -->
+    <!-- 2. Lower-Left Pillar Leg -->
     <path
       d="M 382 392
          L 434 456
@@ -167,13 +166,13 @@
          C 258 756, 248 746, 248 726
          L 250 612
          C 252 522, 298 444, 382 392 Z"
-      fill="url(#alefWingGold)"
+      fill="url(#alefWing)"
       stroke="url(#alefSpecular)"
       stroke-width="2.5"
       stroke-linejoin="round"
     />
 
-    <!-- 3. Main Diagonal Vav Banner (classic horizontal-crowned top-left to horizontal-footed bottom-right) -->
+    <!-- 3. Main Diagonal Spine -->
     <path
       d="M 264 268
          L 386 268
@@ -186,7 +185,7 @@
          L 262 334
          C 250 318, 244 302, 244 288
          C 244 274, 252 268, 264 268 Z"
-      fill="url(#alefGold)"
+      fill="url(#alefSpine)"
       stroke="url(#alefSpecular)"
       stroke-width="3"
       stroke-linejoin="round"
@@ -197,7 +196,7 @@
       d="M 284 290 L 374 290 L 692 698"
       fill="none"
       stroke="#ffffff"
-      stroke-opacity="0.58"
+      stroke-opacity="0.64"
       stroke-width="6.5"
       stroke-linecap="round"
       stroke-linejoin="round"

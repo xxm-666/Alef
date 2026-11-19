@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
 
   const iosPng1024 = await renderSvgToBuffer(
     win,
-    `<html><body style="margin:0;background:#040712">${fullBleedSvg}</body></html>`
+    `<html><body style="margin:0;background:#070314">${fullBleedSvg}</body></html>`
   );
   fs.writeFileSync(
     path.join(iconsDir, 'apple-touch-icon.png'),
