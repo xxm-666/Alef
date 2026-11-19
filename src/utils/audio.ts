@@ -1,3 +1,4 @@
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { AUDIO_FILE_MAP, HUMAN_AUDIO_KEYS } from '../data/audioManifest';
 
 export interface SpeakResult {
@@ -5,82 +6,32 @@ export interface SpeakResult {
   voiceName?: string;
 }
 
+interface NativePronunciationPlugin {
+  play(options: { filename: string; rate: number }): Promise<void>;
+  stop(): Promise<void>;
+}
+
+const nativePronunciation = registerPlugin<NativePronunciationPlugin>('AlefPronunciation');
+const isIOSApp = Capacitor.getPlatform() === 'ios';
+
 let cachedVoices: SpeechSynthesisVoice[] = [];
-
-/**
- * iOS Safari 默认把网页音频(Web Audio / speechSynthesis)归为“环境音”,
- * 会被静音键静音。将音频会话切到 "playback" 类别即可无视静音键。
- */
-let silentAudio: HTMLAudioElement | null = null;
-let unlocked = false;
-
-function buildSilentWavUrl(): string {
-  const sampleRate = 8000;
-  const samples = 800; // 0.1s
-  const buffer = new ArrayBuffer(44 + samples * 2);
-  const v = new DataView(buffer);
-  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  w(0, 'RIFF');
-  v.setUint32(4, 36 + samples * 2, true);
-  w(8, 'WAVE');
-  w(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sampleRate, true);
-  v.setUint32(28, sampleRate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  w(36, 'data');
-  v.setUint32(40, samples * 2, true);
-  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
-}
-
-export function unlockAudio(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
-    if (session) session.type = 'playback';
-  } catch {
-    // ignore
-  }
-  const ctx = getAudioContext();
-  if (ctx && ctx.state === 'suspended') void ctx.resume();
-  if (unlocked) return;
-  try {
-    silentAudio = new Audio(buildSilentWavUrl());
-    silentAudio.setAttribute('playsinline', '');
-    silentAudio.loop = true;
-    silentAudio.volume = 0.01;
-    void silentAudio
-      .play()
-      .then(() => {
-        unlocked = true;
-      })
-      .catch(() => {
-        // 需要用户手势,下次交互再试
-      });
-  } catch {
-    // ignore
-  }
-}
-
-if (typeof window !== 'undefined') {
-  const handler = () => {
-    unlockAudio();
-    if (unlocked) {
-      window.removeEventListener('touchend', handler, true);
-      window.removeEventListener('pointerdown', handler, true);
-      window.removeEventListener('click', handler, true);
-    }
-  };
-  window.addEventListener('touchend', handler, true);
-  window.addEventListener('pointerdown', handler, true);
-  window.addEventListener('click', handler, true);
-}
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let speakTimer: number | null = null;
 let sharedAudioCtx: AudioContext | null = null;
+let currentClip: HTMLAudioElement | null = null;
+let nativePlayback: Promise<void> | null = null;
+const activeTones = new Set<OscillatorNode>();
+
+function updateAudioSession(): void {
+  try {
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) {
+      session.type = currentClip || activeUtterance || activeTones.size ? 'playback' : 'auto';
+    }
+  } catch {
+    // Older WebKit versions do not support switching audio session types.
+  }
+}
 
 function refreshVoices(): SpeechSynthesisVoice[] {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -133,60 +84,92 @@ export function getSpeechStatus(): { available: boolean; hasHebrewVoice: boolean
 function dispatchUtterance(utterance: SpeechSynthesisUtterance): void {
   const synth = window.speechSynthesis;
   activeUtterance = utterance;
-  utterance.onend = () => {
+  const finish = () => {
     if (activeUtterance === utterance) {
       activeUtterance = null;
+      updateAudioSession();
     }
   };
-  utterance.onerror = () => {
-    if (activeUtterance === utterance) {
-      activeUtterance = null;
-    }
-  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  updateAudioSession();
 
-  if (synth.paused) {
-    synth.resume();
+  try {
+    if (synth.paused) synth.resume();
+    synth.speak(utterance);
+  } catch (error) {
+    finish();
+    throw error;
   }
-  synth.speak(utterance);
 }
 
-let currentClip: HTMLAudioElement | null = null;
+function clearSpeakTimer(): void {
+  if (speakTimer !== null) {
+    window.clearTimeout(speakTimer);
+    speakTimer = null;
+  }
+}
+
+function cancelUtterance(): void {
+  if (!activeUtterance) return;
+  activeUtterance = null;
+  updateAudioSession();
+  window.speechSynthesis.cancel();
+}
 
 function stopClip(): void {
-  if (currentClip) {
-    try {
-      currentClip.pause();
-    } catch {
-      // ignore
-    }
-    currentClip = null;
+  if (nativePlayback) {
+    nativePlayback = null;
+    void nativePronunciation.stop().catch(() => {});
   }
+  if (!currentClip) return;
+  const clip = currentClip;
+  currentClip = null;
+  clip.pause();
+  clip.removeAttribute('src');
+  clip.load();
+  updateAudioSession();
 }
 
 /** 优先播放内置的真人 / 神经网络录音；成功发起播放返回 true。 */
 function playRecordedClip(hebrewText: string, rate: number, onFail: () => void): boolean {
   const rel = AUDIO_FILE_MAP[hebrewText.trim()];
-  if (!rel || typeof Audio === 'undefined') return false;
+  if (!rel) return false;
+  const safeRate = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 1));
+  if (isIOSApp && Capacitor.isPluginAvailable('AlefPronunciation')) {
+    cancelUtterance();
+    const pending = nativePronunciation.play({ filename: rel.slice(rel.lastIndexOf('/') + 1), rate: safeRate });
+    nativePlayback = pending;
+    void pending.then(() => {
+      if (nativePlayback === pending) nativePlayback = null;
+    }, () => {
+      if (nativePlayback !== pending) return;
+      nativePlayback = null;
+      onFail();
+    });
+    return true;
+  }
+  if (typeof Audio === 'undefined') return false;
   try {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelUtterance();
     const clip = new Audio(new URL(rel, document.baseURI).toString());
-    const safe = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 1));
-    clip.playbackRate = safe;
-    (clip as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
-    clip.volume = 1;
+    clip.playbackRate = safeRate;
+    clip.preservesPitch = true;
     currentClip = clip;
+    updateAudioSession();
     const fallback = () => {
       if (currentClip !== clip) return;
-      currentClip = null;
+      stopClip();
       onFail();
     };
     clip.addEventListener('error', fallback);
     clip.addEventListener('ended', () => {
-      if (currentClip === clip) currentClip = null;
+      if (currentClip === clip) stopClip();
     });
     void clip.play().catch(fallback);
     return true;
   } catch {
+    stopClip();
     return false;
   }
 }
@@ -196,11 +179,9 @@ export function speakHebrew(
   phoneticFallback?: string,
   rate = 0.9
 ): SpeakResult {
+  if (typeof window === 'undefined' || (isIOSApp && document.hidden)) return { mode: 'unavailable' };
   stopClip();
-  if (speakTimer !== null) {
-    window.clearTimeout(speakTimer);
-    speakTimer = null;
-  }
+  clearSpeakTimer();
 
   const recorded = playRecordedClip(hebrewText, rate, () =>
     speakWithSynthesis(hebrewText, phoneticFallback, rate)
@@ -219,12 +200,11 @@ function speakWithSynthesis(
   phoneticFallback?: string,
   rate = 0.9
 ): SpeakResult {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+  if ((isIOSApp && document.hidden) || !('speechSynthesis' in window)) {
     return { mode: 'unavailable' };
   }
 
   try {
-    unlockAudio();
     const synth = window.speechSynthesis;
 
     const voices = refreshVoices();
@@ -264,10 +244,14 @@ function speakWithSynthesis(
     // Avoid calling cancel() synchronously before speak() when idle, as iOS WebKit / Chromium
     // can silently drop the newly queued utterance.
     if (synth.speaking || synth.pending) {
-      synth.cancel();
+      cancelUtterance();
       speakTimer = window.setTimeout(() => {
         speakTimer = null;
-        dispatchUtterance(utterance);
+        try {
+          dispatchUtterance(utterance);
+        } catch {
+          // Playback is no longer available.
+        }
       }, 45);
     } else {
       dispatchUtterance(utterance);
@@ -293,14 +277,10 @@ function getAudioContext(): AudioContext | null {
 }
 
 export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
+  if (typeof window === 'undefined' || (isIOSApp && document.hidden)) return;
   try {
-    unlockAudio();
     const ctx = getAudioContext();
     if (!ctx) return;
-
-    if (ctx.state === 'suspended') {
-      void ctx.resume();
-    }
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -332,7 +312,39 @@ export function playFeedbackTone(kind: 'correct' | 'wrong' | 'flip'): void {
       osc.start(now);
       osc.stop(now + 0.08);
     }
+    activeTones.add(osc);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+      activeTones.delete(osc);
+      if (activeTones.size === 0) void ctx.suspend().catch(() => {});
+      updateAudioSession();
+    };
+    updateAudioSession();
+    void ctx.resume().catch(() => {});
   } catch {
     // Ignore audio context errors on restricted autoplay contexts
+  }
+}
+
+function stopPageAudio(): void {
+  stopClip();
+  clearSpeakTimer();
+  cancelUtterance();
+  for (const tone of activeTones) {
+    tone.disconnect();
+    tone.stop();
+  }
+  activeTones.clear();
+  if (sharedAudioCtx) void sharedAudioCtx.suspend().catch(() => {});
+  updateAudioSession();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', stopPageAudio);
+  if (isIOSApp) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopPageAudio();
+    });
   }
 }

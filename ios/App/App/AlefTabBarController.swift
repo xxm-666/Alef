@@ -78,6 +78,7 @@ private final class AlefStudyController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginInstance(AlefPronunciationPlugin())
         let controller = webView?.configuration.userContentController
         controller?.addUserScript(WKUserScript(
             source: "window.alefNativeTabs = true;",

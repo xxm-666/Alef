@@ -21,7 +21,7 @@
 - **元音音节实验室**：[`SyllableLab`](src/components/SyllableLab.tsx) 支持自由组合辅音字母与 Niqqud 元音符号，实时试听并练习拼读。
 
 ### 4. 真声音频与离线 PWA 支持
-- **多级音频播放策略**：[`audio.ts`](src/utils/audio.ts) 优先播放内置预录 MP3（`public/audio/`），无录音时回退至浏览器希伯来语 TTS 或音译拼读，并针对 iOS Safari 静音键做了播放解锁处理。
+- **多级音频播放策略**：[`audio.ts`](src/utils/audio.ts) 优先播放内置预录 MP3（`public/audio/`），无录音时回退至浏览器希伯来语 TTS 或音译拼读。iOS 应用使用原生播放器播放录音，结束后释放音频会话。
 - **离线音频包下载**：[`offlineAudio.ts`](src/utils/offlineAudio.ts) 支持在 PWA 中将全部字母、词汇与短语音频缓存至浏览器 `Cache Storage`，配合 Vite 构建自动生成的 `sw.js` 实现完全离线使用。
 
 ### 5. 桌面端特性、多主题与数据备份
