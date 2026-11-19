@@ -60,16 +60,21 @@ struct PronunciationButton: View {
     var iconOnly = false
     var rate: Double?
     var title = "播放发音"
+    var minimumHitSize: CGFloat?
 
     var body: some View {
         Button {
             audio.speak(hebrew, fallback: fallback, rate: rate ?? progress.speechRate)
         } label: {
-            if iconOnly {
-                Image(systemName: "speaker.wave.2")
-            } else {
-                Label(title, systemImage: "speaker.wave.2")
+            Group {
+                if iconOnly {
+                    Image(systemName: "speaker.wave.2")
+                } else {
+                    Label(title, systemImage: "speaker.wave.2")
+                }
             }
+            .frame(minWidth: minimumHitSize, minHeight: minimumHitSize)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(title)

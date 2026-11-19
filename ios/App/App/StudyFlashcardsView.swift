@@ -11,96 +11,241 @@ private struct FlashcardPreferences: Codable {
 struct StudyFlashcardsView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
+    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var flipped = false
     @State private var shuffledIDs: [String]?
 
+    private let scopes = [("all", "全部"), ("needs_review", "需复习"), ("sofit", "词尾形"), ("begadkefat", "达盖什")]
+    private let frontStyles = [("block", "印刷体"), ("cursive", "手写体"), ("both", "印刷与手写"), ("sofit", "词尾形")]
+
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
             Picker("练习方式", selection: setting(\.subMode)) {
                 Text("翻卡").tag("flip")
                 Text("测验").tag("quiz")
             }
             .pickerStyle(.segmented)
-            if preferences.subMode == "quiz" {
-                Picker("题型", selection: setting(\.quizType)) {
-                    Text("字形 → 发音").tag("block-to-sound")
-                    Text("手写 → 印刷").tag("cursive-to-block")
-                    Text("匹配词尾").tag("sofit-match")
-                    Text("达盖什辨音").tag("dagesh-quiz")
+            .frame(maxWidth: 560)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+
+            if isQuiz {
+                Form {
+                    Picker("题型", selection: setting(\.quizType)) {
+                        Text("字形 → 发音").tag("block-to-sound")
+                        Text("手写 → 印刷").tag("cursive-to-block")
+                        Text("匹配词尾").tag("sofit-match")
+                        Text("达盖什辨音").tag("dagesh-quiz")
+                    }
+                    FlashQuizSection(letters: content.letters, kind: preferences.quizType)
+                        .id(preferences.quizType)
                 }
-                FlashQuizSection(letters: content.letters, kind: preferences.quizType)
-                    .id(preferences.quizType)
+                .contentMargins(.vertical, 12, for: .scrollContent)
             } else {
-                Section {
-                    Picker("卡片范围", selection: setting(\.deckScope)) {
-                        Text("全部").tag("all")
-                        Text("需复习").tag("needs_review")
-                        Text("词尾形").tag("sofit")
-                        Text("达盖什").tag("begadkefat")
-                    }
-                    Picker("正面字形", selection: setting(\.frontType)) {
-                        Text("印刷体").tag("block")
-                        Text("手写体").tag("cursive")
-                        Text("印刷与手写").tag("both")
-                        Text("词尾形").tag("sofit")
-                    }
-                }
-                if let current = deck[safe: index] {
-                    Section("卡片 \(index + 1) / \(deck.count)") {
-                        Button(action: flip) {
-                            VStack(spacing: 8) {
-                                flashcard(current)
-                                Text(flipped ? "查看正面" : "翻到答案").font(.subheadline)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 155)
-                        }
-                        .keyboardShortcut(.space, modifiers: [])
-                        PronunciationButton(hebrew: current.nameHebrew, fallback: current.nameEnglish)
-                        if flipped {
-                            NavigationLink("完整详情与手写") { LetterStudyView(letter: current, content: content) }
-                            if let example = current.examples.first { WordExampleRow(example: example) }
-                            ForEach(Mastery.allCases) { level in
-                                Button(level.title) {
-                                    let following = deck[safe: (index + 1) % deck.count]?.id
-                                    progress.setLetter(current.id, mastery: level)
-                                    let next = deck.firstIndex { $0.id == following } ?? 0
-                                    setting(\.cardIndex).wrappedValue = next
-                                    flipped = false
-                                }
-                            }
-                        }
-                    }
-                    Section {
-                        Button("上一张", systemImage: "chevron.left") { move(-1) }
-                            .keyboardShortcut(.leftArrow, modifiers: [])
-                        Button("下一张", systemImage: "chevron.right") { move(1) }
-                            .keyboardShortcut(.rightArrow, modifiers: [])
-                        Button("打乱顺序", systemImage: "shuffle") {
-                            shuffledIDs = deck.shuffled().map(\.id)
-                            setting(\.cardIndex).wrappedValue = 0
-                            flipped = false
-                        }
-                        if shuffledIDs != nil {
-                            Button("恢复字母顺序", systemImage: "arrow.counterclockwise") {
-                                shuffledIDs = nil
-                                setting(\.cardIndex).wrappedValue = 0
-                                flipped = false
-                            }
-                        }
-                    }
-                } else {
-                    ContentUnavailableView("这个范围没有卡片", systemImage: "rectangle.on.rectangle")
+                deckView
+            }
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle("闪卡")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !isQuiz {
+                ToolbarItem(placement: .topBarTrailing) {
+                    deckOptions
                 }
             }
         }
-        .navigationTitle("闪卡")
         .onChange(of: preferences.deckScope) { _, _ in
             shuffledIDs = nil
             setting(\.cardIndex).wrappedValue = 0
             flipped = false
         }
         .onChange(of: preferences.frontType) { _, _ in flipped = false }
+    }
+
+    private var isQuiz: Bool { preferences.subMode == "quiz" }
+
+    private var deckOptions: some View {
+        Menu {
+            Picker("卡片范围", selection: setting(\.deckScope)) {
+                ForEach(scopes, id: \.0) { key, title in Text(title).tag(key) }
+            }
+            Picker("正面字形", selection: setting(\.frontType)) {
+                ForEach(frontStyles, id: \.0) { key, title in Text(title).tag(key) }
+            }
+            Section {
+                Button("打乱顺序", systemImage: "shuffle") {
+                    shuffledIDs = deck.shuffled().map(\.id)
+                    setting(\.cardIndex).wrappedValue = 0
+                    flipped = false
+                }
+                .disabled(deck.count < 2)
+                if shuffledIDs != nil {
+                    Button("恢复字母顺序", systemImage: "arrow.counterclockwise") {
+                        shuffledIDs = nil
+                        setting(\.cardIndex).wrappedValue = 0
+                        flipped = false
+                    }
+                }
+            }
+        } label: {
+            Label("闪卡选项", systemImage: "slider.horizontal.3")
+        }
+    }
+
+    private var deckView: some View {
+        let cards = deck
+        let current = cards[safe: index]
+        return ScrollViewReader { scroll in
+            ScrollView {
+                if let current {
+                    VStack(alignment: .leading, spacing: 16) {
+                        cardProgress(count: cards.count)
+                        studyCard(current)
+                        if flipped {
+                            masteryControls(for: current)
+                            cardDetails(current)
+                        }
+                    }
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
+                    .id("flashcard-top")
+                } else {
+                    ContentUnavailableView("这个范围没有卡片", systemImage: "rectangle.on.rectangle",
+                                           description: Text("可以在右上角切换卡片范围。"))
+                }
+            }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .contentMargins(.vertical, 12, for: .scrollContent)
+            .onChange(of: current?.id) { _, _ in scroll.scrollTo("flashcard-top", anchor: .top) }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if current != nil {
+                    cardNavigation
+                        .frame(maxWidth: 560)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(uiColor: .systemGroupedBackground))
+                }
+            }
+        }
+    }
+
+    private func cardProgress(count: Int) -> some View {
+        let countText = Text("卡片 \(index + 1) / \(count)").font(.subheadline.weight(.semibold)).monospacedDigit()
+        let scope = scopes.first { $0.0 == preferences.deckScope }?.1 ?? "全部"
+        let front = frontStyles.first { $0.0 == preferences.frontType }?.1 ?? "印刷与手写"
+        let optionsText = Text("\(scope) · \(front)").font(.caption).foregroundColor(.secondary)
+        return VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    countText.fixedSize()
+                    Spacer()
+                    optionsText.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    countText
+                    optionsText
+                }
+            }
+            ProgressView(value: Double(index + 1), total: Double(count)).accessibilityHidden(true)
+        }
+    }
+
+    private func studyCard(_ current: StudyLetter) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 22)
+        return VStack(spacing: 0) {
+            Button(action: flip) {
+                VStack(spacing: 12) {
+                    flashcard(current)
+                    Label(flipped ? "查看正面" : "翻到答案", systemImage: "arrow.left.arrow.right")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 176)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.space, modifiers: [])
+            Divider().padding(.horizontal, 16)
+            PronunciationButton(hebrew: current.nameHebrew, fallback: current.nameEnglish, minimumHitSize: 44)
+                .padding(.vertical, 4)
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
+        .overlay { shape.strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1).allowsHitTesting(false) }
+    }
+
+    private var cardNavigation: some View {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            Button { move(-1) } label: {
+                Label("上一张", systemImage: "chevron.left").frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            Button { move(1) } label: {
+                Label("下一张", systemImage: "chevron.right").frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+        .disabled(deck.count < 2)
+    }
+
+    private func masteryControls(for current: StudyLetter) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("标记掌握度").font(.subheadline.weight(.semibold))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Mastery.allCases) { level in
+                        masteryButton(level, for: current).fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Mastery.allCases) { level in masteryButton(level, for: current) }
+                }
+            }
+        }
+    }
+
+    private func masteryButton(_ level: Mastery, for current: StudyLetter) -> some View {
+        Button {
+            let cards = deck
+            let following = cards.isEmpty ? nil : cards[safe: (index + 1) % cards.count]?.id
+            progress.setLetter(current.id, mastery: level)
+            let next = deck.firstIndex { $0.id == following } ?? 0
+            setting(\.cardIndex).wrappedValue = next
+            flipped = false
+        } label: {
+            Label(level.title, systemImage: level.symbol)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private func cardDetails(_ current: StudyLetter) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LabeledContent("古典读音", value: current.biblicalIpa)
+            Text(current.biblicalDiff).foregroundStyle(.secondary)
+            Text("\(current.meaning)。\(current.cursiveDesc)")
+            Text("字母数值 \(current.gematria) · 转写 \(current.transliteration)").font(.footnote).foregroundStyle(.secondary)
+            if let example = current.examples.first {
+                Divider()
+                WordExampleRow(example: example)
+            }
+            NavigationLink {
+                LetterStudyView(letter: current, content: content)
+            } label: {
+                Label("完整详情与手写", systemImage: "pencil.and.outline")
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var preferences: FlashcardPreferences { progress.read("alef.flashcardState.v1", default: FlashcardPreferences()) }
@@ -142,21 +287,21 @@ struct StudyFlashcardsView: View {
 
     @ViewBuilder private func flashcard(_ letter: StudyLetter) -> some View {
         if flipped {
-            HebrewText(text: letter.nameHebrew, size: 43)
-            Text("\(letter.nameEnglish) · \(letter.nameChinese)").font(.title3)
-            Text("现代 \(letter.modernIpa) · \(letter.modernSound)")
-            Text("古典 \(letter.biblicalIpa) · \(letter.biblicalDiff)")
-            Text("\(letter.meaning)。\(letter.cursiveDesc)")
-            Text("字母数值 \(letter.gematria) · 转写 \(letter.transliteration)").font(.footnote)
+            HebrewText(text: letter.nameHebrew, size: 48).foregroundStyle(.tint)
+            Text("\(letter.nameChinese) · \(letter.nameEnglish)").font(.headline)
+            Text("\(letter.modernIpa) · \(letter.modernSound)").font(.subheadline).foregroundStyle(.secondary)
         } else {
-            HStack(spacing: 20) {
+            HStack(alignment: .firstTextBaseline, spacing: 24) {
                 if ["block", "both", "sofit"].contains(preferences.frontType) {
-                    HebrewText(text: preferences.frontType == "sofit" ? (letter.sofit ?? letter.hebrew) : letter.hebrew, size: 78)
+                    HebrewText(text: preferences.frontType == "sofit" ? (letter.sofit ?? letter.hebrew) : letter.hebrew, size: 84)
+                        .foregroundStyle(.tint)
                 }
                 if ["cursive", "both"].contains(preferences.frontType) {
-                    HebrewText(text: letter.hebrew, cursive: true, size: 78)
+                    HebrewText(text: letter.hebrew, cursive: true, size: 76)
                 }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
         }
     }
 }

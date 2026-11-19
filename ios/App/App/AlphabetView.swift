@@ -3,6 +3,8 @@ import SwiftUI
 
 struct AlphabetView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric private var glyphHeight: CGFloat = 46
     let content: StudyContent
 
     private struct Filter: Codable {
@@ -16,58 +18,88 @@ struct AlphabetView: View {
     ]
 
     var body: some View {
+        let options = content.defaultDisplay.merging(progress.read("alef.displayConfig.v1", default: [:])) { _, saved in saved }
+        let mastery = progress.letterMastery
+        let visibleLetters = letters
         ScrollView {
-            if letters.isEmpty {
-                ContentUnavailableView.search(text: filter.searchQuery)
+            if visibleLetters.isEmpty {
+                if filter.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView("没有符合筛选条件的字母", systemImage: "line.3.horizontal.decrease.circle")
+                } else {
+                    ContentUnavailableView.search(text: filter.searchQuery)
+                }
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)], spacing: 12) {
-                    ForEach(letters) { letter in
-                        letterTile(letter)
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(visibleLetters) { letter in
+                        letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned)
                     }
                 }
+                .frame(maxWidth: 780)
+                .frame(maxWidth: .infinity)
                 .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
-                .padding()
             }
         }
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .contentMargins(.vertical, 12, for: .scrollContent)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("希伯来字母")
-        .searchable(text: setting(\.searchQuery), prompt: "搜索字母、名称或读音")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: setting(\.searchQuery), placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索字母、名称或读音")
         .toolbar {
             Menu {
                 Picker("字母筛选", selection: setting(\.activeFilter)) {
                     ForEach(filters, id: \.0) { key, title in Text(title).tag(key) }
                 }
             } label: {
-                Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                Label("筛选", systemImage: filter.activeFilter == "all" ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
             }
+            .accessibilityValue(filters.first { $0.0 == filter.activeFilter }?.1 ?? "所有字母")
         }
     }
 
-    private func letterTile(_ letter: StudyLetter) -> some View {
-        let mastery = progress.letterMastery[letter.id] ?? .unlearned
-        return VStack(spacing: 6) {
+    private var columns: [GridItem] {
+        if typeSize.isAccessibilitySize { return [GridItem(.flexible(), alignment: .top)] }
+        return [GridItem(.adaptive(minimum: typeSize >= .xxLarge ? 146 : 104), spacing: 10, alignment: .top)]
+    }
+
+    private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 18)
+        return VStack(spacing: 0) {
             NavigationLink {
                 LetterStudyView(letter: letter, content: content)
             } label: {
-                card(letter).frame(maxWidth: .infinity, minHeight: 106)
+                card(letter, options: options)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(10)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("\(letter.nameChinese) \(letter.nameEnglish)")
-            HStack(spacing: 14) {
-                PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish, iconOnly: true)
-                if progress.display("showMastery") {
+            .buttonStyle(.plain)
+            .accessibilityLabel([letter.hebrew, options["showChineseName"] == true ? letter.nameChinese : nil,
+                                 options["showEnglishName"] == true ? letter.nameEnglish : nil].compactMap { $0 }.joined(separator: "，"))
+            Divider().padding(.horizontal, 10)
+            HStack(spacing: 0) {
+                PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish, iconOnly: true,
+                                    title: "朗读\(letter.nameChinese)", minimumHitSize: 44)
+                Spacer(minLength: 0)
+                if options["showMastery"] == true {
                     Button {
                         progress.setLetter(letter.id, mastery: mastery.next)
                     } label: {
                         Image(systemName: mastery.symbol)
+                            .foregroundStyle(mastery == .unlearned ? Color.secondary : Color.accentColor)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("掌握度：\(mastery.title)")
+                    .accessibilityLabel("\(letter.nameChinese)的掌握度：\(mastery.title)")
                     .accessibilityHint("切换为\(mastery.next.title)")
                 }
             }
+            .padding(.horizontal, 4)
         }
-        .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .environment(\.layoutDirection, .leftToRight)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: shape)
+        .overlay { shape.strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1).allowsHitTesting(false) }
     }
 
     private var filter: Filter { progress.read("alef.gridState.v1", default: Filter()) }
@@ -97,41 +129,58 @@ struct AlphabetView: View {
         }
     }
 
-    private func card(_ letter: StudyLetter) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 6) {
-                if progress.display("showBlock") { HebrewText(text: letter.hebrew, size: 36) }
-                if progress.display("showCursive") { HebrewText(text: letter.hebrew, cursive: true, size: 33) }
-                if progress.display("showSofit"), let sofit = letter.sofit {
-                    HebrewText(text: sofit, size: 20).foregroundStyle(.secondary)
+    private func card(_ letter: StudyLetter, options: [String: Bool]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if options["showBlock"] == true || options["showCursive"] == true {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if options["showBlock"] == true { HebrewText(text: letter.hebrew, size: 34).foregroundStyle(.tint) }
+                    if options["showCursive"] == true { HebrewText(text: letter.hebrew, cursive: true, size: 31).foregroundStyle(.primary) }
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .frame(minHeight: glyphHeight)
+                .accessibilityHidden(true)
             }
-            if progress.display("showHebrewName") { HebrewText(text: letter.nameHebrew, size: 17) }
-            if progress.display("showChineseName") { Text(letter.nameChinese).font(.subheadline) }
-            if progress.display("showEnglishName") { Text(letter.nameEnglish).font(.caption) }
-            if progress.display("showBegadkefat"), let variants = letter.begadkefat {
-                HebrewText(text: "\(variants.withDagesh.glyph) · \(variants.withoutDagesh.glyph)", size: 14)
+            if options["showChineseName"] == true { cardLine(Text(letter.nameChinese).font(.subheadline.weight(.semibold))) }
+            if options["showEnglishName"] == true { cardLine(Text(letter.nameEnglish).font(.caption).foregroundColor(.secondary)) }
+            if options["showHebrewName"] == true {
+                cardLine(Text(letter.nameHebrew).font(.caption))
             }
-            if progress.display("showModernSound") { Text(letter.modernIpa).font(.caption) }
-            if progress.display("showBiblicalDiff", default: false) { Text(letter.biblicalIpa).font(.caption) }
-            if progress.display("showTransliteration") { Text(letter.transliteration).font(.caption) }
-            if progress.display("showGematria") {
-                let numbers = letter.sofitInfo.map { "\(letter.gematria) / \($0.sofitGematria)" } ?? String(letter.gematria)
-                Text(numbers).font(.caption)
+            if options["showModernSound"] == true || options["showTransliteration"] == true {
+                let sounds = [options["showModernSound"] == true ? letter.modernIpa : nil,
+                              options["showTransliteration"] == true ? letter.transliteration : nil].compactMap { $0 }
+                cardLine(Text(sounds.joined(separator: " · ")).font(.caption2).foregroundColor(.secondary), lines: 2)
             }
-            if progress.display("showCategoryBadges", default: false) {
+            if options["showBiblicalDiff"] == true {
+                cardLine(Text(letter.biblicalIpa).font(.caption2).foregroundColor(.secondary), lines: 2)
+            }
+            if options["showSofit"] == true || options["showBegadkefat"] == true || options["showGematria"] == true {
+                let detail = annotations(letter, options: options)
+                cardLine(Text(detail.isEmpty ? " " : detail).font(.caption2).foregroundColor(.secondary), lines: 2)
+            }
+            if options["showCategoryBadges"] == true {
                 let tags = filters.filter { letter.categories.contains($0.0) }.map(\.1)
-                Text(tags.joined(separator: " · ")).font(.caption2)
-            }
-            if progress.display("showMastery") {
-                Text((progress.letterMastery[letter.id] ?? .unlearned).title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                cardLine(Text(tags.isEmpty ? " " : tags.joined(separator: " · ")).font(.caption2), lines: 2)
             }
         }
         .foregroundStyle(.primary)
-        .multilineTextAlignment(.center)
-        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func cardLine(_ text: Text, lines: Int = 1) -> some View {
+        text.lineLimit(typeSize.isAccessibilitySize ? 6 : lines, reservesSpace: !typeSize.isAccessibilitySize)
+            .minimumScaleFactor(typeSize.isAccessibilitySize ? 1 : 0.76)
+    }
+
+    private func annotations(_ letter: StudyLetter, options: [String: Bool]) -> String {
+        var details: [String] = []
+        if options["showSofit"] == true, let sofit = letter.sofit { details.append("末 \(sofit)") }
+        if options["showBegadkefat"] == true, let variants = letter.begadkefat {
+            details.append("\(variants.withDagesh.glyph)/\(variants.withoutDagesh.glyph)")
+        }
+        if options["showGematria"] == true {
+            details.append(letter.sofitInfo.map { "\(letter.gematria)/\($0.sofitGematria)" } ?? String(letter.gematria))
+        }
+        return details.joined(separator: " · ")
     }
 }
 
