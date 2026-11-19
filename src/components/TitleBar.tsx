@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { GlassLetterGlyph } from './GlassLetterGlyph';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BookOpen,
   CreditCard,
@@ -39,6 +38,8 @@ interface TitleBarProps {
   onClose: () => void;
   onOpenBackup: () => void;
 }
+
+const GlassLetterLens = lazy(() => import('./GlassLetterLens'));
 
 const NAV_ITEMS: { id: StudyViewMode; label: string; shortLabel: string; icon: React.ReactNode }[] = [
   { id: 'grid', label: '全字母表', shortLabel: '字母', icon: <Grid size={15} /> },
@@ -86,7 +87,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       <nav className="titlebar-nav" aria-label="主视图切换">
         {items.map((item) => {
           const isCenter = isBottomNav && item.id === 'grid';
-          return (
+          const button = (
             <button
               key={item.id}
               type="button"
@@ -95,11 +96,22 @@ export const TitleBar: React.FC<TitleBarProps> = ({
               aria-current={activeItem === item.id ? 'page' : undefined}
               onClick={() => onSelectView(item.id)}
             >
-              {isCenter ? <GlassLetterGlyph /> : item.icon}
+              {isCenter ? <span className="nav-center-glyph" aria-hidden="true">א</span> : item.icon}
               <span className="nav-label-desktop">{item.label}</span>
               <span className="nav-label-mobile">{item.shortLabel}</span>
             </button>
           );
+          return isCenter ? (
+            <div className="nav-center-slot" key={item.id}>
+              {/* Chromium renders displacement. Other browsers use the CSS lens below. */}
+              {CSS.supports('appearance', 'base-select') && (
+                <Suspense fallback={null}>
+                  <GlassLetterLens />
+                </Suspense>
+              )}
+              {button}
+            </div>
+          ) : button;
         })}
       </nav>
 

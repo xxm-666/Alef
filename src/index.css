@@ -3849,18 +3849,6 @@ button {
     }
   }
 
-  /* SVG backdrop displacement is an enhancement for Chromium. */
-  @supports (appearance: base-select) and (backdrop-filter: url("#alef-letter-refraction")) {
-    .nav-center-glyph:has(.nav-center-optics) {
-      backdrop-filter: url("#alef-letter-refraction") blur(1px) saturate(135%);
-    }
-  }
-
-  .nav-center-optics {
-    position: absolute;
-    pointer-events: none;
-  }
-
   .nav-label-desktop {
     display: none;
   }
@@ -3894,8 +3882,38 @@ button {
     box-shadow: inset 0 1px 1px var(--dock-glint), inset 0 -1px 1px var(--dock-reflection);
   }
 
-  .titlebar-nav .nav-pill-center {
+  .nav-center-slot {
+    position: relative;
+    display: grid;
     margin-top: -17px;
+    min-width: 0;
+  }
+
+  .nav-center-lens {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50%;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .nav-center-lens-size {
+    display: block;
+    width: 48px;
+    height: 48px;
+  }
+
+  .nav-center-slot:has(.nav-center-lens) .nav-center-glyph {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .titlebar-nav .nav-pill-center {
+    position: relative;
     padding-top: 0;
     gap: 3px;
     color: var(--text-primary);
@@ -3947,8 +3965,11 @@ button {
       backdrop-filter: none;
     }
 
-    .nav-center-glyph,
-    .nav-center-glyph:has(.nav-center-optics) {
+    .nav-center-lens {
+      display: none;
+    }
+
+    .nav-center-glyph {
       --dock-center-base: var(--bg-surface);
       -webkit-backdrop-filter: none;
       backdrop-filter: none;

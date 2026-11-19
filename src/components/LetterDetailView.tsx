@@ -52,7 +52,7 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
   const [dageshActive, setDageshActive] = useState(true);
   const [speechNotice, setSpeechNotice] = useState<string | null>(null);
 
-  function jumpToSection(ref: React.RefObject<HTMLDivElement>) {
+  function jumpToSection(ref: React.RefObject<HTMLDivElement | null>) {
     ref.current?.focus({ preventScroll: true });
     ref.current?.scrollIntoView({ block: 'start' });
   }
