@@ -21,28 +21,22 @@ struct StudyFlashcardsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("练习方式", selection: setting(\.subMode)) {
-                Text("翻卡").tag("flip")
-                Text("测验").tag("quiz")
+            Group {
+                if typeSize.isAccessibilitySize { modePicker.pickerStyle(.menu) }
+                else { modePicker.pickerStyle(.segmented) }
             }
-            .pickerStyle(.segmented)
             .frame(maxWidth: 560)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
 
             if isQuiz {
-                Form {
-                    Picker("题型", selection: setting(\.quizType)) {
-                        Text("字形 → 发音").tag("block-to-sound")
-                        Text("手写 → 印刷").tag("cursive-to-block")
-                        Text("匹配词尾").tag("sofit-match")
-                        Text("达盖什辨音").tag("dagesh-quiz")
-                    }
-                    FlashQuizSection(letters: content.letters, kind: preferences.quizType)
-                        .id(preferences.quizType)
-                }
-                .contentMargins(.vertical, 12, for: .scrollContent)
+                quizOptions
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                FlashQuizView(letters: content.letters, kind: preferences.quizType)
+                    .id(preferences.quizType)
             } else {
                 deckView
             }
@@ -66,6 +60,23 @@ struct StudyFlashcardsView: View {
     }
 
     private var isQuiz: Bool { preferences.subMode == "quiz" }
+
+    private var modePicker: some View {
+        Picker("练习方式", selection: setting(\.subMode)) {
+            Text("翻卡").tag("flip")
+            Text("测验").tag("quiz")
+        }
+    }
+
+    private var quizOptions: some View {
+        Picker("题型", selection: setting(\.quizType)) {
+            Text("字形 → 发音").tag("block-to-sound")
+            Text("手写 → 印刷").tag("cursive-to-block")
+            Text("匹配词尾").tag("sofit-match")
+            Text("达盖什辨音").tag("dagesh-quiz")
+        }
+        .pickerStyle(.menu)
+    }
 
     private var deckOptions: some View {
         Menu {
@@ -105,7 +116,6 @@ struct StudyFlashcardsView: View {
                         cardProgress(count: cards.count)
                         studyCard(current)
                         if flipped {
-                            masteryControls(for: current)
                             cardDetails(current)
                         }
                     }
@@ -121,13 +131,13 @@ struct StudyFlashcardsView: View {
             .contentMargins(.vertical, 12, for: .scrollContent)
             .onChange(of: current?.id) { _, _ in scroll.scrollTo("flashcard-top", anchor: .top) }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if current != nil {
-                    cardNavigation
-                        .frame(maxWidth: 560)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(uiColor: .systemGroupedBackground))
+                if let current {
+                    StudyActionBar {
+                        VStack(spacing: 8) {
+                            if flipped { masteryControls(for: current) }
+                            cardNavigation
+                        }
+                    }
                 }
             }
         }
@@ -180,50 +190,60 @@ struct StudyFlashcardsView: View {
     }
 
     private var cardNavigation: some View {
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            Button { move(-1) } label: {
-                Label("上一张", systemImage: "chevron.left").frame(maxWidth: .infinity, minHeight: 30)
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [])
-            Button { move(1) } label: {
-                Label("下一张", systemImage: "chevron.right").frame(maxWidth: .infinity, minHeight: 30)
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [])
+        HStack(spacing: 12) {
+            navigationButton("上一张", symbol: "chevron.left", offset: -1)
+            navigationButton("下一张", symbol: "chevron.right", offset: 1)
         }
         .buttonStyle(.bordered)
         .controlSize(.large)
         .disabled(deck.count < 2)
     }
 
+    private func navigationButton(_ title: String, symbol: String, offset: Int) -> some View {
+        Button { move(offset) } label: {
+            HStack {
+                Image(systemName: symbol)
+                if !typeSize.isAccessibilitySize { Text(title) }
+            }
+            .frame(maxWidth: .infinity, minHeight: 32)
+        }
+        .accessibilityLabel(title)
+        .keyboardShortcut(offset < 0 ? .leftArrow : .rightArrow, modifiers: [])
+    }
+
     private func masteryControls(for current: StudyLetter) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("标记掌握度").font(.subheadline.weight(.semibold))
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(Mastery.allCases) { level in
-                        masteryButton(level, for: current).fixedSize(horizontal: true, vertical: false)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                ForEach(Mastery.allCases) { level in
+                    Button {
+                        rate(level, for: current)
+                    } label: {
+                        Text(level.title).frame(minHeight: 32)
                     }
+                    .accessibilityLabel("标记为\(level.title)")
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Mastery.allCases) { level in masteryButton(level, for: current) }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .fixedSize(horizontal: true, vertical: false)
+            Menu {
+                ForEach(Mastery.allCases) { level in
+                    Button(level.title, systemImage: level.symbol) { rate(level, for: current) }
                 }
+            } label: {
+                Label("标记掌握度", systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
     }
 
-    private func masteryButton(_ level: Mastery, for current: StudyLetter) -> some View {
-        Button {
-            let cards = deck
-            let following = cards.isEmpty ? nil : cards[safe: (index + 1) % cards.count]?.id
-            progress.setLetter(current.id, mastery: level)
-            let next = deck.firstIndex { $0.id == following } ?? 0
-            setting(\.cardIndex).wrappedValue = next
-            flipped = false
-        } label: {
-            Label(level.title, systemImage: level.symbol)
-        }
-        .buttonStyle(.bordered)
+    private func rate(_ level: Mastery, for current: StudyLetter) {
+        let cards = deck
+        let following = cards.isEmpty ? nil : cards[safe: (index + 1) % cards.count]?.id
+        progress.setLetter(current.id, mastery: level)
+        let next = deck.firstIndex { $0.id == following } ?? 0
+        setting(\.cardIndex).wrappedValue = next
+        flipped = false
     }
 
     private func cardDetails(_ current: StudyLetter) -> some View {
@@ -310,7 +330,7 @@ private extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
 
-private struct FlashQuizSection: View {
+private struct FlashQuizView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     let letters: [StudyLetter]
@@ -330,40 +350,89 @@ private struct FlashQuizSection: View {
     }
 
     var body: some View {
-        Section("当前得分 \(correct) / \(total)") {
-            LabeledContent("连续答对", value: String(streak))
-            if let question {
-                Text(prompt)
-                HebrewText(text: question.glyph, cursive: kind == "cursive-to-block", size: 58)
-                    .frame(maxWidth: .infinity)
-                PronunciationButton(hebrew: question.letter.nameHebrew, fallback: question.letter.nameEnglish)
-                ForEach(question.choices, id: \.self) { choice in
-                    Button(choice) {
-                        guard answer == nil else { return }
-                        answer = choice
-                        total += 1
-                        let success = choice == question.solution
-                        if success { correct += 1 }
-                        streak = success ? streak + 1 : 0
-                        audio.playFeedback(success ? .correct : .wrong)
-                        progress.recordStudy()
-                    }
-                    .disabled(answer != nil)
+        VStack(spacing: 4) {
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Text("得分 \(correct) / \(total)").fixedSize()
+                    Spacer()
+                    Text("连续答对 \(streak)").fixedSize()
                 }
-                if let answer {
-                    Label(answer == question.solution ? "答对了" : "正确答案：\(question.solution)",
-                          systemImage: answer == question.solution ? "checkmark.circle" : "info.circle")
-                    Text(question.explanation).foregroundStyle(.secondary)
-                    Button("下一题", action: next)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("得分 \(correct) / \(total)")
+                    Text("连续答对 \(streak)")
+                }
+            }
+            .font(.subheadline)
+            .monospacedDigit()
+            .frame(maxWidth: 560)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+
+            ScrollViewReader { scroll in
+                List {
+                    if let question {
+                        Section {
+                            VStack(spacing: 8) {
+                                Text(prompt).font(.headline).multilineTextAlignment(.center)
+                                HebrewText(text: question.glyph, cursive: kind == "cursive-to-block", size: 58, style: .largeTitle)
+                                    .foregroundStyle(.tint)
+                                PronunciationButton(hebrew: question.letter.nameHebrew, fallback: question.letter.nameEnglish,
+                                                    minimumHitSize: 44)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .id("flash-question")
+
+                            ForEach(question.choices, id: \.self) { choice in
+                                StudyAnswerButton(title: choice, submitted: answer != nil,
+                                                  selected: answer == choice, correct: choice == question.solution) {
+                                    grade(choice, solution: question.solution)
+                                }
+                            }
+                        }
+                        if let answer {
+                            Section("答题结果") {
+                                Label(answer == question.solution ? "答对了" : "正确答案 · \(question.solution)",
+                                      systemImage: answer == question.solution ? "checkmark.circle" : "info.circle")
+                                Text(question.explanation).foregroundStyle(.secondary)
+                            }
+                            .id("flash-result")
+                        }
+                    } else {
+                        ContentUnavailableView("没有可用题目", systemImage: "rectangle.on.rectangle")
+                    }
+                }
+                .contentMargins(.vertical, 8, for: .scrollContent)
+                .onChange(of: question?.letter.id) { _, _ in scroll.scrollTo("flash-question", anchor: .top) }
+                .onChange(of: answer) { _, value in
+                    if value != nil { scroll.scrollTo("flash-result", anchor: .bottom) }
                 }
             }
         }
-        .task { next() }
-        .task(id: answer) {
-            guard let answer, answer == question?.solution else { return }
-            try? await Task.sleep(for: .milliseconds(700))
-            if !Task.isCancelled { next() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if answer != nil {
+                StudyActionBar {
+                    Button(action: next) {
+                        Label("下一题", systemImage: "arrow.right").frame(maxWidth: .infinity, minHeight: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+            }
         }
+        .task { if question == nil { next() } }
+    }
+
+    private func grade(_ choice: String, solution: String) {
+        guard answer == nil else { return }
+        answer = choice
+        total += 1
+        let success = choice == solution
+        if success { correct += 1 }
+        streak = success ? streak + 1 : 0
+        audio.playFeedback(success ? .correct : .wrong)
+        progress.recordStudy()
     }
 
     private var prompt: String {

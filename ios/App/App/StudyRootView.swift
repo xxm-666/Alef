@@ -106,3 +106,48 @@ struct MasteryPicker: View {
         }
     }
 }
+
+struct StudyActionBar<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            content()
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+}
+
+struct StudyAnswerButton: View {
+    let title: String
+    let submitted: Bool
+    let selected: Bool
+    let correct: Bool
+    var isHebrew = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                if isHebrew { HebrewText(text: title, size: 32).foregroundStyle(.primary) }
+                else { Text(title).foregroundStyle(.primary) }
+                Spacer()
+                if submitted && (selected || correct) {
+                    Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(correct ? Color.green : Color.red)
+                        .accessibilityLabel(correct ? "正确答案" : "答案有误")
+                }
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .disabled(submitted)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}

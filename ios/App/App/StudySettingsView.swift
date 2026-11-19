@@ -5,24 +5,6 @@ import UniformTypeIdentifiers
 struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
-    @State private var importing = false
-    @State private var exporting = false
-    @State private var openConfirmation = false
-    @State private var undoConfirmation = false
-    @State private var backup: StudyBackupDocument?
-    @State private var pending: [String: Data]?
-    @State private var message: String?
-    @State private var showsBackupText = false
-    @State private var backupText = ""
-
-    private let displayOptions = [
-        ("showBlock", "印刷体", true), ("showCursive", "手写体", true), ("showSofit", "词尾形", true),
-        ("showBegadkefat", "达盖什字形", true), ("showHebrewName", "希伯来语名称", true),
-        ("showEnglishName", "英文名称", true), ("showChineseName", "中文名称", true),
-        ("showModernSound", "现代读音", true), ("showBiblicalDiff", "古典读音", false),
-        ("showTransliteration", "音译", true), ("showGematria", "字母数值", true),
-        ("showMastery", "掌握度", true), ("showCategoryBadges", "字母分类", false)
-    ]
 
     var body: some View {
         @Bindable var progress = progress
@@ -32,29 +14,200 @@ struct StudySettingsView: View {
                     ForEach(StudyTheme.allCases) { theme in Text(theme.title).tag(theme) }
                 }
                 Toggle("字母从右向左排列", isOn: $progress.alphabetFromRight)
+                NavigationLink {
+                    StudyLetterDisplayView(content: content)
+                } label: {
+                    Label("字母表显示", systemImage: "rectangle.3.group")
+                }
             }
             Section("发音") {
                 LabeledContent("发音速度") { Text(progress.speechRate, format: .number.precision(.fractionLength(2))) }
                 Slider(value: $progress.speechRate, in: 0.5...1.5, step: 0.05) { Text("发音速度") }
-                PronunciationButton(hebrew: "שָׁלוֹם", fallback: "shalom")
+                PronunciationButton(hebrew: "שָׁלוֹם", fallback: "shalom", title: "试听发音", minimumHitSize: 44)
                 LabeledContent("内置离线录音", value: String(Set(content.audio.values).count))
             }
             Section("学习记录") {
+                LabeledContent("今日练习", value: String(progress.statistics.reviewsToday))
+                LabeledContent("连续学习天数", value: String(progress.statistics.streakDays))
+                NavigationLink {
+                    StudyStatisticsView(content: content)
+                } label: {
+                    Label("完整学习统计", systemImage: "chart.bar")
+                }
+            }
+            Section {
+                NavigationLink {
+                    StudyBackupView()
+                } label: {
+                    Label("备份与恢复", systemImage: "externaldrive")
+                }
+            }
+        }
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct StudyStatisticsView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+
+    var body: some View {
+        List {
+            Section("掌握度") {
                 LabeledContent("已掌握字母", value: "\(progress.letterMastery.values.filter { $0 == .mastered }.count) / \(content.letters.count)")
                 LabeledContent("已掌握单词", value: "\(progress.wordMastery.values.filter { $0 == .mastered }.count) / \(content.words.count)")
                 LabeledContent("到期复习", value: String(progress.schedule.values.filter(\.isDue).count))
+            }
+            Section("练习") {
                 LabeledContent("今日练习", value: String(progress.statistics.reviewsToday))
                 LabeledContent("连续学习天数", value: String(progress.statistics.streakDays))
                 LabeledContent("累计练习", value: String(progress.statistics.totalReviews))
             }
-            Section("备份与恢复") {
+        }
+        .navigationTitle("学习统计")
+    }
+}
+
+private struct StudyLetterDisplayView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+
+    private let displayOptions = [
+        ("showBlock", "印刷体"), ("showCursive", "手写体"), ("showSofit", "词尾形"),
+        ("showBegadkefat", "达盖什字形"), ("showHebrewName", "希伯来语名称"),
+        ("showEnglishName", "英文名称"), ("showChineseName", "中文名称"),
+        ("showModernSound", "现代读音"), ("showBiblicalDiff", "古典读音"),
+        ("showTransliteration", "音译"), ("showGematria", "字母数值"),
+        ("showMastery", "掌握度"), ("showCategoryBadges", "字母分类")
+    ]
+
+    private var config: [String: Bool] {
+        content.defaultDisplay.merging(progress.read("alef.displayConfig.v1", default: [:])) { _, saved in saved }
+    }
+
+    private var selectedPreset: String {
+        content.displayPresets.first { presetConfig($0) == config }?.label
+            ?? (config == content.defaultDisplay ? "默认" : "自定义")
+    }
+
+    var body: some View {
+        Form {
+            Section("模板") {
+                Menu {
+                    ForEach(content.displayPresets) { preset in
+                        Button {
+                            progress.write(preset.config, for: "alef.displayConfig.v1")
+                        } label: {
+                            Label(preset.label, systemImage: presetConfig(preset) == config ? "checkmark" : "rectangle.3.group")
+                        }
+                    }
+                    Button("恢复默认", systemImage: "arrow.counterclockwise") {
+                        progress.write(content.defaultDisplay, for: "alef.displayConfig.v1")
+                    }
+                } label: {
+                    LabeledContent("视图模板", value: selectedPreset)
+                        .frame(minHeight: 44)
+                }
+            }
+            if let example = content.letters.first(where: { $0.id == "kaf" }) ?? content.letters.first {
+                Section("卡片预览") {
+                    VStack(spacing: 0) {
+                        LetterTileContent(letter: example, options: config)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                        Divider().padding(.horizontal, 12)
+                        HStack {
+                            PronunciationButton(hebrew: example.nameHebrew, fallback: example.nameEnglish,
+                                                iconOnly: true, minimumHitSize: 44)
+                            Spacer()
+                            if config["showMastery"] == true {
+                                let mastery = progress.letterMastery[example.id] ?? .unlearned
+                                Image(systemName: mastery.symbol)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel(mastery.title)
+                                    .frame(minWidth: 44)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .frame(idealWidth: 180, maxWidth: 300)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1)
+                            .allowsHitTesting(false)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+            }
+            Section {
+                DisclosureGroup("自定义显示项目") {
+                    ForEach(displayOptions, id: \.0) { key, label in
+                        Toggle(label, isOn: Binding(get: { config[key] == true }, set: {
+                            progress.setDisplay(key, enabled: $0)
+                        }))
+                    }
+                }
+            }
+        }
+        .navigationTitle("字母表显示")
+    }
+
+    private func presetConfig(_ preset: StudyDisplayPreset) -> [String: Bool] {
+        content.defaultDisplay.merging(preset.config) { _, preset in preset }
+    }
+}
+
+private struct StudyBackupView: View {
+    @Environment(StudyProgress.self) private var progress
+    @State private var importing = false
+    @State private var exporting = false
+    @State private var undoConfirmation = false
+    @State private var backup: StudyBackupDocument?
+    @State private var preview: BackupPreview?
+    @State private var message: String?
+    @State private var status: BackupStatus?
+    @State private var showsBackupText = false
+    @State private var backupText = ""
+
+    private struct BackupPreview: Identifiable {
+        let id = UUID()
+        let entries: [String: Data]
+        let changes: [String]
+    }
+
+    private enum BackupStatus {
+        case copied
+        case unchanged
+    }
+
+    var body: some View {
+        Form {
+            Section("保存备份") {
                 Button("导出 Alef 备份", systemImage: "square.and.arrow.up", action: export)
                 Button("复制备份文本", systemImage: "doc.on.doc", action: copyBackup)
+                if status == .copied {
+                    Text("已复制 Alef JSON 备份。").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            Section("恢复学习数据") {
                 Button("导入 Alef 备份", systemImage: "square.and.arrow.down") { importing = true }
-                DisclosureGroup("从文本恢复", isExpanded: $showsBackupText) {
+                Button {
+                    showsBackupText.toggle()
+                } label: {
+                    Label(showsBackupText ? "收起文本输入" : "从文本恢复", systemImage: "doc.text")
+                }
+                if status == .unchanged {
+                    Text("备份内容与当前数据相同。").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            if showsBackupText {
+                Section("JSON 备份文本") {
                     TextEditor(text: $backupText)
                         .font(.system(.footnote, design: .monospaced))
-                        .frame(minHeight: 96)
+                        .frame(minHeight: 160)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .accessibilityLabel("Alef JSON 备份文本")
@@ -66,42 +219,52 @@ struct StudySettingsView: View {
                     }
                     .disabled(backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                if progress.restorePoint != nil {
+            }
+            if progress.restorePoint != nil {
+                Section {
                     Button("撤销上次导入", systemImage: "arrow.uturn.backward") { undoConfirmation = true }
                 }
             }
-            Section("字母表显示") {
-                Menu("视图模板", systemImage: "rectangle.3.group") {
-                    ForEach(content.displayPresets) { preset in
-                        Button(preset.label) { progress.write(preset.config, for: "alef.displayConfig.v1") }
-                    }
-                    Button("恢复默认", systemImage: "arrow.counterclockwise") {
-                        progress.write(content.defaultDisplay, for: "alef.displayConfig.v1")
-                    }
-                }
-                ForEach(displayOptions, id: \.0) { key, label, fallback in
-                    Toggle(label, isOn: Binding(get: { progress.display(key, default: fallback) }, set: {
-                        progress.setDisplay(key, enabled: $0)
-                    }))
-                }
-            }
         }
-        .navigationTitle("设置")
+        .navigationTitle("备份与恢复")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json], onCompletion: prepareImport)
         .fileExporter(isPresented: $exporting, document: backup, contentType: .json, defaultFilename: "alef-backup") { outcome in
             if case let .failure(error) = outcome { message = error.localizedDescription }
         }
-        .confirmationDialog("恢复学习数据", isPresented: $openConfirmation, titleVisibility: .visible) {
-            Button("确认恢复", role: .destructive) {
-                if let pending { progress.applyBackup(pending) }
-                pending = nil
-                backupText = ""
-                showsBackupText = false
+        .sheet(item: $preview) { pending in
+            NavigationStack {
+                List {
+                    Section("将更新 \(pending.changes.count) 项") {
+                        ForEach(pending.changes.indices, id: \.self) { index in
+                            Text(pending.changes[index])
+                        }
+                    }
+                    Text("导入后可以从备份页撤销本次恢复。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                .navigationTitle("恢复预览")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { preview = nil }
+                    }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    StudyActionBar {
+                        Button {
+                            preview = nil
+                            backupText = ""
+                            showsBackupText = false
+                            progress.applyBackup(pending.entries)
+                        } label: {
+                            Label("确认恢复", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity, minHeight: 34)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
+                }
             }
-            Button("取消", role: .cancel) { pending = nil }
-        } message: {
-            let changes = progress.backupChanges(pending ?? [:]).map(backupLabel)
-            Text("将更新 \(changes.count) 项：\(changes.joined(separator: "、"))。导入后可以撤销。")
         }
         .confirmationDialog("撤销上次导入？", isPresented: $undoConfirmation, titleVisibility: .visible) {
             Button("撤销导入", role: .destructive) { progress.undoBackup() }
@@ -125,24 +288,26 @@ struct StudySettingsView: View {
     }
 
     private func prepareBackup(_ data: Data) {
-        pending = nil
+        preview = nil
+        status = nil
         do {
-            let preview = try progress.previewBackup(data)
-            guard !progress.backupChanges(preview).isEmpty else {
-                message = "备份内容与当前数据相同。"
+            let entries = try progress.previewBackup(data)
+            let changes = progress.backupChanges(entries).map(backupLabel)
+            guard !changes.isEmpty else {
+                status = .unchanged
                 return
             }
-            pending = preview
-            openConfirmation = true
+            preview = BackupPreview(entries: entries, changes: changes)
         } catch {
             message = error.localizedDescription
         }
     }
 
     private func copyBackup() {
+        status = nil
         do {
             UIPasteboard.general.string = String(decoding: try progress.exportBackup(), as: UTF8.self)
-            message = "已复制 Alef JSON 备份。"
+            status = .copied
         } catch {
             message = error.localizedDescription
         }
