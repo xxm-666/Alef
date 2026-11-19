@@ -176,9 +176,24 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
 
   // Virtual list state
   const listScrollRef = useRef<HTMLDivElement | null>(null);
+  const mobileViewRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(initialSaved.scrollTop);
   const [viewportHeight, setViewportHeight] = useState(520);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
+  const [isNarrowViewport, setIsNarrowViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 980 : false
+  );
   const didMountFiltersRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(max-width: 980px)');
+    const sync = () => setIsNarrowViewport(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
 
   // Quiz state
   const [quizKind, setQuizKind] = useState<WordQuizKind>('meaning');
@@ -254,6 +269,9 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     return list;
   }, [words, activeFilter, initialLetter, searchQuery, wordMasteryMap, wordSrsMap, favoriteSet, sortOrder]);
 
+  const isMobileListScroll =
+    isNarrowViewport && mode === 'browse' && mobileSubView === 'list' && filteredWords.length > 0;
+
   useEffect(() => {
     if (!didMountFiltersRef.current) {
       didMountFiltersRef.current = true;
@@ -264,20 +282,24 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     if (listScrollRef.current) {
       listScrollRef.current.scrollTop = 0;
     }
+    if (mobileViewRef.current) {
+      mobileViewRef.current.scrollTop = 0;
+    }
   }, [activeFilter, initialLetter, searchQuery, sortOrder]);
 
   // Restore saved virtual list scrollTop when entering browse mode
   useEffect(() => {
     if (mode !== 'browse') return;
-    const el = listScrollRef.current;
+    const el = isMobileListScroll ? mobileViewRef.current : listScrollRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
-      if (listScrollRef.current) {
-        listScrollRef.current.scrollTop = scrollTop;
+      const target = isMobileListScroll ? mobileViewRef.current : listScrollRef.current;
+      if (target) {
+        target.scrollTop = scrollTop;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, isMobileListScroll]);
 
   // Persist view state across tab switches and restarts (debounce scrollTop to keep scrolling smooth)
   const scrollTopRef = useRef(scrollTop);
@@ -331,14 +353,28 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   }, [scrollTop]);
 
   useEffect(() => {
-    const el = listScrollRef.current;
+    const el = isMobileListScroll ? mobileViewRef.current : listScrollRef.current;
     if (!el) return;
     const updateSize = () => setViewportHeight(el.clientHeight || 520);
     updateSize();
     const observer = new ResizeObserver(updateSize);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [mode, filteredWords.length]);
+  }, [mode, filteredWords.length, isMobileListScroll]);
+
+  useEffect(() => {
+    if (!isMobileListScroll) {
+      setToolbarHeight(0);
+      return;
+    }
+    const tb = toolbarRef.current;
+    if (!tb) return;
+    const updateTb = () => setToolbarHeight(tb.offsetHeight + 16);
+    updateTb();
+    const observer = new ResizeObserver(updateTb);
+    observer.observe(tb);
+    return () => observer.disconnect();
+  }, [isMobileListScroll]);
 
   const selectedWord = useMemo(() => {
     const inFiltered = filteredWords.find((w) => w.id === selectedWordId);
@@ -409,11 +445,14 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   }, [phraseScenario]);
 
   // Virtual window calculation
+  const effectiveListScrollTop = isMobileListScroll
+    ? Math.max(0, scrollTop - toolbarHeight)
+    : scrollTop;
   const totalHeight = filteredWords.length * ROW_STRIDE;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_STRIDE) - OVERSCAN);
+  const startIndex = Math.max(0, Math.floor(effectiveListScrollTop / ROW_STRIDE) - OVERSCAN);
   const endIndex = Math.min(
     filteredWords.length,
-    Math.ceil((scrollTop + viewportHeight) / ROW_STRIDE) + OVERSCAN
+    Math.ceil((effectiveListScrollTop + viewportHeight) / ROW_STRIDE) + OVERSCAN
   );
   const visibleSlice = filteredWords.slice(startIndex, endIndex);
 
@@ -493,14 +532,17 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
 
   return (
     <div
+      ref={mobileViewRef}
       className={`view-container words-view ${
-        mode === 'browse' && mobileSubView === 'list' && filteredWords.length > 0
-          ? 'words-mobile-list-lock'
-          : ''
+        isMobileListScroll ? 'words-mobile-list-lock' : ''
       }`}
+      onScroll={
+        isMobileListScroll ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined
+      }
     >
       {/* Top Toolbar */}
       <div
+        ref={toolbarRef}
         className={`toolbar-card ${
           mode === 'browse' && mobileSubView === 'detail' ? 'mobile-hide-toolbar' : ''
         }`}
@@ -684,12 +726,24 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             <aside className="words-list-pane" aria-label="单词列表">
               <div className="words-list-header">
                 <span>匹配 {filteredWords.length} 个单词</span>
-                <span className="muted-caption">↑ / ↓ 切换</span>
+                {isMobileListScroll && scrollTop > Math.max(40, toolbarHeight - 20) ? (
+                  <button
+                    type="button"
+                    className="btn-ghost btn-xs"
+                    onClick={() => mobileViewRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                  >
+                    搜索 / 筛选 ↑
+                  </button>
+                ) : (
+                  <span className="muted-caption desktop-only-control">↑ / ↓ 切换</span>
+                )}
               </div>
               <div
                 ref={listScrollRef}
                 className="words-list-scroll virtual-scroll"
-                onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+                onScroll={
+                  isMobileListScroll ? undefined : (e) => setScrollTop(e.currentTarget.scrollTop)
+                }
               >
                 <div
                   className="virtual-spacer"
