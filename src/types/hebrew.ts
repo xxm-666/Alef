@@ -7,7 +7,7 @@ export type LetterCategory =
 
 export type MasteryLevel = 'unlearned' | 'learning' | 'mastered';
 
-export type StudyViewMode = 'grid' | 'detail' | 'words' | 'flashcards' | 'rules';
+export type StudyViewMode = 'grid' | 'detail' | 'words' | 'flashcards' | 'rules' | 'settings';
 
 export type WordCategory =
   | 'greetings'

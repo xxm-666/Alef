@@ -13,6 +13,7 @@ import {
   PictureInPicture2,
   Pin,
   PinOff,
+  Settings,
   Square,
   Sun,
   X,
@@ -42,12 +43,13 @@ interface TitleBarProps {
   studyStats: StudyStats;
 }
 
-const NAV_ITEMS: { id: StudyViewMode; label: string; icon: React.ReactNode }[] = [
-  { id: 'grid', label: '全字母表', icon: <Grid size={15} /> },
-  { id: 'detail', label: '单字卡片', icon: <CreditCard size={15} /> },
-  { id: 'words', label: '高频单词', icon: <Languages size={15} /> },
-  { id: 'flashcards', label: '闪卡自测', icon: <Layers size={15} /> },
-  { id: 'rules', label: '规则对比', icon: <BookOpen size={15} /> },
+const NAV_ITEMS: { id: StudyViewMode; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+  { id: 'grid', label: '全字母表', shortLabel: '字母', icon: <Grid size={15} /> },
+  { id: 'detail', label: '单字卡片', shortLabel: '单字', icon: <CreditCard size={15} /> },
+  { id: 'words', label: '高频单词', shortLabel: '单词', icon: <Languages size={15} /> },
+  { id: 'flashcards', label: '闪卡自测', shortLabel: '闪卡', icon: <Layers size={15} /> },
+  { id: 'rules', label: '规则对比', shortLabel: '规则', icon: <BookOpen size={15} /> },
+  { id: 'settings', label: '设置', shortLabel: '设置', icon: <Settings size={15} /> },
 ];
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -100,7 +102,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             onClick={() => onSelectView(item.id)}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span className="nav-label-desktop">{item.label}</span>
+            <span className="nav-label-mobile">{item.shortLabel}</span>
           </button>
         ))}
       </nav>

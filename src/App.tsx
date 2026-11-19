@@ -24,6 +24,7 @@ import { FlashcardStudyView } from './components/FlashcardStudyView';
 import { SpecialRulesView } from './components/SpecialRulesView';
 import { MiniWidgetView } from './components/MiniWidgetView';
 import { WordsStudyView } from './components/WordsStudyView';
+import { SettingsView } from './components/SettingsView';
 import { BackupModal } from './components/BackupModal';
 
 const STORAGE_KEYS = {
@@ -428,6 +429,30 @@ export const App: React.FC = () => {
             niqqudList={NIQQUD_ITEMS}
             onSelectLetter={handleOpenDetail}
             speechRate={speechRate}
+          />
+        )}
+
+        {activeView === 'settings' && (
+          <SettingsView
+            theme={theme}
+            onSelectTheme={setTheme}
+            order={order}
+            onToggleOrder={() => setOrder((o) => (o === 'rtl' ? 'ltr' : 'rtl'))}
+            speechRate={speechRate}
+            onChangeSpeechRate={setSpeechRate}
+            displayConfig={displayConfig}
+            onUpdateDisplayConfig={setDisplayConfig}
+            onResetDisplayConfig={() => setDisplayConfig(DEFAULT_DISPLAY_CONFIG)}
+            onOpenBackup={() => setIsBackupOpen(true)}
+            masteredLettersCount={masteredCount}
+            totalLettersCount={HEBREW_LETTERS.length}
+            masteredWordsCount={Object.values(wordMasteryMap).filter((v) => v === 'mastered').length}
+            totalWordsCount={HEBREW_WORDS.length}
+            studyStats={studyStats}
+            windowState={windowState}
+            onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
+            onToggleMiniMode={handleToggleMiniMode}
+            onChangeOpacity={handleChangeOpacity}
           />
         )}
       </main>
