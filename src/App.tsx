@@ -35,6 +35,7 @@ const STORAGE_KEYS = {
   favoriteWords: 'alef.favoriteWords.v1',
   studyStats: 'alef.studyStats.v1',
   theme: 'alef.theme.v1',
+  dayTheme: 'alef.dayTheme.v1',
   order: 'alef.order.v1',
   speechRate: 'alef.speechRate.v1',
   activeView: 'alef.activeView.v1',
@@ -100,8 +101,9 @@ export const App: React.FC = () => {
   );
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() =>
-    readStorage(STORAGE_KEYS.theme, 'dark')
+    readStorage(STORAGE_KEYS.theme, 'parchment')
   );
+  const lastDayTheme = useRef(readStorage<Exclude<ThemeMode, 'dark'>>(STORAGE_KEYS.dayTheme, 'parchment'));
   const [order, setOrder] = useState<AlphabetOrder>(() =>
     readStorage(STORAGE_KEYS.order, 'rtl')
   );
@@ -113,10 +115,15 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(theme));
+    writeStorage(STORAGE_KEYS.theme, theme);
+    if (theme !== 'dark') {
+      lastDayTheme.current = theme;
+      writeStorage(STORAGE_KEYS.dayTheme, theme);
+    }
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      themeMeta.setAttribute('content', theme === 'dark' ? '#0b1120' : '#f3ede1');
+      const appBackground = getComputedStyle(document.documentElement).getPropertyValue('--bg-app');
+      themeMeta.setAttribute('content', appBackground.trim());
     }
   }, [theme]);
 
@@ -355,7 +362,7 @@ export const App: React.FC = () => {
         activeView={activeView}
         onSelectView={handleSelectView}
         theme={theme}
-        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'parchment' : 'dark'))}
+        onToggleTheme={() => setTheme((t) => (t === 'dark' ? lastDayTheme.current : 'dark'))}
         windowState={windowState}
         onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
         onToggleMiniMode={handleToggleMiniMode}

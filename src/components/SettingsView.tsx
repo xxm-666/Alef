@@ -22,6 +22,13 @@ import {
 } from '../types/hebrew';
 import { speakHebrew } from '../utils/audio';
 
+const THEME_CHOICES: { id: ThemeMode; label: string }[] = [
+  { id: 'parchment', label: '羊皮纸日间' },
+  { id: 'rose', label: '玫瑰红' },
+  { id: 'violet', label: '暮光紫' },
+  { id: 'dark', label: '深邃夜间' },
+];
+
 interface SettingsViewProps {
   theme: ThemeMode;
   onSelectTheme: (theme: ThemeMode) => void;
@@ -107,29 +114,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <h3>外观主题</h3>
             </div>
           </div>
-          <div className="theme-choice-grid">
-            <button
-              type="button"
-              className={`theme-choice-btn ${theme === 'dark' ? 'active' : ''}`}
-              onClick={() => onSelectTheme('dark')}
-            >
-              <Moon size={18} />
-              <div>
-                <strong>深邃夜间</strong>
-                <span>适合夜晚低光环境学习</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              className={`theme-choice-btn ${theme === 'parchment' ? 'active' : ''}`}
-              onClick={() => onSelectTheme('parchment')}
-            >
-              <Sun size={18} />
-              <div>
-                <strong>羊皮纸日间</strong>
-                <span>温暖纸质书阅读观感</span>
-              </div>
-            </button>
+          <div className="theme-choice-grid" role="group" aria-label="外观主题">
+            {THEME_CHOICES.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                data-theme={id}
+                className={`theme-choice-btn ${theme === id ? 'active' : ''}`}
+                aria-pressed={theme === id}
+                onClick={() => onSelectTheme(id)}
+              >
+                <span className="theme-swatch" aria-hidden="true" />
+                <strong>{label}</strong>
+              </button>
+            ))}
           </div>
         </section>
 

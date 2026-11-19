@@ -149,7 +149,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           type="button"
           className="icon-action-btn"
           onClick={onToggleTheme}
-          title={theme === 'dark' ? '切换为羊皮纸日间主题' : '切换为深邃夜间主题'}
+          title={theme === 'dark' ? '切换为日间主题' : '切换为深邃夜间主题'}
         >
           {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
         </button>

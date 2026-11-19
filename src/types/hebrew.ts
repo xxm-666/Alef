@@ -43,7 +43,7 @@ export interface HebrewWord {
   sentence?: WordSentenceExample;
 }
 
-export type ThemeMode = 'dark' | 'parchment';
+export type ThemeMode = 'dark' | 'parchment' | 'rose' | 'violet';
 
 export type AlphabetOrder = 'rtl' | 'ltr';
 
