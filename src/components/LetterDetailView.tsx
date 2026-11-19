@@ -23,6 +23,7 @@ interface LetterDetailViewProps {
   letters: HebrewLetter[];
   selectedLetter: HebrewLetter;
   onSelectLetter: (letterId: string) => void;
+  onBackToGrid: () => void;
   order: AlphabetOrder;
   masteryMap: Record<string, MasteryLevel>;
   onSetMastery: (letterId: string, level: MasteryLevel) => void;
@@ -39,6 +40,7 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
   letters,
   selectedLetter,
   onSelectLetter,
+  onBackToGrid,
   order,
   masteryMap,
   onSetMastery,
@@ -111,6 +113,27 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
 
   return (
     <div className="view-container detail-view">
+      <div className="detail-section-links" role="group" aria-label="单字卡片导航">
+        <button type="button" className="btn-secondary btn-sm" onClick={onBackToGrid}>
+          <ArrowLeft size={14} />
+          字母表
+        </button>
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => jumpToSection(examplesRef)}
+        >
+          例词
+        </button>
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => jumpToSection(writingRef)}
+        >
+          书写练习
+        </button>
+      </div>
+
       {/* 22-letter quick navigation strip */}
       <div className="detail-nav-strip">
         <button
@@ -156,23 +179,6 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
             {nextLetter.hebrew} {nextLetter.nameEnglish}
           </span>
           <ArrowRight size={14} />
-        </button>
-      </div>
-
-      <div className="detail-section-links" role="group" aria-label="单字卡片快捷跳转">
-        <button
-          type="button"
-          className="btn-secondary btn-sm"
-          onClick={() => jumpToSection(examplesRef)}
-        >
-          例词
-        </button>
-        <button
-          type="button"
-          className="btn-secondary btn-sm"
-          onClick={() => jumpToSection(writingRef)}
-        >
-          书写练习
         </button>
       </div>
 

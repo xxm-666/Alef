@@ -157,11 +157,10 @@ export const App: React.FC = () => {
     const el = mainScrollRef.current;
     if (!el) return;
     const savedTop = viewScrollPositionsRef.current[activeView] ?? 0;
-    requestAnimationFrame(() => {
-      if (mainScrollRef.current) {
-        mainScrollRef.current.scrollTop = savedTop;
-      }
+    const frame = requestAnimationFrame(() => {
+      el.scrollTop = savedTop;
     });
+    return () => cancelAnimationFrame(frame);
   }, [activeView]);
 
   useEffect(() => {
@@ -277,6 +276,7 @@ export const App: React.FC = () => {
     if (mainScrollRef.current) {
       viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
     }
+    viewScrollPositionsRef.current.detail = 0;
     setSelectedLetterId(letterId);
     setActiveView('detail');
   }
@@ -387,6 +387,7 @@ export const App: React.FC = () => {
             letters={HEBREW_LETTERS}
             selectedLetter={selectedLetter}
             onSelectLetter={setSelectedLetterId}
+            onBackToGrid={() => handleSelectView('grid')}
             order={order}
             masteryMap={masteryMap}
             onSetMastery={handleSetMastery}

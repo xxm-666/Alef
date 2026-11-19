@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   CreditCard,
@@ -62,17 +62,31 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onClose,
   onOpenBackup,
 }) => {
+  const [isBottomNav, setIsBottomNav] = useState(
+    () => window.matchMedia('(max-width: 768px)').matches
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsBottomNav(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  const items = isBottomNav ? NAV_ITEMS.filter((item) => item.id !== 'detail') : NAV_ITEMS;
+  const activeItem = isBottomNav && activeView === 'detail' ? 'grid' : activeView;
+
   return (
     <header className="titlebar">
-
       <nav className="titlebar-nav" aria-label="主视图切换">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <button
             key={item.id}
             type="button"
-            className={`nav-pill ${activeView === item.id ? 'active' : ''}`}
+            className={`nav-pill ${activeItem === item.id ? 'active' : ''}`}
             aria-label={item.label}
-            aria-current={activeView === item.id ? 'page' : undefined}
+            aria-current={activeItem === item.id ? 'page' : undefined}
             onClick={() => onSelectView(item.id)}
           >
             {item.icon}
