@@ -350,7 +350,7 @@ private struct StudyBackupView: View {
         case "alef.selectedLetterId.v1": "上次查看的字母"
         case "alef.displayConfig.v1": "字母表显示选项"
         case "alef.rulesTab.v1": "规则页选项"
-        case "alef.gridState.v1": "字母表筛选"
+        case "alef.gridState.v1": "旧版字母表选项"
         case "alef.wordsState.v1": "词表选项"
         case "alef.flashcardState.v1": "闪卡选项"
         default: key

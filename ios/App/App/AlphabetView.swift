@@ -6,70 +6,89 @@ struct AlphabetView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
 
-    private struct Filter: Codable {
-        var searchQuery = ""
-        var activeFilter = "all"
-    }
-
-    private let filters = [
-        ("all", "所有字母"), ("sofit", "词尾变形"), ("begadkefat", "达盖什"),
-        ("guttural", "喉音字母"), ("confusable", "易混字母"), ("needs_review", "需复习")
-    ]
-
     var body: some View {
         let options = content.defaultDisplay.merging(progress.read("alef.displayConfig.v1", default: [:])) { _, saved in saved }
         let mastery = progress.letterMastery
-        let visibleLetters = letters
         ScrollView {
-            if visibleLetters.isEmpty {
-                if filter.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ContentUnavailableView("没有符合筛选条件的字母", systemImage: "line.3.horizontal.decrease.circle")
-                } else {
-                    ContentUnavailableView.search(text: filter.searchQuery)
-                }
-            } else {
+            VStack(alignment: .leading, spacing: 24) {
                 LazyVGrid(columns: LetterGridLayout.columns(options: options, typeSize: typeSize),
                           spacing: LetterGridLayout.spacing) {
-                    ForEach(visibleLetters) { letter in
+                    ForEach(content.letters) { letter in
                         letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned)
                     }
                 }
-                .frame(maxWidth: LetterGridLayout.maximumWidth)
-                .frame(maxWidth: .infinity)
-                .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
+                .environment(\.layoutDirection, letterDirection)
+
+                if options["showSofit"] == true {
+                    let letters = content.letters.filter { $0.sofitInfo != nil }
+                    if !letters.isEmpty { finalFormsSection(letters, options: options) }
+                }
             }
+            .frame(maxWidth: LetterGridLayout.maximumWidth)
+            .frame(maxWidth: .infinity)
         }
         .contentMargins(.horizontal, LetterGridLayout.pageMargin, for: .scrollContent)
         .contentMargins(.vertical, 12, for: .scrollContent)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let title = filters.first(where: { $0.0 == filter.activeFilter && $0.0 != "all" })?.1 {
-                HStack {
-                    Label(title, systemImage: "line.3.horizontal.decrease")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("清除筛选") { setting(\.activeFilter).wrappedValue = "all" }
-                        .frame(minHeight: 44)
-                }
-                .frame(maxWidth: LetterGridLayout.maximumWidth)
-                .padding(.horizontal, LetterGridLayout.pageMargin)
-                .frame(maxWidth: .infinity)
-                .background(progress.theme.canvas)
-            }
-        }
         .background(progress.theme.canvas)
         .navigationTitle("希伯来字母")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: setting(\.searchQuery), placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索字母、名称或读音")
-        .toolbar {
-            Menu {
-                Picker("字母筛选", selection: setting(\.activeFilter)) {
-                    ForEach(filters, id: \.0) { key, title in Text(title).tag(key) }
-                }
-            } label: {
-                Label("筛选", systemImage: filter.activeFilter == "all" ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+    }
+
+    private var letterDirection: LayoutDirection { progress.alphabetFromRight ? .rightToLeft : .leftToRight }
+
+    private func finalFormsSection(_ letters: [StudyLetter], options: [String: Bool]) -> some View {
+        let size: GridItem.Size = typeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: typeSize >= .xxLarge ? 124 : 80)
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("词尾形").font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                Text("这五个字形用于单词末尾。").font(.subheadline).foregroundStyle(.secondary)
             }
-            .accessibilityValue(filters.first { $0.0 == filter.activeFilter }?.1 ?? "所有字母")
+            LazyVGrid(columns: [GridItem(size, spacing: 10, alignment: .top)], spacing: 10) {
+                ForEach(letters) { letter in
+                    if let form = letter.sofitInfo {
+                        finalFormTile(letter, form: form, options: options)
+                    }
+                }
+            }
+            .environment(\.layoutDirection, letterDirection)
         }
+        .padding(12)
+        .background(progress.theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+        .frame(maxWidth: 540)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func finalFormTile(_ letter: StudyLetter, form: StudySofit, options: [String: Bool]) -> some View {
+        let name: String? = if options["showChineseName"] == true {
+            letter.nameChinese
+        } else if options["showEnglishName"] == true {
+            letter.nameEnglish
+        } else if options["showHebrewName"] == true {
+            letter.nameHebrew
+        } else {
+            nil
+        }
+        return NavigationLink {
+            LetterStudyView(letter: letter, content: content, showsFinalForm: true)
+        } label: {
+            VStack(spacing: 4) {
+                HebrewText(text: form.finalGlyph, cursive: options["showBlock"] != true && options["showCursive"] == true,
+                           size: 42, style: .title)
+                    .foregroundStyle(progress.theme.accent)
+                if let name {
+                    Text(name)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .environment(\.layoutDirection, .leftToRight)
+            .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel([form.finalGlyph, name, "词尾形"].compactMap { $0 }.joined(separator: "，"))
     }
 
     private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
@@ -110,33 +129,6 @@ struct AlphabetView: View {
         .environment(\.layoutDirection, .leftToRight)
         .background(progress.theme.cardSurface, in: shape)
         .overlay { shape.strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 1).allowsHitTesting(false) }
-    }
-
-    private var filter: Filter { progress.read("alef.gridState.v1", default: Filter()) }
-
-    private func setting(_ keyPath: WritableKeyPath<Filter, String>) -> Binding<String> {
-        Binding(get: { filter[keyPath: keyPath] }, set: { value in
-            var state = filter
-            state[keyPath: keyPath] = value
-            progress.write(state, for: "alef.gridState.v1")
-        })
-    }
-
-    private var letters: [StudyLetter] {
-        let state = filter
-        let mastery = progress.letterMastery
-        let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return content.letters.filter { letter in
-            let included = switch state.activeFilter {
-            case "all": true
-            case "confusable": !letter.confusableWith.isEmpty
-            case "needs_review": mastery[letter.id] != .mastered
-            default: letter.categories.contains(state.activeFilter)
-            }
-            let searchable = [letter.hebrew, letter.sofit ?? "", letter.nameChinese, letter.nameEnglish, letter.nameHebrew,
-                              letter.transliteration, letter.modernSound, letter.modernIpa]
-            return included && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) })
-        }
     }
 }
 
@@ -254,12 +246,18 @@ struct LetterTileContent: View {
 struct LetterStudyView: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
+    private let showsFinalForm: Bool
     @State private var letter: StudyLetter
     @State private var showDagesh = true
 
-    init(letter: StudyLetter, content: StudyContent) {
+    init(letter: StudyLetter, content: StudyContent, showsFinalForm: Bool = false) {
         self.content = content
+        self.showsFinalForm = showsFinalForm
         _letter = State(initialValue: letter)
+    }
+
+    private var displayGlyph: String {
+        (showsFinalForm ? letter.sofitInfo?.finalGlyph : nil) ?? letter.hebrew
     }
 
     var body: some View {
@@ -272,11 +270,14 @@ struct LetterStudyView: View {
             }
             Section {
                 NavigationLink {
-                    LetterWritingView(guide: letter.strokeGuide)
+                    LetterWritingView(guide: letter.strokeGuide, startsWithFinalForm: showsFinalForm)
                 } label: {
                     Label("笔顺与手写练习", systemImage: "pencil.and.outline")
                         .frame(minHeight: 44)
                 }
+            }
+            if showsFinalForm, let sofit = letter.sofitInfo {
+                finalFormDetails(sofit)
             }
             if let example = letter.examples.first {
                 Section("例词") {
@@ -316,16 +317,8 @@ struct LetterStudyView: View {
                     Text(variants.note)
                 }
             }
-            if let sofit = letter.sofitInfo {
-                Section("词尾形 · Sofit") {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 20) { finalForms(sofit) }.fixedSize(horizontal: true, vertical: false)
-                        VStack(alignment: .leading, spacing: 12) { finalForms(sofit) }
-                    }
-                    LabeledContent("词尾数值", value: String(sofit.sofitGematria))
-                    Text(sofit.rule)
-                    WordExampleRow(example: sofit.exampleWord)
-                }
+            if !showsFinalForm, let sofit = letter.sofitInfo {
+                finalFormDetails(sofit)
             }
             DisclosureGroup("字源与字形说明") {
                 LabeledContent("字母数值", value: String(letter.gematria))
@@ -345,7 +338,7 @@ struct LetterStudyView: View {
         }
         .studyGroupedBackground()
         .id(letter.id)
-        .navigationTitle("\(letter.hebrew) · \(letter.nameChinese)")
+        .navigationTitle("\(displayGlyph) · \(letter.nameChinese)")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }
     }
@@ -396,11 +389,23 @@ struct LetterStudyView: View {
 
     private func letterForm(cursive: Bool) -> some View {
         VStack(spacing: 4) {
-            HebrewText(text: letter.hebrew, cursive: cursive, size: 62, style: .largeTitle)
+            HebrewText(text: displayGlyph, cursive: cursive, size: 62, style: .largeTitle)
                 .foregroundStyle(cursive ? Color.primary : progress.theme.accent)
             Text(cursive ? "手写体" : "印刷体").font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private func finalFormDetails(_ form: StudySofit) -> some View {
+        Section("词尾形 · Sofit") {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 20) { finalForms(form) }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 12) { finalForms(form) }
+            }
+            LabeledContent("词尾数值", value: String(form.sofitGematria))
+            Text(form.rule)
+            WordExampleRow(example: form.exampleWord)
+        }
     }
 
     @ViewBuilder private func finalForms(_ form: StudySofit) -> some View {
@@ -419,8 +424,9 @@ struct LetterStudyView: View {
     }
 
     private func move(_ offset: Int) {
-        guard let index = content.letters.firstIndex(where: { $0.id == letter.id }) else { return }
-        letter = content.letters[(index + offset + content.letters.count) % content.letters.count]
+        let letters = showsFinalForm ? content.letters.filter { $0.sofitInfo != nil } : content.letters
+        guard let index = letters.firstIndex(where: { $0.id == letter.id }) else { return }
+        letter = letters[(index + offset + letters.count) % letters.count]
         showDagesh = true
     }
 }
@@ -448,7 +454,7 @@ private struct LetterWritingView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var widthClass
     let guide: StudyStrokes
-    @State private var shape = "cursive"
+    @State private var shape: String
     @State private var practiceID = UUID()
     @State private var showTracing = true
     @State private var showsDemonstration = false
@@ -456,6 +462,19 @@ private struct LetterWritingView: View {
     @State private var animationStart: Date?
 
     private let secondsPerStroke = 1.15
+
+    init(guide: StudyStrokes, startsWithFinalForm: Bool) {
+        self.guide = guide
+        let initialShape: String
+        if startsWithFinalForm, guide.sofitCursiveSteps != nil {
+            initialShape = "sofit-cursive"
+        } else if startsWithFinalForm, guide.sofitBlockSteps != nil {
+            initialShape = "sofit-block"
+        } else {
+            initialShape = "cursive"
+        }
+        _shape = State(initialValue: initialShape)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
