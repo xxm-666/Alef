@@ -6,7 +6,6 @@ struct StudyRulesView: View {
     let content: StudyContent
 
     private let categories = [
-        ("syllables", "拼读实验室", "waveform", "组合辅音和元音，练习听辨音节"),
         ("sofit", "词尾变形", "textformat.abc", "对照五个字母的普通形和词尾形"),
         ("begadkefat", "达盖什", "circle.grid.2x2", "比较带点与不带点的现代及古典读音"),
         ("confusable", "易混字母", "square.on.square", "辨认外形相近的字母"),
@@ -16,27 +15,36 @@ struct StudyRulesView: View {
 
     var body: some View {
         List {
-            ForEach(categories, id: \.0) { key, label, symbol, description in
-                NavigationLink {
-                    details(key)
-                        .navigationTitle(label)
-                        .onAppear { progress.write(key, for: "alef.rulesTab.v1") }
-                } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(label).font(.headline)
-                            Text(description).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    } icon: {
-                        Image(systemName: symbol).foregroundStyle(.tint)
-                    }
+            Section("练习") {
+                ruleLink("syllables", title: "拼读实验室", symbol: "waveform", description: "组合辅音和元音，练习听辨音节")
+            }
+            Section("查阅") {
+                ForEach(categories, id: \.0) { key, title, symbol, description in
+                    ruleLink(key, title: title, symbol: symbol, description: description)
                 }
             }
         }
         .studyGroupedBackground()
         .navigationTitle("拼读与规则")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func ruleLink(_ key: String, title: String, symbol: String, description: String) -> some View {
+        NavigationLink {
+            details(key)
+                .navigationTitle(title)
+                .onAppear { progress.write(key, for: "alef.rulesTab.v1") }
+        } label: {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.headline)
+                    Text(description).font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } icon: {
+                Image(systemName: symbol).foregroundStyle(.tint)
+            }
+        }
     }
 
     @ViewBuilder private func details(_ category: String) -> some View {
@@ -61,16 +69,11 @@ struct StudyRulesView: View {
                 Section(group.title) {
                     ScrollView(.horizontal) {
                         HStack(alignment: .firstTextBaseline, spacing: 20) {
-                            ForEach(letters) { letter in
-                                HebrewText(text: letter.hebrew, size: 44).foregroundStyle(.tint)
-                            }
+                            ForEach(letters) { letter in comparisonLetter(letter) }
                         }
                         .padding(.vertical, 6)
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                    ForEach(letters) { letter in
-                        letterLink(letter)
-                    }
                     ForEach(Array(group.comparisonNotes.enumerated()), id: \.offset) { _, note in Text(note) }
                     Text(group.tip).foregroundStyle(.secondary)
                 }
@@ -78,7 +81,7 @@ struct StudyRulesView: View {
             .studyGroupedBackground()
         case "sofit":
             List {
-                Section("词尾规则") {
+                DisclosureGroup("词尾规则与记忆口诀") {
                     Text("记忆口诀：כמנפ״ץ（Kamnapetz）。五个字母位于词尾时分别写作 ך · ם · ן · ף · ץ。除闭合的 ם 外，其余四个词尾形都向下越过基线。")
                 }
                 ForEach(content.letters.filter { $0.sofitInfo != nil }) { letter in
@@ -88,9 +91,9 @@ struct StudyRulesView: View {
                                 sofitGlyph("词中", glyph: pair.medialGlyph)
                                 sofitGlyph("词尾", glyph: pair.finalGlyph)
                             }
-                            LabeledContent("字母数值", value: "\(letter.gematria) → \(pair.sofitGematria)")
                             Text(pair.rule)
                             WordExampleRow(example: pair.exampleWord)
+                            LabeledContent("字母数值", value: "\(letter.gematria) → \(pair.sofitGematria)")
                             letterLink(letter)
                         }
                     }
@@ -99,7 +102,7 @@ struct StudyRulesView: View {
             .studyGroupedBackground()
         case "begadkefat":
             List {
-                Section("带点与不带点") {
+                DisclosureGroup("带点与不带点的规则") {
                     Text("ב · ג · ד · כ · פ · ת 的中心点（Dagesh Kal）标记硬音。现代希伯来语只有 ב · כ · פ 保留硬音和软音的区别，ג · ד · ת 的擦音化见于古典朗诵。")
                 }
                 ForEach(content.letters.filter { $0.begadkefat != nil }) { letter in
@@ -138,6 +141,22 @@ struct StudyRulesView: View {
             }
             .studyGroupedBackground()
         }
+    }
+
+    private func comparisonLetter(_ letter: StudyLetter) -> some View {
+        NavigationLink {
+            LetterStudyView(letter: letter, content: content)
+        } label: {
+            VStack(spacing: 4) {
+                HebrewText(text: letter.hebrew, size: 44).foregroundStyle(.tint)
+                Text(letter.nameChinese).font(.subheadline.weight(.medium))
+                Text(letter.modernIpa).font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 66, minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
     }
 
     private func comparisonLayout<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -248,7 +267,7 @@ private struct StudySyllablesView: View {
                 .onChange(of: answer) { _, newAnswer in
                     if quizzing {
                         scroll.scrollTo(newAnswer == nil ? "syllable-question" : "syllable-result",
-                                        anchor: newAnswer == nil ? .top : .bottom)
+                                        anchor: .top)
                     }
                 }
             }
@@ -286,20 +305,20 @@ private struct StudySyllablesView: View {
                                     title: "播放题目", minimumHitSize: 44)
             }
             .id("syllable-question")
+            if let answer {
+                let selected = question.choices.first { $0.id == answer }
+                StudyQuizFeedback(correct: answer == question.solution.id,
+                                  solution: word(question.consonant, question.solution),
+                                  response: selected.map { word(question.consonant, $0) },
+                                  explanation: question.solution.tip)
+                    .id("syllable-result")
+            }
             ForEach(question.choices) { vowel in
                 StudyAnswerButton(title: word(question.consonant, vowel), submitted: answer != nil,
                                   selected: answer == vowel.id, correct: vowel.id == question.solution.id, isHebrew: true) {
                     grade(vowel.id, solution: question.solution.id)
                 }
             }
-        }
-        if let answer {
-            Section("答题结果") {
-                Label(answer == question.solution.id ? "答对了" : "正确答案 · \(word(question.consonant, question.solution))",
-                      systemImage: answer == question.solution.id ? "checkmark.circle" : "info.circle")
-                Text(question.solution.tip).font(.footnote).foregroundStyle(.secondary)
-            }
-            .id("syllable-result")
         }
     }
 

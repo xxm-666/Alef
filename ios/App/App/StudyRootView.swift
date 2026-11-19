@@ -218,3 +218,36 @@ struct StudyAnswerButton: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
+
+struct StudyQuizFeedback: View {
+    @AccessibilityFocusState(for: .voiceOver) private var focused: Bool
+    @State private var didFocus = false
+    let correct: Bool
+    let solution: String
+    var response: String?
+    var explanation: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(correct ? "答对了" : "答案有误",
+                  systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.headline)
+            if !correct, let response {
+                Text("你的答案  \(response)").foregroundStyle(.secondary)
+            }
+            Text("正确答案  \(solution)")
+            if let explanation, !explanation.isEmpty {
+                Text(explanation).foregroundStyle(.secondary)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityFocused($focused)
+        .onAppear {
+            guard !didFocus else { return }
+            focused = true
+            didFocus = true
+        }
+    }
+}

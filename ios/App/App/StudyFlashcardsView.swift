@@ -133,8 +133,14 @@ struct StudyFlashcardsView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let current {
                     StudyActionBar {
-                        VStack(spacing: 8) {
-                            if flipped { masteryControls(for: current) }
+                        if flipped {
+                            HStack(spacing: 4) {
+                                compactNavigation("上一张", symbol: "chevron.left", offset: -1)
+                                masteryControls(for: current)
+                                    .frame(maxWidth: .infinity)
+                                compactNavigation("下一张", symbol: "chevron.right", offset: 1)
+                            }
+                        } else {
                             cardNavigation
                         }
                     }
@@ -211,6 +217,18 @@ struct StudyFlashcardsView: View {
         .keyboardShortcut(offset < 0 ? .leftArrow : .rightArrow, modifiers: [])
     }
 
+    private func compactNavigation(_ title: String, symbol: String, offset: Int) -> some View {
+        Button { move(offset) } label: {
+            Image(systemName: symbol)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(title)
+        .keyboardShortcut(offset < 0 ? .leftArrow : .rightArrow, modifiers: [])
+        .disabled(deck.count < 2)
+    }
+
     private func masteryControls(for current: StudyLetter) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 6) {
@@ -218,20 +236,20 @@ struct StudyFlashcardsView: View {
                     Button {
                         rate(level, for: current)
                     } label: {
-                        Text(level.title).frame(minHeight: 32)
+                        Text(level.title).font(.subheadline).frame(minHeight: 34)
                     }
                     .accessibilityLabel("标记为\(level.title)")
                 }
             }
             .buttonStyle(.bordered)
-            .controlSize(.large)
+            .controlSize(.regular)
             .fixedSize(horizontal: true, vertical: false)
             Menu {
                 ForEach(Mastery.allCases) { level in
                     Button(level.title, systemImage: level.symbol) { rate(level, for: current) }
                 }
             } label: {
-                Label("标记掌握度", systemImage: "checkmark.circle")
+                Text("掌握度")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
@@ -384,6 +402,11 @@ private struct FlashQuizView: View {
                             .padding(.vertical, 8)
                             .id("flash-question")
 
+                            if let answer {
+                                StudyQuizFeedback(correct: answer == question.solution, solution: question.solution,
+                                                  response: answer, explanation: question.explanation)
+                                    .id("flash-result")
+                            }
                             ForEach(question.choices, id: \.self) { choice in
                                 StudyAnswerButton(title: choice, submitted: answer != nil,
                                                   selected: answer == choice, correct: choice == question.solution) {
@@ -391,23 +414,15 @@ private struct FlashQuizView: View {
                                 }
                             }
                         }
-                        if let answer {
-                            Section("答题结果") {
-                                Label(answer == question.solution ? "答对了" : "正确答案 · \(question.solution)",
-                                      systemImage: answer == question.solution ? "checkmark.circle" : "info.circle")
-                                Text(question.explanation).foregroundStyle(.secondary)
-                            }
-                            .id("flash-result")
-                        }
                     } else {
                         ContentUnavailableView("没有可用题目", systemImage: "rectangle.on.rectangle")
                     }
                 }
                 .studyGroupedBackground()
                 .contentMargins(.vertical, 8, for: .scrollContent)
-                .onChange(of: question?.letter.id) { _, _ in scroll.scrollTo("flash-question", anchor: .top) }
                 .onChange(of: answer) { _, value in
-                    if value != nil { scroll.scrollTo("flash-result", anchor: .bottom) }
+                    if value != nil { scroll.scrollTo("flash-result", anchor: .top) }
+                    else { scroll.scrollTo("flash-question", anchor: .top) }
                 }
             }
         }

@@ -28,17 +28,18 @@ struct AlphabetView: View {
                     ContentUnavailableView.search(text: filter.searchQuery)
                 }
             } else {
-                LazyVGrid(columns: columns(for: options), spacing: 12) {
+                LazyVGrid(columns: LetterGridLayout.columns(options: options, typeSize: typeSize),
+                          spacing: LetterGridLayout.spacing) {
                     ForEach(visibleLetters) { letter in
                         letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned)
                     }
                 }
-                .frame(maxWidth: 780)
+                .frame(maxWidth: LetterGridLayout.maximumWidth)
                 .frame(maxWidth: .infinity)
                 .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
             }
         }
-        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .contentMargins(.horizontal, LetterGridLayout.pageMargin, for: .scrollContent)
         .contentMargins(.vertical, 12, for: .scrollContent)
         .safeAreaInset(edge: .top, spacing: 0) {
             if let title = filters.first(where: { $0.0 == filter.activeFilter && $0.0 != "all" })?.1 {
@@ -49,8 +50,8 @@ struct AlphabetView: View {
                     Button("清除筛选") { setting(\.activeFilter).wrappedValue = "all" }
                         .frame(minHeight: 44)
                 }
-                .frame(maxWidth: 780)
-                .padding(.horizontal, 16)
+                .frame(maxWidth: LetterGridLayout.maximumWidth)
+                .padding(.horizontal, LetterGridLayout.pageMargin)
                 .frame(maxWidth: .infinity)
                 .background(progress.theme.canvas)
             }
@@ -69,14 +70,6 @@ struct AlphabetView: View {
             }
             .accessibilityValue(filters.first { $0.0 == filter.activeFilter }?.1 ?? "所有字母")
         }
-    }
-
-    private func columns(for options: [String: Bool]) -> [GridItem] {
-        if typeSize.isAccessibilitySize { return [GridItem(.flexible(), alignment: .top)] }
-        let minimum: CGFloat
-        if LetterTileContent.isDetailed(options) { minimum = typeSize >= .xxLarge ? 200 : 136 }
-        else { minimum = typeSize >= .xxLarge ? 146 : 104 }
-        return [GridItem(.adaptive(minimum: minimum), spacing: 12, alignment: .top)]
     }
 
     private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
@@ -147,7 +140,33 @@ struct AlphabetView: View {
     }
 }
 
+enum LetterGridLayout {
+    static let pageMargin: CGFloat = 16
+    static let spacing: CGFloat = 12
+    static let maximumWidth: CGFloat = 780
+
+    static func columns(options: [String: Bool], typeSize: DynamicTypeSize) -> [GridItem] {
+        if typeSize.isAccessibilitySize { return [GridItem(.flexible(), alignment: .top)] }
+        let minimum = minimumTileWidth(options: options, typeSize: typeSize)
+        return [GridItem(.adaptive(minimum: minimum), spacing: spacing, alignment: .top)]
+    }
+
+    static func previewWidth(pageWidth: CGFloat, options: [String: Bool], typeSize: DynamicTypeSize) -> CGFloat {
+        let width = min(maximumWidth, max(0, pageWidth - 2 * pageMargin))
+        if typeSize.isAccessibilitySize { return width }
+        let minimum = minimumTileWidth(options: options, typeSize: typeSize)
+        let count = max(1, ((width + spacing) / (minimum + spacing)).rounded(.down))
+        return (width - (count - 1) * spacing) / count
+    }
+
+    private static func minimumTileWidth(options: [String: Bool], typeSize: DynamicTypeSize) -> CGFloat {
+        if LetterTileContent.isDetailed(options) { return typeSize >= .xxLarge ? 200 : 136 }
+        return typeSize >= .xxLarge ? 146 : 104
+    }
+}
+
 struct LetterTileContent: View {
+    @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric private var glyphHeight: CGFloat = 46
     let letter: StudyLetter
@@ -160,12 +179,11 @@ struct LetterTileContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if options["showBlock"] == true || options["showCursive"] == true {
+                let showBoth = options["showBlock"] == true && options["showCursive"] == true
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if options["showBlock"] == true { HebrewText(text: letter.hebrew, size: 34).foregroundStyle(.tint) }
-                    if options["showCursive"] == true { HebrewText(text: letter.hebrew, cursive: true, size: 31).foregroundStyle(.primary) }
+                    if options["showBlock"] == true { glyph(cursive: false, labeled: showBoth) }
+                    if options["showCursive"] == true { glyph(cursive: true, labeled: showBoth) }
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
                 .frame(minHeight: glyphHeight)
                 .accessibilityHidden(true)
             }
@@ -193,6 +211,22 @@ struct LetterTileContent: View {
             }
         }
         .foregroundStyle(.primary)
+    }
+
+    private func glyph(cursive: Bool, labeled: Bool) -> some View {
+        VStack(spacing: 2) {
+            HebrewText(text: letter.hebrew, cursive: cursive, size: cursive ? 31 : 34)
+                .foregroundStyle(cursive ? Color.primary : progress.theme.accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            if labeled {
+                Text(cursive ? "手写" : "印刷")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
     }
 
     @ViewBuilder private func cardLine(_ text: Text, lines: Int = 1) -> some View {
@@ -417,6 +451,7 @@ private struct LetterWritingView: View {
     @State private var shape = "cursive"
     @State private var practiceID = UUID()
     @State private var showTracing = true
+    @State private var showsDemonstration = false
     @State private var selectedStroke: Int?
     @State private var animationStart: Date?
 
@@ -433,42 +468,44 @@ private struct LetterWritingView: View {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
 
-            List {
-                if widthClass == .regular && !typeSize.isAccessibilitySize {
-                    HStack(alignment: .top, spacing: 24) {
-                        demonstration.frame(maxWidth: .infinity, alignment: .topLeading)
-                        practice.frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    demonstration.padding(.vertical, 8)
-                    practice.padding(.vertical, 8)
-                }
-                if !selectedSteps.isEmpty {
-                    DisclosureGroup("查看 \(selectedSteps.count) 个笔画步骤") {
-                        ForEach(Array(selectedSteps.enumerated()), id: \.offset) { index, step in
-                            Button {
-                                animationStart = nil
-                                selectedStroke = selectedStroke == index ? nil : index
-                            } label: {
-                                HStack {
-                                    Text("\(index + 1). \(step)").foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedStroke == index { Image(systemName: "checkmark.circle.fill") }
-                                }
-                                .frame(minHeight: 44)
+            ScrollViewReader { scroll in
+                List {
+                    if sideBySide {
+                        HStack(alignment: .top, spacing: 24) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("笔顺演示").font(.headline)
+                                demonstration
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityAddTraits(selectedStroke == index ? .isSelected : [])
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .id("stroke-demo")
+                            practice.frame(maxWidth: .infinity, alignment: .topLeading)
                         }
+                        .padding(.vertical, 8)
+                    } else {
+                        DisclosureGroup("笔顺演示", isExpanded: $showsDemonstration) {
+                            demonstration
+                        }
+                        .frame(minHeight: 44)
+                        .id("stroke-demo")
+                        practice.padding(.vertical, 8)
+                    }
+                    strokeSteps
+                }
+                .studyGroupedBackground()
+                .contentMargins(.vertical, 8, for: .scrollContent)
+                .onChange(of: selectedStroke) { _, index in
+                    if index != nil && !sideBySide {
+                        showsDemonstration = true
+                        scroll.scrollTo("stroke-demo", anchor: .top)
                     }
                 }
             }
-            .studyGroupedBackground()
-            .contentMargins(.vertical, 8, for: .scrollContent)
         }
         .background(progress.theme.canvas)
         .navigationTitle("笔顺与手写")
+        .onChange(of: showsDemonstration) { _, expanded in
+            if !expanded { animationStart = nil }
+        }
         .onChange(of: shape) { _, _ in
             animationStart = nil
             selectedStroke = nil
@@ -485,6 +522,30 @@ private struct LetterWritingView: View {
         }
     }
 
+    private var sideBySide: Bool { widthClass == .regular && !typeSize.isAccessibilitySize }
+
+    @ViewBuilder private var strokeSteps: some View {
+        if !selectedSteps.isEmpty {
+            DisclosureGroup("查看 \(selectedSteps.count) 个笔画步骤") {
+                ForEach(Array(selectedSteps.enumerated()), id: \.offset) { index, step in
+                    Button {
+                        animationStart = nil
+                        selectedStroke = selectedStroke == index ? nil : index
+                    } label: {
+                        HStack {
+                            Text("\(index + 1). \(step)").foregroundStyle(.primary)
+                            Spacer()
+                            if selectedStroke == index { Image(systemName: "checkmark.circle.fill") }
+                        }
+                        .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityAddTraits(selectedStroke == index ? .isSelected : [])
+                }
+            }
+        }
+    }
+
     private var shapePicker: some View {
         Picker("字形", selection: $shape) {
             Text("印刷").tag("block")
@@ -496,12 +557,11 @@ private struct LetterWritingView: View {
 
     private var demonstration: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("笔顺演示").font(.headline)
             TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 30, paused: animationStart == nil)) { timeline in
                 let position = animationStart.map { max(0, timeline.date.timeIntervalSince($0) / secondsPerStroke) }
                 StrokeDiagram(strokes: selectedStrokes, selectedStroke: selectedStroke, progress: position, reduceMotion: reduceMotion)
             }
-            .frame(height: widthClass == .regular ? 224 : 144)
+            .frame(height: sideBySide ? 224 : 144)
             .frame(maxWidth: .infinity)
             .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12))
             Button {
@@ -520,6 +580,16 @@ private struct LetterWritingView: View {
     private var practice: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("手写练习").font(.headline)
+            HStack(spacing: 12) {
+                Toggle("描红", isOn: $showTracing).frame(minHeight: 44)
+                Button {
+                    practiceID = UUID()
+                } label: {
+                    Image(systemName: "eraser").frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("清空练习")
+            }
             Rectangle()
                 .fill(Color(uiColor: .tertiarySystemFill))
                 .aspectRatio(1.2, contentMode: .fit)
@@ -530,13 +600,6 @@ private struct LetterWritingView: View {
                     DrawingPad().id(practiceID).accessibilityLabel("手写练习区")
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-            Toggle("显示描红字形", isOn: $showTracing).frame(minHeight: 44)
-            Button {
-                practiceID = UUID()
-            } label: {
-                Label("清空练习", systemImage: "eraser").frame(minHeight: 44)
-            }
-            .buttonStyle(.borderless)
         }
     }
 

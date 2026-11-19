@@ -79,6 +79,7 @@ private struct StudyStatisticsView: View {
 
 private struct StudyLetterDisplayView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
 
     private let displayOptions = [
@@ -100,6 +101,14 @@ private struct StudyLetterDisplayView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
+            form(previewWidth: LetterGridLayout.previewWidth(pageWidth: geometry.size.width,
+                                                             options: config, typeSize: typeSize))
+        }
+        .navigationTitle("字母表显示")
+    }
+
+    private func form(previewWidth: CGFloat) -> some View {
         Form {
             Section("模板") {
                 Menu {
@@ -122,24 +131,24 @@ private struct StudyLetterDisplayView: View {
                 Section("卡片预览") {
                     VStack(spacing: 0) {
                         LetterTileContent(letter: example, options: config)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                        Divider().padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .padding(10)
+                        Divider().padding(.horizontal, 10)
                         HStack {
                             PronunciationButton(hebrew: example.nameHebrew, fallback: example.nameEnglish,
                                                 iconOnly: true, minimumHitSize: 44)
-                            Spacer()
+                            Spacer(minLength: 0)
                             if config["showMastery"] == true {
                                 let mastery = progress.letterMastery[example.id] ?? .unlearned
                                 Image(systemName: mastery.symbol)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(mastery == .unlearned ? Color.secondary : progress.theme.accent)
                                     .accessibilityLabel(mastery.title)
                                     .frame(minWidth: 44)
                             }
                         }
                         .padding(.horizontal, 4)
                     }
-                    .frame(idealWidth: 180, maxWidth: 300)
+                    .frame(width: previewWidth)
                     .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 18))
                     .overlay {
                         RoundedRectangle(cornerRadius: 18)
@@ -148,6 +157,8 @@ private struct StudyLetterDisplayView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                 }
             }
             Section {
@@ -161,7 +172,6 @@ private struct StudyLetterDisplayView: View {
             }
         }
         .studyGroupedBackground()
-        .navigationTitle("字母表显示")
     }
 
     private func presetConfig(_ preset: StudyDisplayPreset) -> [String: Bool] {

@@ -20,6 +20,7 @@ struct WordsView: View {
     let content: StudyContent
     @State private var phraseCategory = "all"
     @State private var hidePhraseTranslation = false
+    @State private var slowPhrasePlayback = false
     @State private var reviewWords: [StudyWord]?
 
     var body: some View {
@@ -30,17 +31,7 @@ struct WordsView: View {
                 } else {
                     modePicker.pickerStyle(.segmented)
                 }
-                if ["browse", "cards"].contains(mode) && !dueWords.isEmpty {
-                    Button(action: startReview) {
-                        Label("复习到期单词（\(dueWords.count)）", systemImage: "calendar.badge.clock")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderless)
-                }
-                if ["browse", "cards"].contains(mode),
-                   preferences.activeFilter != "all" || preferences.initialLetter != "all" {
-                    filterStatus
-                }
+                if ["browse", "cards"].contains(mode) { libraryStatus }
                 if mode == "phrases" { phraseControls }
             }
             .frame(maxWidth: 560)
@@ -128,7 +119,41 @@ struct WordsView: View {
         progress.write(state, for: "alef.wordsState.v1")
     }
 
-    private var filterStatus: some View {
+    @ViewBuilder private var libraryStatus: some View {
+        let count = dueWords.count
+        let hasFilter = preferences.activeFilter != "all" || preferences.initialLetter != "all"
+        if hasFilter || count > 0 {
+            HStack(spacing: 6) {
+                if hasFilter {
+                    Text(filterDescription)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        var state = preferences
+                        state.activeFilter = "all"
+                        state.initialLetter = "all"
+                        progress.write(state, for: "alef.wordsState.v1")
+                    } label: {
+                        Image(systemName: "xmark.circle").frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("清除筛选")
+                }
+                Spacer(minLength: 0)
+                if count > 0 {
+                    Button(action: startReview) {
+                        Label("到期 \(count)", systemImage: "calendar.badge.clock")
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("复习到期单词，共 \(count) 个")
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .font(.subheadline)
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var filterDescription: String {
         let filter = switch preferences.activeFilter {
         case "favorites": "我的收藏"
         case "needs_review": "需复习"
@@ -137,18 +162,7 @@ struct WordsView: View {
         default: content.wordCategories[preferences.activeFilter]?.label ?? preferences.activeFilter
         }
         let initial = preferences.initialLetter
-        return HStack {
-            Text(initial == "all" ? filter : "\(filter) · 首字母 \(initial)")
-                .font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
-            Button("清除筛选") {
-                var state = preferences
-                state.activeFilter = "all"
-                state.initialLetter = "all"
-                progress.write(state, for: "alef.wordsState.v1")
-            }
-            .frame(minHeight: 44)
-        }
+        return initial == "all" ? filter : "\(filter) · 首字母 \(initial)"
     }
 
     private var preferences: WordPreferences { progress.read("alef.wordsState.v1", default: WordPreferences()) }
@@ -190,11 +204,13 @@ struct WordsView: View {
     }
 
     private var library: some View {
-        List {
-            if filteredWords.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
-            ForEach(filteredWords) { word in
+        let words = filteredWords
+        let favorites = Set(progress.favorites)
+        return List {
+            if words.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
+            ForEach(words) { word in
                 HStack(spacing: 4) {
-                    wordLink(word)
+                    wordLink(word, isFavorite: favorites.contains(word.id))
                     wordSpeaker(word)
                 }
                 .swipeActions(allowsFullSwipe: false) {
@@ -210,12 +226,14 @@ struct WordsView: View {
     }
 
     private var cards: some View {
-        ScrollView {
-            if filteredWords.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
+        let words = filteredWords
+        let favorites = Set(progress.favorites)
+        return ScrollView {
+            if words.isEmpty { ContentUnavailableView.search(text: preferences.searchQuery) }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 260 : 144), spacing: 12)], spacing: 12) {
-                ForEach(filteredWords) { word in
+                ForEach(words) { word in
                     VStack(alignment: .leading, spacing: 8) {
-                        wordLink(word).buttonStyle(.borderless)
+                        wordLink(word, isFavorite: favorites.contains(word.id)).buttonStyle(.borderless)
                         HStack {
                             wordSpeaker(word)
                             Spacer()
@@ -260,14 +278,22 @@ struct WordsView: View {
         }
     }
 
-    private func wordLink(_ word: StudyWord) -> some View {
+    private func wordLink(_ word: StudyWord, isFavorite: Bool) -> some View {
         NavigationLink {
             WordDetailView(word: word, content: content, showNiqqud: preferences.showNiqqud,
                            showCursive: preferences.showCursive)
                 .onAppear { setting(\.selectedWordId).wrappedValue = word.id }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                HebrewText(text: preferences.showNiqqud ? word.hebrew : word.hebrewUnpointed, cursive: preferences.showCursive)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HebrewText(text: preferences.showNiqqud ? word.hebrew : word.hebrewUnpointed, cursive: preferences.showCursive)
+                    if isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundStyle(.tint)
+                            .accessibilityLabel("已收藏")
+                    }
+                }
                 Text(word.meaningZh).font(.subheadline).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -276,11 +302,26 @@ struct WordsView: View {
 
     private var phraseControls: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Picker("场景", selection: $phraseCategory) {
-                Text("全部场景").tag("all")
-                ForEach(content.phraseCategories.keys.sorted(), id: \.self) { category in
-                    Text(content.phraseCategories[category]?.label ?? category).tag(category)
+            HStack {
+                Picker("场景", selection: $phraseCategory) {
+                    Text("全部场景").tag("all")
+                    ForEach(content.phraseCategories.keys.sorted(), id: \.self) { category in
+                        Text(content.phraseCategories[category]?.label ?? category).tag(category)
+                    }
                 }
+                Spacer(minLength: 0)
+                Menu {
+                    Picker("朗读速度", selection: $slowPhrasePlayback) {
+                        Text("按设置速度").tag(false)
+                        Text("慢速").tag(true)
+                    }
+                } label: {
+                    Image(systemName: slowPhrasePlayback ? "tortoise.fill" : "speedometer")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("朗读速度")
+                .accessibilityValue(slowPhrasePlayback ? "慢速" : "按设置速度")
             }
             Toggle("隐藏中文，自测释义", isOn: $hidePhraseTranslation)
                 .frame(minHeight: 44)
@@ -311,16 +352,10 @@ struct WordsView: View {
                 Text(phrase.meaningZh)
                 if let note = phrase.note { Text(note).font(.footnote).foregroundStyle(.secondary) }
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 16) { phraseAudio(phrase) }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .leading) { phraseAudio(phrase) }
-            }
+            PronunciationButton(hebrew: phrase.hebrew, fallback: phrase.transliteration,
+                                rate: slowPhrasePlayback ? 0.68 : nil,
+                                title: slowPhrasePlayback ? "慢速朗读" : "朗读短语", minimumHitSize: 44)
         }
-    }
-
-    @ViewBuilder private func phraseAudio(_ phrase: StudyPhrase) -> some View {
-        PronunciationButton(hebrew: phrase.hebrew, fallback: phrase.transliteration, title: "朗读短语", minimumHitSize: 44)
-        PronunciationButton(hebrew: phrase.hebrew, fallback: phrase.transliteration, rate: 0.68, title: "慢速朗读", minimumHitSize: 44)
     }
 
     private var readings: some View {
@@ -444,6 +479,7 @@ private struct WordDetailView: View {
 
 private struct StudyReadingView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
     let reading: StudyReading
     @Binding var showNiqqud: Bool
     @State private var showTranslation = false
@@ -458,17 +494,13 @@ private struct StudyReadingView: View {
     var body: some View {
         List {
             if let source = reading.source { Text(source).foregroundStyle(.secondary) }
-            Toggle("显示元音点", isOn: $showNiqqud)
-            Section("朗读") {
+            Section("原文与朗读") {
+                if typeSize.isAccessibilitySize { readingMode.pickerStyle(.menu) }
+                else { readingMode.pickerStyle(.segmented) }
                 Text("点按标记的词查看释义。")
                     .font(.footnote).foregroundStyle(.secondary)
                 ForEach(Array(reading.sentences.enumerated()), id: \.offset) { index, sentence in
                     sentenceRow(sentence, at: index)
-                }
-            }
-            DisclosureGroup("中文译文", isExpanded: $showTranslation) {
-                ForEach(Array(reading.sentences.enumerated()), id: \.offset) { _, sentence in
-                    Text(sentence.chinese)
                 }
             }
             Section("阅读理解") {
@@ -506,7 +538,21 @@ private struct StudyReadingView: View {
         .studyGroupedBackground()
         .navigationTitle(reading.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Menu {
+                Toggle("显示元音点", isOn: $showNiqqud)
+            } label: {
+                Label("阅读选项", systemImage: "slider.horizontal.3")
+            }
+        }
         .onChange(of: showNiqqud) { _, _ in selectedGloss = nil }
+    }
+
+    private var readingMode: some View {
+        Picker("阅读方式", selection: $showTranslation) {
+            Text("原文").tag(false)
+            Text("中希对照").tag(true)
+        }
     }
 
     private func sentenceRow(_ sentence: StudyReading.Sentence, at index: Int) -> some View {
@@ -533,6 +579,11 @@ private struct StudyReadingView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(progress.theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
+            if showTranslation {
+                Text(sentence.chinese)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             PronunciationButton(hebrew: sentence.hebrew, fallback: sentence.transliteration,
                                 title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
         }
@@ -558,7 +609,6 @@ private struct StudyReadingView: View {
 private struct WordQuizView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
-    @Environment(\.dynamicTypeSize) private var typeSize
     let words: [StudyWord]
     let distractors: [StudyWord]
     let letters: [StudyLetter]
@@ -588,8 +638,15 @@ private struct WordQuizView: View {
                             questionPrompt(target)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id("word-question")
+                            if let result {
+                                StudyQuizFeedback(correct: result,
+                                                  solution: kind == "spelling" ? target.hebrewUnpointed : "\(target.hebrew) · \(target.meaningZh)",
+                                                  response: kind == "spelling" ? spelling : options.first { $0.id == selectedOption }?.meaningZh,
+                                                  explanation: kind == "spelling" ? target.meaningZh : nil)
+                                    .id("word-result")
+                            }
                             if kind == "spelling" {
-                                spellingInput
+                                if result == nil { spellingInput }
                             } else {
                                 ForEach(options) { option in
                                     StudyAnswerButton(title: option.meaningZh, submitted: result != nil,
@@ -599,14 +656,6 @@ private struct WordQuizView: View {
                                     }
                                 }
                             }
-                        }
-                        if let result {
-                            Section("答题结果") {
-                                Label(result ? "答对了" : "正确答案 · \(target.hebrew) · \(target.meaningZh)",
-                                      systemImage: result ? "checkmark.circle" : "info.circle")
-                                if kind == "spelling" { LabeledContent("无点拼写", value: target.hebrewUnpointed) }
-                            }
-                            .id("word-result")
                         }
                     } else {
                         ContentUnavailableView(reviewing && answered > 0 ? "已完成到期复习" : "没有可用单词",
@@ -618,12 +667,13 @@ private struct WordQuizView: View {
                 .contentMargins(.vertical, 8, for: .scrollContent)
                 .onChange(of: target?.id) { _, _ in scroll.scrollTo("word-question", anchor: .top) }
                 .onChange(of: result) { _, value in
-                    if value != nil { scroll.scrollTo("word-result", anchor: .bottom) }
+                    if value != nil { scroll.scrollTo("word-result", anchor: .top) }
+                    else { scroll.scrollTo("word-question", anchor: .top) }
                 }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if target != nil || reviewing {
+            if result != nil || (target != nil && kind == "spelling") || (target == nil && reviewing) {
                 StudyActionBar { quizAction }
             }
         }
@@ -643,14 +693,20 @@ private struct WordQuizView: View {
     }
 
     private var quizHeader: some View {
-        VStack(spacing: 8) {
-            if !reviewing {
-                if typeSize.isAccessibilitySize { kindPicker.pickerStyle(.menu) }
-                else { kindPicker.pickerStyle(.segmented) }
+        HStack(spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { quizStatus }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 4) { quizStatus }
             }
-            LabeledContent("当前得分", value: "\(correct) / \(answered)")
-            if let reviewQueue, !reviewQueue.isEmpty, target != nil {
-                LabeledContent("复习进度", value: "\(reviewIndex + 1) / \(reviewQueue.count)")
+            Spacer(minLength: 0)
+            if !reviewing && target != nil && result == nil {
+                Button { next(play: true) } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("换一题")
             }
         }
         .font(.subheadline)
@@ -659,6 +715,15 @@ private struct WordQuizView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var quizStatus: some View {
+        if !reviewing {
+            kindPicker.pickerStyle(.menu)
+        } else if let reviewQueue, !reviewQueue.isEmpty, target != nil {
+            Text("复习 \(reviewIndex + 1) / \(reviewQueue.count)")
+        }
+        Text("得分 \(correct) / \(answered)").foregroundStyle(.secondary)
     }
 
     private func questionPrompt(_ target: StudyWord) -> some View {
@@ -720,24 +785,11 @@ private struct WordQuizView: View {
                     next(play: true)
                 }
             } else if kind == "spelling" {
-                ViewThatFits(in: .horizontal) {
-                    HStack { skipButton.fixedSize(); confirmButton }
-                    VStack { confirmButton; skipButton }
-                }
-            } else if !reviewing {
-                skipButton
-            } else {
-                Text("选择一个答案以继续").font(.footnote).foregroundStyle(.secondary)
+                confirmButton
             }
         } else if reviewing {
             primaryButton("返回词表", symbol: "list.bullet", action: onFinishReview)
         }
-    }
-
-    private var skipButton: some View {
-        Button("换一题", systemImage: "arrow.clockwise") { next(play: true) }
-            .frame(minHeight: 44)
-            .buttonStyle(.borderless)
     }
 
     private var confirmButton: some View {
