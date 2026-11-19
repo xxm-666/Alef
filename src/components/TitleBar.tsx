@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { GlassLetterGlyph } from './GlassLetterGlyph';
 import {
   BookOpen,
   CreditCard,
@@ -94,7 +95,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
               aria-current={activeItem === item.id ? 'page' : undefined}
               onClick={() => onSelectView(item.id)}
             >
-              {isCenter ? <span className="nav-center-glyph" aria-hidden="true">א</span> : item.icon}
+              {isCenter ? <GlassLetterGlyph /> : item.icon}
               <span className="nav-label-desktop">{item.label}</span>
               <span className="nav-label-mobile">{item.shortLabel}</span>
             </button>

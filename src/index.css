@@ -3830,6 +3830,11 @@ button {
 
   @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
     .titlebar-nav {
+      background: transparent;
+    }
+
+    .titlebar-nav::before {
+      z-index: -1;
       background: radial-gradient(ellipse at 12% 0%, var(--dock-lens), transparent 48%),
         radial-gradient(ellipse at 87% 105%, var(--dock-reflection), transparent 48%),
         var(--dock-glass);
@@ -3842,6 +3847,18 @@ button {
       -webkit-backdrop-filter: blur(5px) saturate(135%);
       backdrop-filter: blur(5px) saturate(135%);
     }
+  }
+
+  /* SVG backdrop displacement is an enhancement for Chromium. */
+  @supports (appearance: base-select) and (backdrop-filter: url("#alef-letter-refraction")) {
+    .nav-center-glyph:has(.nav-center-optics) {
+      backdrop-filter: url("#alef-letter-refraction") blur(1px) saturate(135%);
+    }
+  }
+
+  .nav-center-optics {
+    position: absolute;
+    pointer-events: none;
   }
 
   .nav-label-desktop {
@@ -3922,11 +3939,16 @@ button {
   @media (prefers-reduced-transparency: reduce) {
     .titlebar-nav {
       background: var(--bg-surface);
+    }
+
+    .titlebar-nav::before {
+      background: none;
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
 
-    .nav-center-glyph {
+    .nav-center-glyph,
+    .nav-center-glyph:has(.nav-center-optics) {
       --dock-center-base: var(--bg-surface);
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
