@@ -1316,7 +1316,7 @@ export const NIQQUD_ITEMS: NiqqudItem[] = [
     sample: 'בַּ',
     vowelSound: 'a',
     ipa: '[a]',
-    note: '字母下方一短横；现代发音与 Kamatz 完全一致，均读 [a]。',
+    note: '字母下方一短横；现代固定读 [a]。与普通 Kamatz 同音，但无重音闭音节的 Kamatz Katan 读 [o]（如 חָכְמָה chokhma）。',
   },
   {
     id: 'tzere',
@@ -1374,8 +1374,8 @@ export const NIQQUD_ITEMS: NiqqudItem[] = [
     nameEnglish: 'Shva',
     nameChinese: '舍瓦',
     sample: 'בְּ',
-    vowelSound: '静音 / 短 e',
+    vowelSound: '静音 / 轻短 e',
     ipa: '[∅ ~ e]',
-    note: '字母下方纵向两点：位于音节尾通常静音 (Shva Nach)，位于词首或特定位置读轻短 [e] (Shva Na)。',
+    note: '字母下方纵向两点：位于音节尾通常静音 (Shva Nach)；在词首既常静音（如 סְלִיחָה slicha、שְׁתַּיִם shtayim），也在部分前缀或特定辅音群中读轻短 [e]（如 מְדַבֵּר medaber）。',
   },
 ];

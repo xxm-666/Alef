@@ -168,7 +168,7 @@ const RAW_BATCH_4: CompactWordEntry[] = [
   ['mizbeach', 'מִזְבֵּחַ', 'מזבח', 'Mizbeach', '/mizˈbeaχ/', '祭坛', '名词', '阳性单数', 'biblical', 'ז-ב-ח'],
   ['neshamah', 'נְשָׁמָה', 'נשמה', 'Neshamah', '/neʃaˈma/', '灵魂、气息', '名词', '阴性单数', 'biblical', 'נ-ש-ם'],
   ['kol', 'קוֹל', 'קול', 'Kol', '/kol/', '声音、嗓音', '名词', '阳性单数', 'biblical'],
-  ['sheket', 'שֶׁקֶט', 'שקט', 'Sheket', '/ˈʃeket/', '安静、宁静', '名词 / 形容词', '阳性单数', 'biblical'],
+  ['sheket', 'שֶׁקֶט', 'שקט', 'Sheket', '/ˈʃeket/', '安静、宁静', '名词', '阳性单数', 'biblical'],
   ['kohen', 'כֹּהֵן', 'כוהן', 'Kohen', '/koˈhen/', '祭司', '名词', '阳性单数', 'biblical', 'כ-ה-ן'],
 ];
 

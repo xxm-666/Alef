@@ -138,7 +138,6 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "אֲחוֹתִי גָּרָה בְּחֵיפָה.": "audio/he_6fa000913d0b.mp3",
   "דָּוִד הוּא הַבֵּן הַבְּכוֹר.": "audio/he_4e385578e77b.mp3",
   "בַּת": "audio/he_082f4720b19e.mp3",
-  "הַבַּת שֶׁלָּהֶם מְנַגֶּנֶת בְּפְּסַנְתֵּר.": "audio/he_5791048a9c2b.mp3",
   "מוֹרֶה": "audio/he_8c8d5f0323e8.mp3",
   "הַמּוֹרֶה מַסְבִּיר אֶת הַדִּקְדּוּק.": "audio/he_3604efba5eb0.mp3",
   "תַּלְמִיד": "audio/he_40784acf5f34.mp3",
@@ -220,7 +219,6 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "מְדַבֵּר": "audio/he_73b0f26ad25b.mp3",
   "הַאִם אַתָּה מְדַבֵּר אַנְגְּלִית?": "audio/he_d89bc669d7e6.mp3",
   "אוֹהֵב": "audio/he_bad96ef89297.mp3",
-  "אֲנִי אוֹהֵב מוּזִיקָה וְסְפָרִים.": "audio/he_7d83a17226f7.mp3",
   "הוֹלֵךְ": "audio/he_682f19f6edb9.mp3",
   "אֲנִי הוֹלֵךְ הַבַּיְתָה עַכְשָׁו.": "audio/he_92dd5ce127cb.mp3",
   "רוֹצֶה": "audio/he_cabf086f38fc.mp3",
@@ -254,7 +252,6 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "לֵב": "audio/he_aa1c1a678a48.mp3",
   "בְּכָל לְבָבְךָ וּבְכָל נַפְשְׁךָ.": "audio/he_bf5802d4edb6.mp3",
   "נֶפֶשׁ": "audio/he_e639c6fe8854.mp3",
-  "כָּל הַנְּשָׁמָה תְּהַלֵּל יָהּ.": "audio/he_cf7b2591098a.mp3",
   "בְּרִית": "audio/he_699828230a4c.mp3",
   "זֹאת אוֹת הַבְּרִית בֵּינִי וּבֵינֵיכֶם.": "audio/he_c1786b3d2685.mp3",
   "כָּבוֹד": "audio/he_279b5d6be15b.mp3",
@@ -613,5 +610,9 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "תֶ": "audio/he_711bed32e5d0.mp3",
   "תִי": "audio/he_05ff9e602c89.mp3",
   "תוֹ": "audio/he_3ccd01861566.mp3",
-  "תוּ": "audio/he_e8d1093a11db.mp3"
+  "תוּ": "audio/he_e8d1093a11db.mp3",
+  "חֶבְרָה": "audio/he_239331cbaf42.mp3",
+  "הַבַּת שֶׁלָּהֶם מְנַגֶּנֶת בַּפְּסַנְתֵּר.": "audio/he_6f8a959ddb27.mp3",
+  "אֲנִי אוֹהֵב מוּזִיקָה וּסְפָרִים.": "audio/he_db509b9d8c88.mp3",
+  "הַמּוּזִיקָה טוֹבָה לַנֶּפֶשׁ.": "audio/he_bb2b57dc702f.mp3"
 };

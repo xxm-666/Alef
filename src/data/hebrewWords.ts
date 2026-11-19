@@ -492,8 +492,8 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     category: 'family',
     note: '复数为 בָּנוֹת (banot)。「成人礼（女孩）」称作 בַּת מִצְוָה (Bat Mitzvah)。',
     sentence: {
-      hebrew: 'הַבַּת שֶׁלָּהֶם מְנַגֶּנֶת בְּפְּסַנְתֵּר.',
-      transliteration: 'Ha-bat shelahem menagenet be-fsanter.',
+      hebrew: 'הַבַּת שֶׁלָּהֶם מְנַגֶּנֶת בַּפְּסַנְתֵּר.',
+      transliteration: 'Ha-bat shelahem menagenet ba-psanter.',
       meaningZh: '他们的女儿会弹钢琴。',
     },
   },
@@ -1346,7 +1346,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     root: 'א-ה-ב',
     note: '「爱 (名词)」是 אַהֲבָה (ahavah)；「我爱你（对女性）」אֲנִי אוֹהֵב אוֹתָךְ。',
     sentence: {
-      hebrew: 'אֲנִי אוֹהֵב מוּזִיקָה וְסְפָרִים.',
+      hebrew: 'אֲנִי אוֹהֵב מוּזִיקָה וּסְפָרִים.',
       transliteration: 'Ani ohev muzikah u-sfarim.',
       meaningZh: '我喜欢音乐和书籍。',
     },
@@ -1705,9 +1705,9 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     root: 'נ-פ-ש',
     note: '本义与「呼吸、喉咙」相关，指有生命的个体或灵魂。词尾 שׁ 读 /ʃ/。',
     sentence: {
-      hebrew: 'כָּל הַנְּשָׁמָה תְּהַלֵּל יָהּ.',
-      transliteration: 'Kol ha-neshamah tehalel Yah.',
-      meaningZh: '凡有气息的都要赞美耶和华。',
+      hebrew: 'הַמּוּזִיקָה טוֹבָה לַנֶּפֶשׁ.',
+      transliteration: 'Ha-muzikah tovah la-nefesh.',
+      meaningZh: '音乐有益于心灵。',
     },
   },
   {

@@ -109,7 +109,7 @@ export const HEBREW_PHRASES: HebrewPhrase[] = [
     hebrewUnpointed: 'אני רוצה קפה הפוך, בבקשה.',
     transliteration: 'Ani rotzeh kafeh hafuch, bevakasha.',
     meaningZh: '我想要一杯拿铁咖啡，谢谢。',
-    note: 'קָפֶה הָפוּךְ（倒过来的咖啡）是以色列咖啡馆最常用的拿铁叫法。',
+    note: 'אֲנִי רוֹצֶה (ani rotzeh) 为男性说话人用语，女性说 אֲנִי רוֹצָה (ani rotzah)。קָפֶה הָפוּךְ（倒过来的咖啡）是以色列咖啡馆最常用的拿铁叫法。',
   },
   {
     id: 'p-dine-3',
@@ -184,6 +184,7 @@ export const HEBREW_PHRASES: HebrewPhrase[] = [
     hebrewUnpointed: 'לך ישר ואחר כך פנה ימינה.',
     transliteration: 'Lech yashar ve-achar kach peneh yaminah.',
     meaningZh: '直走，然后向右转。',
+    note: 'לֵךְ (lech) 与 פְּנֵה (peneh) 为对单数男性的命令式；对女性则用 לְכִי (lechi) 与 פְּנִי (pni)。',
   },
   {
     id: 'p-dir-4',
@@ -198,7 +199,7 @@ export const HEBREW_PHRASES: HebrewPhrase[] = [
     scenario: 'directions',
     hebrew: 'לֹא, זֶה קָרוֹב מְאֹד, חָמֵשׁ דַּקּוֹת בְּרֶגֶל.',
     hebrewUnpointed: 'לא, זה קרוב מאוד, חמש דקות ברגל.',
-    transliteration: 'Lo, zeh karov meod, chamesh dakot ba-regel.',
+    transliteration: 'Lo, zeh karov meod, chamesh dakot be-regel.',
     meaningZh: '不远，很近，步行五分钟就到。',
   },
   {

@@ -1,0 +1,1 @@
+@layer components{.preview-bnFW62{--markdown-font-size:var(--text-sm);--markdown-line-height:calc(var(--text-sm) + 8px);--text-primary:var(--color-codex-description);color:var(--color-codex-description)}.preview-bnFW62:has(table){max-height:calc(var(--markdown-line-height) * 3)}}
