@@ -279,7 +279,7 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
             <h3>喉音及准喉音字母 (אהחע״ר)</h3>
             <p>
               <strong>א · ה · ח · ע</strong> 为四大喉音字母，加上特性相近的小舌/齿龈音 <strong>ר</strong> 合称「אהחע״ר」。它们的三大语法共性：
-              1) 绝不接受重读双写点 Dagesh Chazak；2) 偏爱搭配复合元音 Hatef (אֲ אֱ אֳ)；3) 词尾 ח、ע 及带 Mappiq 的 הּ（不含 א、ר）会引发前置过渡元音「偷渡音 Patach」(-aḥ，如 רוּחַ ruach)。
+              1) 绝不接受重读双写点 Dagesh Chazak；2) 偏爱搭配复合元音 Hatef (אֲ אֱ אֳ)；3) 词尾 ח、ע 及带 Mappiq 的 הּ（不含 א、ר）仅在非 /a/ 元音（如 /i/ /e/ /o/ /u/）之后会引发前置过渡元音「偷渡音 Patach」(-aḥ，如 רוּחַ ruach；而 אָח ach 前面已是 Kamatz /a/，不再额外加 a)。
             </p>
           </div>
           <div className="rules-cards-grid">
@@ -341,7 +341,7 @@ export const SpecialRulesView: React.FC<SpecialRulesViewProps> = ({
                   <button
                     type="button"
                     className="card-mini-icon-btn"
-                    title="听示例音读"
+                    title="听符号名称"
                     onClick={() => speakHebrew(item.nameHebrew, item.nameEnglish, speechRate)}
                   >
                     <Volume2 size={14} />

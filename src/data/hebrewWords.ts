@@ -460,7 +460,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     sentence: {
       hebrew: 'אֲחוֹתִי גָּרָה בְּחֵיפָה.',
       transliteration: 'Achoti garah be-Cheifah.',
-      meaningZh: '我姐姐住在海法。',
+      meaningZh: '我的姐妹住在海法。',
     },
   },
   {

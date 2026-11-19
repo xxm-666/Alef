@@ -125,7 +125,7 @@ const VOWEL_PATTERNS: VowelPattern[] = [
     mark: '\u05B0',
     vowelRoman: 'e',
     vowelIpa: 'ə / ∅',
-    tip: '下方竖排两点：在词首常轻读 /e/，在音节尾则不发元音。',
+    tip: '下方竖排两点：在音节尾静音；在词首既可静音（如 סְלִיחָה slicha），也可轻读 /e/（如 מְדַבֵּר medaber）。',
   },
 ];
 
@@ -144,11 +144,14 @@ interface GeneratedSyllable {
 
 function buildSyllable(c: ConsonantItem, v: VowelPattern): GeneratedSyllable {
   const hebrew = `${c.glyph}${v.mark}${v.suffix ?? ''}`;
-  const roman = c.isSilent
-    ? v.vowelRoman
-    : v.id === 'shva'
-    ? `${c.roman}e`
-    : `${c.roman}${v.vowelRoman}`;
+  const roman =
+    v.id === 'shva'
+      ? c.isSilent
+        ? '(e / ∅)'
+        : `${c.roman}(e)`
+      : c.isSilent
+      ? v.vowelRoman
+      : `${c.roman}${v.vowelRoman}`;
   const ipa = c.isSilent ? `/${v.vowelIpa}/` : `/${c.ipa}${v.vowelIpa}/`;
   return {
     key: `${c.id}-${v.id}`,
@@ -286,6 +289,34 @@ export const SyllableLab: React.FC<SyllableLabProps> = ({ speechRate }) => {
                 <p className="syllable-tip">{item.pattern.tip}</p>
               </button>
             ))}
+          </div>
+
+          <div className="shva-examples-bar">
+            <span className="shva-examples-label">词首 Sheva 真词对照：</span>
+            <button
+              type="button"
+              className="shva-example-chip"
+              onClick={() => speakHebrew('סְלִיחָה', 'slicha', speechRate)}
+            >
+              <Volume2 size={13} />
+              <span className="ex-heb" dir="rtl">
+                סְלִיחָה
+              </span>
+              <code>slicha</code>
+              <span className="muted-caption">（静音 ∅）</span>
+            </button>
+            <button
+              type="button"
+              className="shva-example-chip"
+              onClick={() => speakHebrew('מְדַבֵּר', 'medaber', speechRate)}
+            >
+              <Volume2 size={13} />
+              <span className="ex-heb" dir="rtl">
+                מְדַבֵּר
+              </span>
+              <code>medaber</code>
+              <span className="muted-caption">（轻读 /e/）</span>
+            </button>
           </div>
         </>
       ) : (

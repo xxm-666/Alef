@@ -1306,7 +1306,7 @@ export const NIQQUD_ITEMS: NiqqudItem[] = [
     sample: 'בָּ',
     vowelSound: 'a (或偶读 o)',
     ipa: '[a]',
-    note: '字母下方小 T 形符号；现代多数情况读 [a]（如 father），在无重音闭音节（Kamatz Katan）读 [o]。',
+    note: '字母下方小 T 形符号；现代多数情况读 [a]（如 father），作 Kamatz Katan 时读 [o]（最常见于无重音闭音节，如 חָכְמָה chokhma，也见于词库中的 צָהֳרַיִם tzohorayim 等词）。',
   },
   {
     id: 'patach',

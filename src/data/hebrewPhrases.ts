@@ -182,9 +182,9 @@ export const HEBREW_PHRASES: HebrewPhrase[] = [
     scenario: 'directions',
     hebrew: 'לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.',
     hebrewUnpointed: 'לך ישר ואחר כך פנה ימינה.',
-    transliteration: 'Lech yashar ve-achar kach peneh yaminah.',
+    transliteration: 'Lech yashar ve-achar kach pne yaminah.',
     meaningZh: '直走，然后向右转。',
-    note: 'לֵךְ (lech) 与 פְּנֵה (peneh) 为对单数男性的命令式；对女性则用 לְכִי (lechi) 与 פְּנִי (pni)。',
+    note: 'לֵךְ (lech) 与 פְּנֵה (pne) 为对单数男性的命令式；对女性则用 לְכִי (lechi) 与 פְּנִי (pni)。',
   },
   {
     id: 'p-dir-4',
