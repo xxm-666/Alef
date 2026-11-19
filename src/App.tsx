@@ -383,14 +383,11 @@ export const App: React.FC = () => {
           <AlphabetGridView
             letters={HEBREW_LETTERS}
             displayConfig={displayConfig}
-            onUpdateDisplayConfig={setDisplayConfig}
             order={order}
-            onToggleOrder={() => setOrder((o) => (o === 'rtl' ? 'ltr' : 'rtl'))}
             masteryMap={masteryMap}
             onCycleMastery={handleCycleMastery}
             onSelectLetter={handleOpenDetail}
             speechRate={speechRate}
-            onChangeSpeechRate={setSpeechRate}
           />
         )}
 

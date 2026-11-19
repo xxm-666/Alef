@@ -52,6 +52,89 @@ interface SettingsViewProps {
   onChangeOpacity: (opacity: number) => void;
 }
 
+const DISPLAY_PRESETS: {
+  id: string;
+  label: string;
+  config: CustomDisplayConfig;
+}[] = [
+  {
+    id: 'beginner',
+    label: '初学者精简',
+    config: {
+      showBlock: true,
+      showCursive: false,
+      showSofit: true,
+      showBegadkefat: true,
+      showHebrewName: true,
+      showEnglishName: true,
+      showChineseName: true,
+      showModernSound: true,
+      showBiblicalDiff: false,
+      showTransliteration: true,
+      showGematria: false,
+      showMastery: true,
+      showCategoryBadges: false,
+    },
+  },
+  {
+    id: 'writing',
+    label: '手写与词尾专练',
+    config: {
+      showBlock: true,
+      showCursive: true,
+      showSofit: true,
+      showBegadkefat: true,
+      showHebrewName: false,
+      showEnglishName: true,
+      showChineseName: false,
+      showModernSound: true,
+      showBiblicalDiff: false,
+      showTransliteration: false,
+      showGematria: false,
+      showMastery: true,
+      showCategoryBadges: true,
+    },
+  },
+  {
+    id: 'scholar',
+    label: '现代+圣经全属性',
+    config: {
+      showBlock: true,
+      showCursive: true,
+      showSofit: true,
+      showBegadkefat: true,
+      showHebrewName: true,
+      showEnglishName: true,
+      showChineseName: true,
+      showModernSound: true,
+      showBiblicalDiff: true,
+      showTransliteration: true,
+      showGematria: true,
+      showMastery: true,
+      showCategoryBadges: true,
+    },
+  },
+  {
+    id: 'quiz_mask',
+    label: '遮罩自测',
+    config: {
+      showBlock: true,
+      showCursive: true,
+      showSofit: true,
+      showBegadkefat: false,
+      showHebrewName: false,
+      showEnglishName: false,
+      showChineseName: false,
+      showModernSound: false,
+      showBiblicalDiff: false,
+      showTransliteration: false,
+      showGematria: false,
+      showMastery: true,
+      showCategoryBadges: false,
+    },
+  },
+];
+
 const DISPLAY_FIELD_LABELS: { key: keyof CustomDisplayConfig; label: string }[] = [
   { key: 'showBlock', label: '印刷体' },
   { key: 'showCursive', label: '手写体' },
@@ -204,6 +287,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <RotateCcw size={14} />
             <span>恢复默认</span>
           </button>
+        </div>
+        <div className="preset-row" role="group" aria-label="卡片视图模板">
+          <span className="panel-label">视图模板</span>
+          {DISPLAY_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className="preset-chip"
+              onClick={() => onUpdateDisplayConfig(preset.config)}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
         <div className="settings-chips-grid">
           {DISPLAY_FIELD_LABELS.map((item) => {

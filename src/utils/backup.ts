@@ -37,7 +37,6 @@ const rules: Record<string, [label: string, check: Validator]> = {
   'alef.rulesTab.v1': ['规则页选项', oneOf('syllables', 'sofit', 'begadkefat', 'confusable', 'guttural', 'niqqud')],
   'alef.gridState.v1': ['字母表筛选', fields({
     searchQuery: string, activeFilter: oneOf('all', 'sofit', 'begadkefat', 'guttural', 'confusable', 'needs_review'),
-    showCustomPanel: boolean,
   })],
   'alef.wordsState.v1': ['词表选项', fields({
     searchQuery: string, activeFilter: oneOf('all', 'favorites', 'needs_review', 'due_srs', ...Object.keys(WORD_CATEGORY_META)),

@@ -563,14 +563,6 @@ button {
   font-weight: 600;
 }
 
-.custom-display-panel {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .preset-row {
   display: flex;
   flex-wrap: wrap;
@@ -597,43 +589,6 @@ button {
 
 .preset-chip:hover {
   border-color: var(--gold);
-}
-
-.toggles-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.attr-toggle-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.14s ease;
-}
-
-.toggle-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-
-.attr-toggle-chip.enabled {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.attr-toggle-chip.enabled .toggle-dot {
-  background: var(--accent);
 }
 
 /* Alphabet Grid */

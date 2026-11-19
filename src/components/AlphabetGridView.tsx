@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeftRight,
   CheckCircle2,
   Circle,
   Clock,
   Filter,
   Search,
-  SlidersHorizontal,
   Volume2,
 } from 'lucide-react';
 import {
@@ -23,114 +21,12 @@ import { readStorage, writeStorage } from '../utils/storage';
 interface AlphabetGridViewProps {
   letters: HebrewLetter[];
   displayConfig: CustomDisplayConfig;
-  onUpdateDisplayConfig: (next: CustomDisplayConfig) => void;
   order: AlphabetOrder;
-  onToggleOrder: () => void;
   masteryMap: Record<string, MasteryLevel>;
   onCycleMastery: (letterId: string) => void;
   onSelectLetter: (letterId: string) => void;
   speechRate: number;
-  onChangeSpeechRate: (rate: number) => void;
 }
-
-const DISPLAY_PRESETS: {
-  id: string;
-  label: string;
-  config: CustomDisplayConfig;
-}[] = [
-  {
-    id: 'beginner',
-    label: '初学者精简',
-    config: {
-      showBlock: true,
-      showCursive: false,
-      showSofit: true,
-      showBegadkefat: true,
-      showHebrewName: true,
-      showEnglishName: true,
-      showChineseName: true,
-      showModernSound: true,
-      showBiblicalDiff: false,
-      showTransliteration: true,
-      showGematria: false,
-      showMastery: true,
-      showCategoryBadges: false,
-    },
-  },
-  {
-    id: 'writing',
-    label: '手写与词尾专练',
-    config: {
-      showBlock: true,
-      showCursive: true,
-      showSofit: true,
-      showBegadkefat: true,
-      showHebrewName: false,
-      showEnglishName: true,
-      showChineseName: false,
-      showModernSound: true,
-      showBiblicalDiff: false,
-      showTransliteration: false,
-      showGematria: false,
-      showMastery: true,
-      showCategoryBadges: true,
-    },
-  },
-  {
-    id: 'scholar',
-    label: '现代+圣经全属性',
-    config: {
-      showBlock: true,
-      showCursive: true,
-      showSofit: true,
-      showBegadkefat: true,
-      showHebrewName: true,
-      showEnglishName: true,
-      showChineseName: true,
-      showModernSound: true,
-      showBiblicalDiff: true,
-      showTransliteration: true,
-      showGematria: true,
-      showMastery: true,
-      showCategoryBadges: true,
-    },
-  },
-  {
-    id: 'quiz_mask',
-    label: '遮罩自测',
-    config: {
-      showBlock: true,
-      showCursive: true,
-      showSofit: true,
-      showBegadkefat: false,
-      showHebrewName: false,
-      showEnglishName: false,
-      showChineseName: false,
-      showModernSound: false,
-      showBiblicalDiff: false,
-      showTransliteration: false,
-      showGematria: false,
-      showMastery: true,
-      showCategoryBadges: false,
-    },
-  },
-];
-
-const CONFIG_TOGGLES: { key: keyof CustomDisplayConfig; label: string }[] = [
-  { key: 'showBlock', label: '印刷体' },
-  { key: 'showCursive', label: '手写体' },
-  { key: 'showSofit', label: '词尾形 Sofit' },
-  { key: 'showBegadkefat', label: 'Dagesh 音变' },
-  { key: 'showHebrewName', label: '希伯来名' },
-  { key: 'showChineseName', label: '中文名' },
-  { key: 'showEnglishName', label: '英文名' },
-  { key: 'showModernSound', label: '现代读音 & IPA' },
-  { key: 'showBiblicalDiff', label: '圣经古典发音' },
-  { key: 'showTransliteration', label: '拉丁转写' },
-  { key: 'showGematria', label: 'Gematria 数值' },
-  { key: 'showCategoryBadges', label: '属性标签' },
-  { key: 'showMastery', label: '熟练度标记' },
-];
 
 const FILTER_OPTIONS: { id: GridFilter; label: string }[] = [
   { id: 'all', label: '全部 22 字母' },
@@ -158,41 +54,34 @@ const GRID_STATE_KEY = 'alef.gridState.v1';
 interface PersistedGridState {
   searchQuery: string;
   activeFilter: GridFilter;
-  showCustomPanel: boolean;
 }
 
 export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
   letters,
   displayConfig,
-  onUpdateDisplayConfig,
   order,
-  onToggleOrder,
   masteryMap,
   onCycleMastery,
   onSelectLetter,
   speechRate,
-  onChangeSpeechRate,
 }) => {
   const initialGrid = useMemo(
     () =>
       readStorage<PersistedGridState>(GRID_STATE_KEY, {
         searchQuery: '',
         activeFilter: 'all',
-        showCustomPanel: false,
       }),
     []
   );
   const [searchQuery, setSearchQuery] = useState(initialGrid.searchQuery);
   const [activeFilter, setActiveFilter] = useState<GridFilter>(initialGrid.activeFilter);
-  const [showCustomPanel, setShowCustomPanel] = useState(initialGrid.showCustomPanel);
 
   useEffect(() => {
     writeStorage<PersistedGridState>(GRID_STATE_KEY, {
       searchQuery,
       activeFilter,
-      showCustomPanel,
     });
-  }, [searchQuery, activeFilter, showCustomPanel]);
+  }, [searchQuery, activeFilter]);
 
   const filteredLetters = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -217,61 +106,18 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
     });
   }, [letters, activeFilter, searchQuery, masteryMap]);
 
-  function toggleConfigField(key: keyof CustomDisplayConfig) {
-    const next = { ...displayConfig, [key]: !displayConfig[key] };
-    // Prevent hiding both block and cursive simultaneously so cards remain identifiable
-    if (!next.showBlock && !next.showCursive) {
-      next.showBlock = true;
-    }
-    onUpdateDisplayConfig(next);
-  }
-
   return (
     <div className="view-container">
       <div className="toolbar-card">
-        <div className="toolbar-top-row">
-          <div className="search-box">
-            <Search size={15} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="搜索字母、中文名、音标、转写或数值"
-              placeholder="搜索字母、读音或数值"
-            />
-          </div>
-
-          <div className="toolbar-right-controls">
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              onClick={onToggleOrder}
-              title="切换字母表排列方向"
-            >
-              <ArrowLeftRight size={14} />
-              <span>{order === 'rtl' ? '从右向左 (希伯来习惯)' : '从左向右 (LTR)'}</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              onClick={() => onChangeSpeechRate(speechRate === 1 ? 0.75 : 1)}
-              title="切换朗读语速"
-            >
-              <Volume2 size={14} />
-              <span>语速 {speechRate}x</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-secondary btn-sm ${showCustomPanel ? 'active-btn' : ''}`}
-              aria-expanded={showCustomPanel}
-              onClick={() => setShowCustomPanel((v) => !v)}
-            >
-              <SlidersHorizontal size={14} />
-              <span>显示选项</span>
-            </button>
-          </div>
+        <div className="search-box">
+          <Search size={15} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="搜索字母、中文名、音标、转写或数值"
+            placeholder="搜索字母、读音或数值"
+          />
         </div>
 
         <div className="filter-pills-row">
@@ -290,40 +136,6 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
             </button>
           ))}
         </div>
-
-        {showCustomPanel && (
-          <div className="custom-display-panel">
-            <div className="preset-row">
-              <span className="panel-label">视图模板：</span>
-              {DISPLAY_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className="preset-chip"
-                  onClick={() => onUpdateDisplayConfig(preset.config)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-            <div className="toggles-grid">
-              {CONFIG_TOGGLES.map((item) => {
-                const enabled = displayConfig[item.key];
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`attr-toggle-chip ${enabled ? 'enabled' : ''}`}
-                    onClick={() => toggleConfigField(item.key)}
-                  >
-                    <span className="toggle-dot" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {filteredLetters.length === 0 ? (
