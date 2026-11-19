@@ -1733,8 +1733,15 @@ button {
   justify-content: space-between;
 }
 
-.flash-deck-toggle {
-  display: none;
+#flash-study-options {
+  flex-basis: 100%;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.flashcard-view .quiz-score-badge {
+  align-self: flex-end;
 }
 
 .flashcard-controls-group {
@@ -4121,16 +4128,114 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .flash-deck-toggle {
-    display: inline-flex;
+  .flashcard-view {
+    gap: 10px;
   }
 
-  .flash-deck-options {
-    flex-basis: 100%;
+  .flash-study-toggle {
+    min-height: 36px;
   }
 
-  .flash-deck-options:not(.flash-deck-options-open) {
-    display: none;
+  .flashcard-view .quiz-stage {
+    padding-top: 0;
+  }
+
+  .flashcard-view .quiz-card {
+    padding: 12px;
+    gap: 9px;
+  }
+
+  .flashcard-view .quiz-prompt-header h3 {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .flashcard-view .quiz-stimulus-box {
+    height: clamp(80px, 15svh, 120px);
+  }
+
+  .flashcard-view .quiz-big-hebrew {
+    font-size: clamp(58px, 10svh, 80px);
+  }
+
+  .flashcard-view .quiz-stimulus-box svg {
+    max-height: clamp(74px, 14svh, 112px);
+    max-width: 100%;
+  }
+
+  .flashcard-view .quiz-options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .flashcard-view .quiz-option-btn {
+    min-height: 52px;
+    justify-content: center;
+    padding: 8px 5px;
+    overflow-wrap: anywhere;
+  }
+
+  .flashcard-view .opt-main {
+    font-size: 16px;
+  }
+
+  .flashcard-view .opt-main:dir(rtl) {
+    font-size: 24px;
+    line-height: 1.2;
+  }
+
+  @media (max-height: 560px) {
+    .flashcard-view .quiz-card {
+      padding: 10px;
+      gap: 7px;
+    }
+
+    .flashcard-view .quiz-stimulus-box {
+      height: 66px;
+    }
+
+    .flashcard-view .quiz-stimulus-box svg {
+      max-height: 60px;
+    }
+
+    .flashcard-view .quiz-big-hebrew {
+      font-size: 52px;
+    }
+
+    .flashcard-view .quiz-option-btn {
+      min-height: 46px;
+      padding-block: 5px;
+    }
+
+    .flashcard-view .opt-sub {
+      font-size: 11px;
+    }
+  }
+
+  @media (min-height: 700px) {
+    .flashcard-view .quiz-card {
+      padding: 16px;
+      gap: 12px;
+    }
+
+    .flashcard-view .quiz-stimulus-box {
+      height: 150px;
+    }
+
+    .flashcard-view .quiz-option-btn {
+      min-height: 68px;
+    }
+  }
+
+  .flashcard-view .quiz-feedback-box {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .flashcard-view .quiz-feedback-box > button {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding-inline: 8px;
   }
 
   .flashcard-stage {
@@ -4142,7 +4247,7 @@ button {
   }
 
   .flip-card-wrapper {
-    height: clamp(170px, calc(100svh - 325px), 360px);
+    height: clamp(170px, calc(100svh - 325px), 440px);
   }
 
   .flip-back .back-details-grid {

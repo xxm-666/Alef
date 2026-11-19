@@ -189,7 +189,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
   );
 
   const [subMode, setSubMode] = useState<StudySubMode>(initialFlash.subMode);
-  const [showDeckOptions, setShowDeckOptions] = useState(false);
+  const [showStudyOptions, setShowStudyOptions] = useState(false);
   const [frontType, setFrontType] = useState<CardFrontType>(initialFlash.frontType);
   const [deckScope, setDeckScope] = useState<DeckScope>(initialFlash.deckScope);
   const [shuffledIds, setShuffledIds] = useState<string[] | null>(null);
@@ -322,7 +322,10 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
           <button
             type="button"
             className={subMode === 'flip' ? 'active' : ''}
-            onClick={() => setSubMode('flip')}
+            onClick={() => {
+              setSubMode('flip');
+              setShowStudyOptions(false);
+            }}
           >
             翻转闪卡
           </button>
@@ -331,6 +334,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
             className={subMode === 'quiz' ? 'active' : ''}
             onClick={() => {
               setSubMode('quiz');
+              setShowStudyOptions(false);
               startNewQuestion(quizType);
             }}
           >
@@ -338,141 +342,136 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
           </button>
         </div>
 
-        {subMode === 'flip' && (
-          <button
-            type="button"
-            className="btn-secondary btn-sm flash-deck-toggle"
-            aria-expanded={showDeckOptions}
-            aria-controls="flash-deck-options"
-            onClick={() => setShowDeckOptions((open) => !open)}
-          >
-            卡组选项
-          </button>
-        )}
+        <button
+          type="button"
+          className="btn-secondary btn-sm flash-study-toggle"
+          aria-expanded={showStudyOptions}
+          aria-controls="flash-study-options"
+          onClick={() => setShowStudyOptions((open) => !open)}
+        >
+          {subMode === 'flip' ? '卡组选项' : '题型选项'}
+        </button>
 
-        {subMode === 'flip' ? (
-          <div
-            id="flash-deck-options"
-            className={`flashcard-controls-group flash-deck-options ${showDeckOptions ? 'flash-deck-options-open' : ''}`}
-          >
-            <div className="segmented-control">
-              <button
-                type="button"
-                className={frontType === 'block' ? 'active' : ''}
-                onClick={() => setFrontType('block')}
-              >
-                印刷体正面
-              </button>
-              <button
-                type="button"
-                className={frontType === 'cursive' ? 'active' : ''}
-                onClick={() => setFrontType('cursive')}
-              >
-                手写体正面
-              </button>
-              <button
-                type="button"
-                className={frontType === 'both' ? 'active' : ''}
-                onClick={() => setFrontType('both')}
-              >
-                双字形对照
-              </button>
-              <button
-                type="button"
-                className={frontType === 'sofit' ? 'active' : ''}
-                onClick={() => setFrontType('sofit')}
-              >
-                词尾形优先
-              </button>
-            </div>
+        <div id="flash-study-options" hidden={!showStudyOptions}>
+          {subMode === 'flip' ? (
+            <div className="flashcard-controls-group">
+              <div className="segmented-control">
+                <button
+                  type="button"
+                  className={frontType === 'block' ? 'active' : ''}
+                  onClick={() => setFrontType('block')}
+                >
+                  印刷体正面
+                </button>
+                <button
+                  type="button"
+                  className={frontType === 'cursive' ? 'active' : ''}
+                  onClick={() => setFrontType('cursive')}
+                >
+                  手写体正面
+                </button>
+                <button
+                  type="button"
+                  className={frontType === 'both' ? 'active' : ''}
+                  onClick={() => setFrontType('both')}
+                >
+                  双字形对照
+                </button>
+                <button
+                  type="button"
+                  className={frontType === 'sofit' ? 'active' : ''}
+                  onClick={() => setFrontType('sofit')}
+                >
+                  词尾形优先
+                </button>
+              </div>
 
-            <select
-              className="select-pill"
-              value={deckScope}
-              onChange={(e) => setDeckScope(e.target.value as DeckScope)}
-              aria-label="选择词库范围"
-            >
-              <option value="all">全部 22 字母</option>
-              <option value="needs_review">仅未掌握/学习中</option>
-              <option value="sofit">仅词尾变形 (5)</option>
-              <option value="begadkefat">仅 Begadkefat (6)</option>
-            </select>
+              <select
+                className="select-pill"
+                value={deckScope}
+                onChange={(e) => setDeckScope(e.target.value as DeckScope)}
+                aria-label="选择词库范围"
+              >
+                <option value="all">全部 22 字母</option>
+                <option value="needs_review">仅未掌握/学习中</option>
+                <option value="sofit">仅词尾变形 (5)</option>
+                <option value="begadkefat">仅 Begadkefat (6)</option>
+              </select>
 
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              onClick={handleShuffle}
-            >
-              <Shuffle size={14} />
-              <span>随机打乱</span>
-            </button>
-            {shuffledIds && (
               <button
                 type="button"
-                className="btn-ghost btn-sm"
-                onClick={() => {
-                  setShuffledIds(null);
-                  setCardIndex(0);
-                  setIsFlipped(false);
-                }}
+                className="btn-secondary btn-sm"
+                onClick={handleShuffle}
               >
-                <RotateCcw size={14} />
-                <span>恢复顺序</span>
+                <Shuffle size={14} />
+                <span>随机打乱</span>
               </button>
-            )}
-          </div>
-        ) : (
-          <div className="flashcard-controls-group">
-            <div className="segmented-control">
-              <button
-                type="button"
-                className={quizType === 'block-to-sound' ? 'active' : ''}
-                onClick={() => {
-                  setQuizType('block-to-sound');
-                  startNewQuestion('block-to-sound');
-                }}
-              >
-                印刷体辨音
-              </button>
-              <button
-                type="button"
-                className={quizType === 'cursive-to-block' ? 'active' : ''}
-                onClick={() => {
-                  setQuizType('cursive-to-block');
-                  startNewQuestion('cursive-to-block');
-                }}
-              >
-                手写配印刷
-              </button>
-              <button
-                type="button"
-                className={quizType === 'sofit-match' ? 'active' : ''}
-                onClick={() => {
-                  setQuizType('sofit-match');
-                  startNewQuestion('sofit-match');
-                }}
-              >
-                词尾 Sofit
-              </button>
-              <button
-                type="button"
-                className={quizType === 'dagesh-quiz' ? 'active' : ''}
-                onClick={() => {
-                  setQuizType('dagesh-quiz');
-                  startNewQuestion('dagesh-quiz');
-                }}
-              >
-                Dagesh 音变
-              </button>
+              {shuffledIds && (
+                <button
+                  type="button"
+                  className="btn-ghost btn-sm"
+                  onClick={() => {
+                    setShuffledIds(null);
+                    setCardIndex(0);
+                    setIsFlipped(false);
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  <span>恢复顺序</span>
+                </button>
+              )}
             </div>
-            <div className="quiz-score-badge">
-              <span>
-                得分：{quizStats.correct}/{quizStats.total}
-              </span>
-              <span>连对：{quizStats.streak}</span>
+          ) : (
+            <div className="flashcard-controls-group">
+              <div className="segmented-control">
+                <button
+                  type="button"
+                  className={quizType === 'block-to-sound' ? 'active' : ''}
+                  onClick={() => {
+                    setQuizType('block-to-sound');
+                    startNewQuestion('block-to-sound');
+                    setShowStudyOptions(false);
+                  }}
+                >
+                  印刷体辨音
+                </button>
+                <button
+                  type="button"
+                  className={quizType === 'cursive-to-block' ? 'active' : ''}
+                  onClick={() => {
+                    setQuizType('cursive-to-block');
+                    startNewQuestion('cursive-to-block');
+                    setShowStudyOptions(false);
+                  }}
+                >
+                  手写配印刷
+                </button>
+                <button
+                  type="button"
+                  className={quizType === 'sofit-match' ? 'active' : ''}
+                  onClick={() => {
+                    setQuizType('sofit-match');
+                    startNewQuestion('sofit-match');
+                    setShowStudyOptions(false);
+                  }}
+                >
+                  词尾 Sofit
+                </button>
+                <button
+                  type="button"
+                  className={quizType === 'dagesh-quiz' ? 'active' : ''}
+                  onClick={() => {
+                    setQuizType('dagesh-quiz');
+                    startNewQuestion('dagesh-quiz');
+                    setShowStudyOptions(false);
+                  }}
+                >
+                  Dagesh 音变
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {subMode === 'flip' && currentCard && (
@@ -658,6 +657,12 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
       {subMode === 'quiz' && (
         <div className="quiz-stage">
           <div className="quiz-card">
+            <div className="quiz-score-badge">
+              <span>
+                得分：{quizStats.correct}/{quizStats.total}
+              </span>
+              <span>连对：{quizStats.streak}</span>
+            </div>
             <div className="quiz-prompt-header">
               <HelpCircle size={18} />
               <h3>{question.promptTitle}</h3>
