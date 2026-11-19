@@ -48,6 +48,9 @@ const NAV_ITEMS: { id: StudyViewMode; label: string; shortLabel: string; icon: R
   { id: 'settings', label: '设置', shortLabel: '设置', icon: <Settings size={15} /> },
 ];
 
+const MOBILE_NAV_ORDER: StudyViewMode[] = ['words', 'flashcards', 'grid', 'rules', 'settings'];
+const MOBILE_NAV_ITEMS = MOBILE_NAV_ORDER.flatMap((id) => NAV_ITEMS.filter((item) => item.id === id));
+
 export const TitleBar: React.FC<TitleBarProps> = ({
   activeView,
   onSelectView,
@@ -74,26 +77,29 @@ export const TitleBar: React.FC<TitleBarProps> = ({
     return () => query.removeEventListener('change', update);
   }, []);
 
-  const items = isBottomNav ? NAV_ITEMS.filter((item) => item.id !== 'detail') : NAV_ITEMS;
+  const items = isBottomNav ? MOBILE_NAV_ITEMS : NAV_ITEMS;
   const activeItem = isBottomNav && activeView === 'detail' ? 'grid' : activeView;
 
   return (
     <header className="titlebar">
       <nav className="titlebar-nav" aria-label="主视图切换">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`nav-pill ${activeItem === item.id ? 'active' : ''}`}
-            aria-label={item.label}
-            aria-current={activeItem === item.id ? 'page' : undefined}
-            onClick={() => onSelectView(item.id)}
-          >
-            {item.icon}
-            <span className="nav-label-desktop">{item.label}</span>
-            <span className="nav-label-mobile">{item.shortLabel}</span>
-          </button>
-        ))}
+        {items.map((item) => {
+          const isCenter = isBottomNav && item.id === 'grid';
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav-pill ${isCenter ? 'nav-pill-center' : ''} ${activeItem === item.id ? 'active' : ''}`}
+              aria-label={item.label}
+              aria-current={activeItem === item.id ? 'page' : undefined}
+              onClick={() => onSelectView(item.id)}
+            >
+              {isCenter ? <span className="nav-center-glyph" aria-hidden="true">א</span> : item.icon}
+              <span className="nav-label-desktop">{item.label}</span>
+              <span className="nav-label-mobile">{item.shortLabel}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <div className="titlebar-actions">

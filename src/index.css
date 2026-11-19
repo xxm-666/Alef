@@ -3730,19 +3730,47 @@ button {
   }
 
   .titlebar-nav {
+    --dock-glass: rgba(22, 33, 55, 0.76);
+    --dock-rim: rgba(201, 226, 255, 0.27);
+    --dock-glint: rgba(214, 237, 255, 0.14);
+    --dock-center-top: #416484;
+    --dock-center-bottom: #203752;
+    --dock-center-ink: #f1f9ff;
+    --dock-center-glow: rgba(56, 189, 248, 0.30);
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: 430px;
+    margin-inline: auto;
     z-index: 50;
-    border-radius: 0;
-    border: none;
-    border-top: 1px solid var(--border);
-    background: var(--bg-surface);
-    padding: 6px 6px max(8px, env(safe-area-inset-bottom));
-    justify-content: space-around;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
-    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
+    padding: 5px;
+    border: 1px solid var(--dock-rim);
+    border-radius: 30px;
+    background: var(--bg-surface);
+    box-shadow: inset 0 1px 1px var(--dock-glint), 0 8px 26px rgba(9, 15, 27, 0.24);
+  }
+
+  [data-theme='parchment'] .titlebar-nav {
+    --dock-glass: rgba(255, 251, 242, 0.78);
+    --dock-rim: rgba(129, 150, 180, 0.34);
+    --dock-glint: rgba(255, 255, 255, 0.77);
+    --dock-center-top: #edf8ff;
+    --dock-center-bottom: #bed7f4;
+    --dock-center-ink: #203f71;
+    --dock-center-glow: rgba(29, 78, 216, 0.20);
+  }
+
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .titlebar-nav {
+      background: linear-gradient(160deg, var(--dock-glint), transparent 64%), var(--dock-glass);
+      -webkit-backdrop-filter: blur(20px) saturate(155%);
+      backdrop-filter: blur(20px) saturate(155%);
+    }
   }
 
   .nav-label-desktop {
@@ -3755,15 +3783,69 @@ button {
     line-height: 1.1;
   }
 
-  .nav-pill {
-    flex: 1;
+  .titlebar-nav .nav-pill {
+    min-width: 0;
+    min-height: 48px;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
-    padding: 6px 2px;
-    min-height: 44px;
-    border-radius: 10px;
-    white-space: nowrap;
+    gap: 5px;
+    padding: 5px 2px;
+    border-radius: 22px;
+    color: var(--text-secondary);
+  }
+
+  .titlebar-nav .nav-pill > svg {
+    width: 19px;
+    height: 19px;
+    stroke-width: 1.8;
+  }
+
+  .titlebar-nav .nav-pill.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .titlebar-nav .nav-pill-center {
+    margin-top: -17px;
+    padding-top: 0;
+    gap: 3px;
+    color: var(--text-primary);
+    font-weight: 600;
+    background: transparent;
+  }
+
+  .titlebar-nav .nav-pill-center.active {
+    background: transparent;
+  }
+
+  .nav-center-glyph {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--dock-rim);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 35% 8%, rgba(255, 255, 255, 0.25), transparent 63%),
+      linear-gradient(155deg, var(--dock-center-top), var(--dock-center-bottom));
+    box-shadow: inset 0 1px 2px var(--dock-glint), 0 4px 12px var(--dock-center-glow);
+    color: var(--dock-center-ink);
+    font: 32px/1 var(--font-hebrew);
+  }
+
+  .nav-pill-center.active .nav-center-glyph {
+    border-color: var(--accent);
+    box-shadow: inset 0 1px 2px var(--dock-glint), 0 4px 15px var(--dock-center-glow);
+  }
+
+  .titlebar-nav .nav-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .titlebar-nav .nav-pill {
+      transition: none;
+    }
   }
 
   .mobile-hide-toolbar {
@@ -3789,7 +3871,7 @@ button {
   }
 
   .main-scroll-area {
-    padding: calc(12px + env(safe-area-inset-top)) 12px calc(84px + env(safe-area-inset-bottom));
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(96px + env(safe-area-inset-bottom));
   }
 
   .search-box {
@@ -3953,7 +4035,7 @@ button {
   }
 
   .flip-card-wrapper {
-    height: clamp(190px, calc(100svh - 305px), 360px);
+    height: clamp(178px, calc(100svh - 317px), 360px);
   }
 
   .flip-back .back-details-grid {
