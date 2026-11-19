@@ -81,6 +81,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
 
   const items = isBottomNav ? MOBILE_NAV_ITEMS : NAV_ITEMS;
   const activeItem = isBottomNav && activeView === 'detail' ? 'grid' : activeView;
+  const activeIndex = MOBILE_NAV_ITEMS.findIndex((item) => item.id === activeItem);
 
   return (
     <header className="titlebar">
@@ -89,6 +90,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <Suspense fallback={null}>
             <DockGlass />
           </Suspense>
+        )}
+        {isBottomNav && activeIndex >= 0 && (
+          <span
+            className="dock-selection"
+            data-center={activeItem === 'grid'}
+            aria-hidden="true"
+            style={{ '--dock-selection-index': activeIndex } as React.CSSProperties}
+          />
         )}
         {items.map((item) => {
           const isCenter = isBottomNav && item.id === 'grid';

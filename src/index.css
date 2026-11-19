@@ -3770,6 +3770,9 @@ button {
   }
 
   .titlebar-nav {
+    --dock-gap: 4px;
+    --dock-padding-inline: 9px;
+    --dock-padding-block: 7px;
     --dock-glass: rgba(17, 28, 48, 0.35);
     --dock-rim: rgba(205, 229, 255, 0.24);
     --dock-glint: rgba(220, 240, 255, 0.52);
@@ -3790,8 +3793,8 @@ button {
     z-index: 50;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
-    padding: 7px 9px;
+    gap: var(--dock-gap);
+    padding: var(--dock-padding-block) var(--dock-padding-inline);
     border: 1px solid var(--dock-rim);
     border-radius: 999px;
     background: var(--bg-surface);
@@ -3890,7 +3893,26 @@ button {
     display: none;
   }
 
+  .dock-selection {
+    position: absolute;
+    top: var(--dock-padding-block);
+    bottom: var(--dock-padding-block);
+    left: var(--dock-padding-inline);
+    width: calc((100% - 2 * var(--dock-padding-inline) - 4 * var(--dock-gap)) / 5);
+    border-radius: 999px;
+    pointer-events: none;
+    background: linear-gradient(155deg, var(--dock-lens), var(--accent-soft));
+    box-shadow: inset 0 1px 1px var(--dock-glint), inset 0 -1px 1px var(--dock-reflection);
+    transform: translateX(calc(var(--dock-selection-index) * (100% + var(--dock-gap))));
+    transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1.08), opacity 180ms ease;
+  }
+
+  .dock-selection[data-center='true'] {
+    opacity: 0;
+  }
+
   .titlebar-nav .nav-pill {
+    position: relative;
     min-width: 0;
     min-height: 50px;
     flex-direction: row;
@@ -3911,12 +3933,17 @@ button {
 
   .titlebar-nav .nav-pill.active {
     color: var(--accent);
-    background: linear-gradient(155deg, var(--dock-lens), var(--accent-soft));
-    box-shadow: inset 0 1px 1px var(--dock-glint), inset 0 -1px 1px var(--dock-reflection);
+    background: transparent;
+    box-shadow: none;
   }
 
   .titlebar-nav .nav-pill.active > svg {
     transform: scale(1.06);
+  }
+
+  .titlebar-nav .nav-pill:active > svg,
+  .titlebar-nav .nav-pill-center:active .nav-center-glyph {
+    transform: scale(0.9);
   }
 
   .nav-center-slot {
@@ -4006,8 +4033,19 @@ button {
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .titlebar-nav .nav-pill {
+    .dock-selection,
+    .titlebar-nav .nav-pill,
+    .titlebar-nav .nav-pill > svg,
+    .nav-center-glyph {
       transition: none;
+    }
+
+    .titlebar-nav .nav-pill > svg,
+    .titlebar-nav .nav-pill.active > svg,
+    .titlebar-nav .nav-pill:active > svg,
+    .titlebar-nav .nav-pill-center .nav-center-glyph,
+    .titlebar-nav .nav-pill-center:active .nav-center-glyph {
+      transform: none;
     }
   }
 
