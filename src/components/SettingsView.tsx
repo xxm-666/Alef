@@ -81,6 +81,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleMiniMode,
   onChangeOpacity,
 }) => {
+  const todayKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
+  })();
+  const todayCount = studyStats.lastActiveDate === todayKey ? studyStats.todayReviews : 0;
+
   function toggleField(key: keyof CustomDisplayConfig) {
     onUpdateDisplayConfig({
       ...displayConfig,
@@ -97,7 +105,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Flame size={16} />
             <h3>学习进度概览</h3>
           </div>
-          <span className="muted-caption">本地自动保存</span>
+          <span className="muted-caption">今日复习 {todayCount} 次</span>
         </div>
         <div className="settings-stats-grid">
           <div className="settings-stat-box">

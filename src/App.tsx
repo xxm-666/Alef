@@ -364,9 +364,6 @@ export const App: React.FC = () => {
         onMaximize={handleMaximize}
         onClose={handleClose}
         onOpenBackup={() => setIsBackupOpen(true)}
-        masteredCount={masteredCount}
-        totalCount={HEBREW_LETTERS.length}
-        studyStats={studyStats}
       />
 
       <main ref={mainScrollRef} className="main-scroll-area">
