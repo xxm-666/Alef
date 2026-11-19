@@ -31,7 +31,12 @@ import { BackupModal } from './components/BackupModal';
 const NATIVE_TAB_VIEWS = ['words', 'flashcards', 'grid', 'rules', 'settings'] as const;
 const iosWindow = window as Window & {
   alefNativeTabs?: boolean;
-  webkit?: { messageHandlers?: { alefViewChanged?: { postMessage: (route: StudyViewMode) => void } } };
+  webkit?: {
+    messageHandlers?: {
+      alefViewChanged?: { postMessage: (route: StudyViewMode) => void };
+      alefThemeChanged?: { postMessage: (appearance: { background: string; dark: boolean }) => void };
+    };
+  };
 };
 const usesNativeTabs = iosWindow.alefNativeTabs === true;
 
@@ -132,10 +137,10 @@ export const App: React.FC = () => {
       lastDayTheme.current = theme;
       writeStorage(STORAGE_KEYS.dayTheme, theme);
     }
-    const themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (themeMeta) {
-      const appBackground = getComputedStyle(document.documentElement).getPropertyValue('--bg-app');
-      themeMeta.setAttribute('content', appBackground.trim());
+    const background = getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background);
+    if (usesNativeTabs) {
+      iosWindow.webkit?.messageHandlers?.alefThemeChanged?.postMessage({ background, dark: theme === 'dark' });
     }
   }, [theme]);
 

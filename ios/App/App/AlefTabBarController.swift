@@ -19,12 +19,41 @@ private enum StudyTab: String, CaseIterable {
     }
 }
 
+private struct StudyAppearance {
+    let background: UIColor
+    let style: UIUserInterfaceStyle
+
+    init?(message: Any) {
+        guard let values = message as? [String: Any],
+              let dark = values["dark"] as? Bool,
+              let hex = values["background"] as? String,
+              hex.first == "#", hex.utf8.count == 7,
+              let rgb = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+
+        background = UIColor(
+            red: CGFloat((rgb >> 16) & 0xff) / 255,
+            green: CGFloat((rgb >> 8) & 0xff) / 255,
+            blue: CGFloat(rgb & 0xff) / 255,
+            alpha: 1
+        )
+        style = dark ? .dark : .light
+    }
+}
+
 final class AlefTabBarController: UITabBarController, UITabBarControllerDelegate {
     private let studyController = AlefStudyController()
     private let studyTabs = StudyTab.allCases
 
+    override var childForStatusBarStyle: UIViewController? { nil }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        overrideUserInterfaceStyle == .dark ? .lightContent : .darkContent
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        overrideUserInterfaceStyle = .light
+        view.backgroundColor = .systemBackground
         delegate = self
         viewControllers = studyTabs.map { tab in
             let controller = UIViewController()
@@ -33,6 +62,14 @@ final class AlefTabBarController: UITabBarController, UITabBarControllerDelegate
             return controller
         }
         selectedIndex = studyTabs.firstIndex(of: .grid) ?? 0
+        studyController.onAppearanceChange = { [weak self] appearance in
+            guard let self else { return }
+            self.overrideUserInterfaceStyle = appearance.style
+            self.view.backgroundColor = appearance.background
+            self.viewControllers?.forEach { $0.view.backgroundColor = appearance.background }
+            self.studyController.webView?.underPageBackgroundColor = appearance.background
+            self.setNeedsStatusBarAppearanceUpdate()
+        }
         studyController.onViewChange = { [weak self] route in
             guard let self, let tab = StudyTab(rawValue: route == "detail" ? "grid" : route),
                   let index = self.studyTabs.firstIndex(of: tab) else { return }
@@ -75,6 +112,7 @@ final class AlefTabBarController: UITabBarController, UITabBarControllerDelegate
 
 private final class AlefStudyController: CAPBridgeViewController {
     var onViewChange: ((String) -> Void)?
+    var onAppearanceChange: ((StudyAppearance) -> Void)?
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
@@ -85,8 +123,14 @@ private final class AlefStudyController: CAPBridgeViewController {
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         ))
-        controller?.add(AlefViewMessageHandler { [weak self] route in self?.onViewChange?(route) },
-                        name: "alefViewChanged")
+        controller?.add(AlefScriptMessageHandler { [weak self] message in
+            guard let route = message as? String else { return }
+            self?.onViewChange?(route)
+        }, name: "alefViewChanged")
+        controller?.add(AlefScriptMessageHandler { [weak self] message in
+            guard let appearance = StudyAppearance(message: message) else { return }
+            self?.onAppearanceChange?(appearance)
+        }, name: "alefThemeChanged")
     }
 
     func open(_ tab: StudyTab) {
@@ -96,15 +140,15 @@ private final class AlefStudyController: CAPBridgeViewController {
     }
 }
 
-private final class AlefViewMessageHandler: NSObject, WKScriptMessageHandler {
-    private let receive: (String) -> Void
+private final class AlefScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    private let receive: (Any) -> Void
 
-    init(_ receive: @escaping (String) -> Void) {
+    init(_ receive: @escaping (Any) -> Void) {
         self.receive = receive
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame, let route = message.body as? String else { return }
-        receive(route)
+        guard message.frameInfo.isMainFrame else { return }
+        receive(message.body)
     }
 }
