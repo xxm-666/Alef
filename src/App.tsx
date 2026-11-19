@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CONFUSABLE_GROUPS,
   HEBREW_LETTERS,
@@ -27,6 +27,13 @@ import { MiniWidgetView } from './components/MiniWidgetView';
 import { WordsStudyView } from './components/WordsStudyView';
 import { SettingsView } from './components/SettingsView';
 import { BackupModal } from './components/BackupModal';
+
+const NATIVE_TAB_VIEWS = ['words', 'flashcards', 'grid', 'rules', 'settings'] as const;
+const iosWindow = window as Window & {
+  alefNativeTabs?: boolean;
+  webkit?: { messageHandlers?: { alefViewChanged?: { postMessage: (route: StudyViewMode) => void } } };
+};
+const usesNativeTabs = iosWindow.alefNativeTabs === true;
 
 const STORAGE_KEYS = {
   displayConfig: 'alef.displayConfig.v1',
@@ -277,7 +284,7 @@ export const App: React.FC = () => {
     });
   }
 
-  function handleSelectView(nextView: StudyViewMode) {
+  const handleSelectView = useCallback((nextView: StudyViewMode) => {
     if (nextView === 'detail' && activeView !== 'detail') {
       letterDetailReturnView.current = activeView;
     }
@@ -285,7 +292,24 @@ export const App: React.FC = () => {
       viewScrollPositionsRef.current[activeView] = mainScrollRef.current.scrollTop;
     }
     setActiveView(nextView);
-  }
+  }, [activeView]);
+
+  useEffect(() => {
+    if (!usesNativeTabs) return;
+    function handleNativeTab(event: Event) {
+      const route: unknown = (event as CustomEvent).detail;
+      const tab = NATIVE_TAB_VIEWS.find((view) => view === route);
+      if (tab) handleSelectView(tab);
+    }
+    window.addEventListener('alef-native-tab', handleNativeTab);
+    return () => window.removeEventListener('alef-native-tab', handleNativeTab);
+  }, [handleSelectView]);
+
+  useEffect(() => {
+    if (usesNativeTabs) {
+      iosWindow.webkit?.messageHandlers?.alefViewChanged?.postMessage(activeView);
+    }
+  }, [activeView]);
 
   function handleOpenDetail(letterId: string) {
     viewScrollPositionsRef.current.detail = 0;
@@ -360,10 +384,10 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className="app-root"
+      className={usesNativeTabs ? 'app-root native-ios-tabs' : 'app-root'}
       style={!windowState.isElectron && windowState.opacity < 1 ? { opacity: windowState.opacity } : undefined}
     >
-      <TitleBar
+      {!usesNativeTabs && <TitleBar
         activeView={activeView}
         onSelectView={handleSelectView}
         theme={theme}
@@ -376,7 +400,7 @@ export const App: React.FC = () => {
         onMaximize={handleMaximize}
         onClose={handleClose}
         onOpenBackup={() => setIsBackupOpen(true)}
-      />
+      />}
 
       <main ref={mainScrollRef} className="main-scroll-area" {...letterSwipeBack}>
         {activeView === 'grid' && (

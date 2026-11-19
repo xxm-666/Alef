@@ -4198,6 +4198,11 @@ button {
     padding: calc(12px + env(safe-area-inset-top)) 12px var(--mobile-content-bottom);
   }
 
+  .native-ios-tabs .main-scroll-area {
+    --mobile-content-bottom: 16px;
+    padding-top: 12px;
+  }
+
   .main-scroll-area:has(> .words-mobile-list-lock) {
     padding-bottom: 0;
   }

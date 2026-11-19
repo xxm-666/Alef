@@ -96,9 +96,9 @@ npm run dist:linux
 
 ### iPhone 安装与「每日字母」小组件
 
-此 iOS 版本面向 iOS 17 及以上。小组件会按手机本地日期轮换 22 个希伯来字母，可离线使用。
+此 iOS 版本面向 iOS 17 及以上。底部导航使用 iOS 系统标签栏，学习页面沿用 Alef 网页界面。小组件会按手机本地日期轮换 22 个希伯来字母，可离线使用。
 
-1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。工作流用 macOS 构建 iOS 应用，并把小组件一并放入 IPA。
+1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。默认使用 **Xcode 27** 预览 runner。若 GitHub 无法分配该 runner，可以新建一次运行并选择 **Xcode 26 (Intel)**。两个选项都会把应用和小组件打进 IPA。
 2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`。IPA 需要签名后才能安装。
 3. Windows 用户可以按 [AltStore Classic 官方指南](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows) 安装 AltServer 和 AltStore，再在 iPhone 上通过 **AltStore → My Apps → ＋** 导入 `Alef.ipa`。如果提示是否保留应用扩展，选择保留。免费 Apple 账号签名通常需要每 7 天刷新。
 4. 安装并打开 Alef 后，长按 iPhone 主屏幕，在小组件列表里搜索 **Alef** 并添加「每日字母」。
