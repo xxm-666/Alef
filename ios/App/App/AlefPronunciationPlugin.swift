@@ -6,7 +6,7 @@ import UIKit
 final class AlefPronunciationPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioPlayerDelegate {
     let identifier = "AlefPronunciationPlugin"
     let jsName = "AlefPronunciation"
-    let pluginMethods = [
+    let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
     ]
