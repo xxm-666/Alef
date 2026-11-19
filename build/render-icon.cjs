@@ -6,6 +6,15 @@ const path = require('path');
 app.disableHardwareAcceleration();
 process.on('unhandledRejection', (e) => { console.error('ERR', e); app.exit(1); });
 
+async function renderSvgToBuffer(win, html) {
+  await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  await win.webContents.executeJavaScript(
+    'new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 250))))'
+  );
+  const img = await win.webContents.capturePage({ x: 0, y: 0, width: 1024, height: 1024 });
+  return img.toPNG();
+}
+
 app.whenReady().then(async () => {
   const root = path.resolve(__dirname, '..');
   const svg = fs.readFileSync(path.join(__dirname, 'icon.svg'), 'utf8');
@@ -19,18 +28,18 @@ app.whenReady().then(async () => {
     webPreferences: { offscreen: true },
   });
 
-  const html = `<html><body style="margin:0;background:transparent">${svg}</body></html>`;
-  await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  await new Promise((r) => setTimeout(r, 500));
+  // Warm-up load so Chromium offscreen compositor is initialized
+  await renderSvgToBuffer(win, `<html><body style="margin:0;background:transparent">${svg}</body></html>`);
 
-  const captured = await win.webContents.capturePage({ x: 0, y: 0, width: 1024, height: 1024 });
-  const png1024 = captured.toPNG();
+  // 1. Desktop & Electron icon (1024x1024 transparent-corner squircle)
+  const png1024 = await renderSvgToBuffer(
+    win,
+    `<html><body style="margin:0;background:transparent">${svg}</body></html>`
+  );
 
-  // Desktop & build icons (1024x1024 transparent squircle)
   fs.writeFileSync(path.join(__dirname, 'icon.png'), png1024);
   fs.writeFileSync(path.join(root, 'electron', 'icon.png'), png1024);
 
-  // PWA icons (512x512 and 192x192)
   const iconsDir = path.join(root, 'public', 'icons');
   fs.mkdirSync(iconsDir, { recursive: true });
   fs.writeFileSync(
@@ -42,16 +51,20 @@ app.whenReady().then(async () => {
     nativeImage.createFromBuffer(png1024).resize({ width: 192, height: 192, quality: 'best' }).toPNG()
   );
 
-  // iOS apple-touch-icon (180x180 full-bleed dark background so iOS never shows black corners)
-  const iosHtml = `<html><body style="margin:0;width:1024px;height:1024px;background:linear-gradient(135deg,#1e3a6e 0%,#0f1c38 48%,#080e1d 100%)">${svg}</body></html>`;
-  await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(iosHtml));
-  await new Promise((r) => setTimeout(r, 300));
-  const iosCaptured = await win.webContents.capturePage({ x: 0, y: 0, width: 1024, height: 1024 });
+  // 2. iOS apple-touch-icon (full-bleed 0..1024 background without outer squircle inset so iOS native mask has no double border)
+  const fullBleedSvg = svg
+    .replace(/<rect class="outer-box" x="40" y="40" width="944" height="944" rx="226"/g, '<rect x="0" y="0" width="1024" height="1024"')
+    .replace(/<rect class="outer-rim"[^>]*\/>/g, '');
+
+  const iosPng1024 = await renderSvgToBuffer(
+    win,
+    `<html><body style="margin:0;background:#040712">${fullBleedSvg}</body></html>`
+  );
   fs.writeFileSync(
     path.join(iconsDir, 'apple-touch-icon.png'),
-    nativeImage.createFromBuffer(iosCaptured.toPNG()).resize({ width: 180, height: 180, quality: 'best' }).toPNG()
+    nativeImage.createFromBuffer(iosPng1024).resize({ width: 180, height: 180, quality: 'best' }).toPNG()
   );
 
-  console.log('Rendered all icons cleanly.');
+  console.log('Rendered all iOS 26 icons cleanly.');
   app.quit();
 });
