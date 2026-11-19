@@ -3686,7 +3686,7 @@ button {
     border: none;
     border-top: 1px solid var(--border);
     background: var(--bg-surface);
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    padding: 6px 6px max(8px, env(safe-area-inset-bottom));
     justify-content: space-around;
     gap: 2px;
     box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
@@ -4127,6 +4127,24 @@ button {
 
   .settings-card {
     padding: 14px;
+  }
+}
+
+@media (max-width: 768px) and (display-mode: standalone) {
+  html,
+  body,
+  #root {
+    height: 100lvh;
+    min-height: 100lvh;
+  }
+
+  .app-root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    height: 100lvh;
   }
 }
 
