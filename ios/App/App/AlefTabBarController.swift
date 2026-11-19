@@ -21,21 +21,21 @@ private enum StudyTab: String, CaseIterable {
 
 final class AlefTabBarController: UITabBarController, UITabBarControllerDelegate {
     private let studyController = AlefStudyController()
-    private let tabs = StudyTab.allCases
+    private let studyTabs = StudyTab.allCases
 
     override func viewDidLoad() {
         super.viewDidLoad()
         delegate = self
-        viewControllers = tabs.map { tab in
+        viewControllers = studyTabs.map { tab in
             let controller = UIViewController()
             controller.tabBarItem = tab.item
             controller.view.backgroundColor = .systemBackground
             return controller
         }
-        selectedIndex = tabs.firstIndex(of: .grid) ?? 0
+        selectedIndex = studyTabs.firstIndex(of: .grid) ?? 0
         studyController.onViewChange = { [weak self] route in
             guard let self, let tab = StudyTab(rawValue: route == "detail" ? "grid" : route),
-                  let index = self.tabs.firstIndex(of: tab) else { return }
+                  let index = self.studyTabs.firstIndex(of: tab) else { return }
             if self.selectedIndex != index {
                 self.selectedIndex = index
                 self.attachStudyView()
@@ -45,9 +45,9 @@ final class AlefTabBarController: UITabBarController, UITabBarControllerDelegate
     }
 
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        guard tabs.indices.contains(selectedIndex) else { return }
+        guard studyTabs.indices.contains(selectedIndex) else { return }
         attachStudyView()
-        studyController.open(tabs[selectedIndex])
+        studyController.open(studyTabs[selectedIndex])
     }
 
     private func attachStudyView() {
