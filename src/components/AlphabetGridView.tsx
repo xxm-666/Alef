@@ -178,7 +178,7 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
       readStorage<PersistedGridState>(GRID_STATE_KEY, {
         searchQuery: '',
         activeFilter: 'all',
-        showCustomPanel: typeof window !== 'undefined' ? window.innerWidth > 768 : true,
+        showCustomPanel: false,
       }),
     []
   );
@@ -236,7 +236,8 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索字母、中文名、音标、转写或数值 (如: Alef / 10 / ך)..."
+              aria-label="搜索字母、中文名、音标、转写或数值"
+              placeholder="搜索字母、读音或数值"
             />
           </div>
 
@@ -264,10 +265,11 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
             <button
               type="button"
               className={`btn-secondary btn-sm ${showCustomPanel ? 'active-btn' : ''}`}
+              aria-expanded={showCustomPanel}
               onClick={() => setShowCustomPanel((v) => !v)}
             >
               <SlidersHorizontal size={14} />
-              <span>自定义显示属性</span>
+              <span>显示选项</span>
             </button>
           </div>
         </div>
@@ -356,7 +358,7 @@ export const AlphabetGridView: React.FC<AlphabetGridViewProps> = ({
                 style={{ direction: 'ltr' }}
                 onClick={() => onSelectLetter(letter.id)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault();
                     onSelectLetter(letter.id);
                   }

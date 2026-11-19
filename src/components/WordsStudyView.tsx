@@ -167,6 +167,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   const [sortOrder, setSortOrder] = useState<WordSortOrder>(initialSaved.sortOrder);
   const [showNiqqud, setShowNiqqud] = useState(initialSaved.showNiqqud);
   const [showCursive, setShowCursive] = useState(initialSaved.showCursive);
+  const [showWordOptions, setShowWordOptions] = useState(false);
   const [mode, setMode] = useState<WordsMode>(initialSaved.mode);
   const [mobileSubView, setMobileSubView] = useState<'list' | 'detail'>(
     initialSaved.mobileSubView ?? 'list'
@@ -543,89 +544,77 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
       {/* Top Toolbar */}
       <div
         ref={toolbarRef}
-        className={`toolbar-card ${
+        className={`toolbar-card words-toolbar ${
           mode === 'browse' && mobileSubView === 'detail' ? 'mobile-hide-toolbar' : ''
         }`}
       >
+        <div className="segmented-control word-mode-control" role="group" aria-label="词汇学习模式">
+          <button
+            type="button"
+            aria-pressed={mode === 'browse'}
+            className={mode === 'browse' ? 'active' : ''}
+            onClick={() => setMode('browse')}
+          >
+            <BookOpen size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+            词表
+            <span className="word-mode-progress"> ({masteredWordsCount}/{words.length})</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'cards'}
+            className={mode === 'cards' ? 'active' : ''}
+            onClick={() => setMode('cards')}
+          >
+            <LayoutGrid size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+            卡片墙
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'phrases'}
+            className={mode === 'phrases' ? 'active' : ''}
+            onClick={() => setMode('phrases')}
+          >
+            <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+            短句
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'quiz'}
+            className={mode === 'quiz' ? 'active' : ''}
+            onClick={() => {
+              setMode('quiz');
+              loadNextQuiz();
+            }}
+          >
+            <HelpCircle size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+            自测
+          </button>
+        </div>
         <div className="toolbar-top-row">
-          <div className="search-box">
-            <Search size={15} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`搜索 ${words.length} 个词库（希伯来语 / 中文释义 / 转写 / 词根）...`}
-            />
-          </div>
-
-          <div className="toolbar-right-controls">
-            <button
-              type="button"
-              className={`btn-secondary btn-sm ${sortOrder === 'alpha' ? 'active-btn' : ''}`}
-              onClick={() => setSortOrder((s) => (s === 'default' ? 'alpha' : 'default'))}
-              title="切换排序方式"
-            >
-              <ArrowUpDown size={14} />
-              <span>{sortOrder === 'alpha' ? '按 א-ת 排序' : '按主题排序'}</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-secondary btn-sm ${showNiqqud ? 'active-btn' : ''}`}
-              onClick={() => setShowNiqqud((v) => !v)}
-              title="切换是否显示元音符号 (Niqqud)"
-            >
-              {showNiqqud ? <Eye size={14} /> : <EyeOff size={14} />}
-              <span>{showNiqqud ? '元音点' : '无点拼写'}</span>
-            </button>
-
-            <button
-              type="button"
-              className={`btn-secondary btn-sm ${showCursive ? 'active-btn' : ''}`}
-              onClick={() => setShowCursive((v) => !v)}
-            >
-              <Sparkles size={14} />
-              <span>手写体</span>
-            </button>
-
-            <div className="segmented-control">
-              <button
-                type="button"
-                className={mode === 'browse' ? 'active' : ''}
-                onClick={() => setMode('browse')}
-              >
-                <BookOpen size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                工作台 ({masteredWordsCount}/{words.length})
-              </button>
-              <button
-                type="button"
-                className={mode === 'cards' ? 'active' : ''}
-                onClick={() => setMode('cards')}
-              >
-                <LayoutGrid size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                卡片墙
-              </button>
-              <button
-                type="button"
-                className={mode === 'phrases' ? 'active' : ''}
-                onClick={() => setMode('phrases')}
-              >
-                <MessageSquare size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                情景短句
-              </button>
-              <button
-                type="button"
-                className={mode === 'quiz' ? 'active' : ''}
-                onClick={() => {
-                  setMode('quiz');
-                  loadNextQuiz();
-                }}
-              >
-                <HelpCircle size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                自测
-              </button>
+          {mode !== 'phrases' && (
+            <div className="search-box">
+              <Search size={15} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="搜索希伯来语、中文释义、转写或词根"
+                placeholder={`搜索 ${words.length} 个词`}
+              />
             </div>
-          </div>
+          )}
+          <button
+            type="button"
+            className="btn-secondary btn-sm word-options-toggle"
+            aria-expanded={showWordOptions}
+            aria-controls="word-options"
+            onClick={() => setShowWordOptions((open) => !open)}
+          >
+            词汇选项
+            {(mode === 'browse' || mode === 'cards') && initialLetter !== 'all' && (
+              <span>· {initialLetter}</span>
+            )}
+          </button>
         </div>
 
         {/* Category filter pills (hidden in phrases mode) */}
@@ -672,36 +661,70 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
           </div>
         )}
 
-        {/* Alef-Bet Initial Letter Jump Strip */}
-        {(mode === 'browse' || mode === 'cards') && (
-          <div className="alefbet-jump-row" aria-label="按希伯来首字母筛选">
-            <span className="muted-caption" style={{ flexShrink: 0 }}>
-              首字母索引：
-            </span>
+        <div id="word-options" className={`word-options ${showWordOptions ? 'word-options-open' : ''}`}>
+          <div className="toolbar-right-controls">
+            {mode !== 'phrases' && (
+              <button
+                type="button"
+                className={`btn-secondary btn-sm ${sortOrder === 'alpha' ? 'active-btn' : ''}`}
+                onClick={() => setSortOrder((s) => (s === 'default' ? 'alpha' : 'default'))}
+                title="切换排序方式"
+              >
+                <ArrowUpDown size={14} />
+                <span>{sortOrder === 'alpha' ? '按 א-ת 排序' : '按主题排序'}</span>
+              </button>
+            )}
+
             <button
               type="button"
-              className={`initial-chip ${initialLetter === 'all' ? 'active' : ''}`}
-              onClick={() => setInitialLetter('all')}
+              className={`btn-secondary btn-sm ${showNiqqud ? 'active-btn' : ''}`}
+              onClick={() => setShowNiqqud((v) => !v)}
+              title="切换是否显示元音符号 (Niqqud)"
             >
-              全部
+              {showNiqqud ? <Eye size={14} /> : <EyeOff size={14} />}
+              <span>{showNiqqud ? '元音点' : '无点拼写'}</span>
             </button>
-            <div className="initial-chips-scroll" dir="rtl">
-              {letters.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  className={`initial-chip hebrew-init ${initialLetter === l.hebrew ? 'active' : ''}`}
-                  onClick={() =>
-                    setInitialLetter((prev) => (prev === l.hebrew ? 'all' : l.hebrew))
-                  }
-                  title={`筛选以 ${l.hebrew} (${l.nameEnglish}) 开头的单词`}
-                >
-                  {l.hebrew}
-                </button>
-              ))}
-            </div>
+
+            <button
+              type="button"
+              className={`btn-secondary btn-sm ${showCursive ? 'active-btn' : ''}`}
+              onClick={() => setShowCursive((v) => !v)}
+            >
+              <Sparkles size={14} />
+              <span>手写体</span>
+            </button>
           </div>
-        )}
+          {/* Alef-Bet Initial Letter Jump Strip */}
+          {(mode === 'browse' || mode === 'cards') && (
+            <div className="alefbet-jump-row" aria-label="按希伯来首字母筛选">
+              <span className="muted-caption" style={{ flexShrink: 0 }}>
+                首字母索引：
+              </span>
+              <button
+                type="button"
+                className={`initial-chip ${initialLetter === 'all' ? 'active' : ''}`}
+                onClick={() => setInitialLetter('all')}
+              >
+                全部
+              </button>
+              <div className="initial-chips-scroll" dir="rtl">
+                {letters.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    className={`initial-chip hebrew-init ${initialLetter === l.hebrew ? 'active' : ''}`}
+                    onClick={() =>
+                      setInitialLetter((prev) => (prev === l.hebrew ? 'all' : l.hebrew))
+                    }
+                    title={`筛选以 ${l.hebrew} (${l.nameEnglish}) 开头的单词`}
+                  >
+                    {l.hebrew}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {mode === 'browse' ? (

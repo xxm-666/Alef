@@ -166,6 +166,7 @@ body,
 }
 
 .nav-pill {
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -200,6 +201,7 @@ body,
 
 .titlebar-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
 }
@@ -963,6 +965,10 @@ button {
 }
 
 /* Letter Detail View */
+.detail-section-links {
+  display: none;
+}
+
 .detail-nav-strip {
   display: flex;
   align-items: center;
@@ -1695,6 +1701,10 @@ button {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+}
+
+.flash-deck-toggle {
+  display: none;
 }
 
 .flashcard-controls-group {
@@ -2569,6 +2579,31 @@ button {
 }
 
 /* Words Study View (Desktop Workbench) */
+.toolbar-card.words-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.words-toolbar > .filter-pills-row,
+.word-options {
+  grid-column: 1 / -1;
+}
+
+.word-options {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.word-mode-control button {
+  white-space: nowrap;
+}
+
+.word-options-toggle {
+  display: none;
+}
+
 .words-workbench {
   display: grid;
   grid-template-columns: 350px 1fr;
@@ -3547,6 +3582,24 @@ button {
   border-radius: 8px;
 }
 
+@media (max-width: 1120px) {
+  .nav-label-desktop {
+    display: none;
+  }
+
+  .nav-label-mobile {
+    display: inline;
+  }
+
+  .nav-pill {
+    padding-inline: 9px;
+  }
+
+  .titlebar .opacity-control {
+    display: none;
+  }
+}
+
 @media (max-width: 980px) {
   .detail-hero-card,
   .detail-bottom-grid,
@@ -3811,6 +3864,55 @@ button {
     padding: 14px;
   }
 
+  .detail-section-links {
+    display: flex;
+    gap: 8px;
+  }
+
+  .detail-section-links button {
+    min-height: 44px;
+  }
+
+  .hero-info-column .detail-meaning-box {
+    order: 1;
+  }
+
+  .toolbar-card.words-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .word-mode-control {
+    justify-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .word-mode-progress {
+    display: none;
+  }
+
+  .word-mode-control button {
+    min-height: 40px;
+    padding-inline: 4px;
+  }
+
+  .words-toolbar .search-box {
+    width: auto;
+  }
+
+  .words-toolbar .toolbar-top-row {
+    flex-wrap: nowrap;
+  }
+
+  .word-options-toggle {
+    display: inline-flex;
+    white-space: nowrap;
+  }
+
+  .word-options:not(.word-options-open) {
+    display: none;
+  }
+
   .stroke-pad-body,
   .back-details-grid,
   .quiz-options-grid,
@@ -3830,8 +3932,32 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .flash-deck-toggle {
+    display: inline-flex;
+  }
+
+  .flash-deck-options {
+    flex-basis: 100%;
+  }
+
+  .flash-deck-options:not(.flash-deck-options-open) {
+    display: none;
+  }
+
+  .flashcard-stage {
+    gap: 10px;
+  }
+
+  .flashcard-keyboard-hint {
+    display: none;
+  }
+
   .flip-card-wrapper {
-    height: 410px;
+    height: clamp(190px, calc(100svh - 305px), 360px);
+  }
+
+  .flip-back .back-details-grid {
+    min-height: 0;
   }
 
   .flip-card-face {
@@ -3839,7 +3965,11 @@ button {
   }
 
   .front-huge-hebrew {
-    font-size: 102px;
+    font-size: clamp(68px, calc(100svh - 420px), 102px);
+  }
+
+  .front-glyph-stage svg {
+    max-height: clamp(72px, calc(100svh - 425px), 140px);
   }
 
   .front-both-pair {
@@ -3847,8 +3977,19 @@ button {
   }
 
   .flashcard-rating-bar {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
     align-items: stretch;
+  }
+
+  .flashcard-rating-bar > button {
+    min-height: 44px;
+  }
+
+  .flashcard-rating-bar .rating-buttons {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .rating-buttons {
@@ -3858,7 +3999,9 @@ button {
   .rate-btn {
     flex: 1;
     justify-content: center;
-    padding: 9px 8px;
+    min-height: 44px;
+    padding: 6px 4px;
+    font-size: 12px;
   }
 }
 
@@ -3888,9 +4031,16 @@ button {
     padding: 1px 4px;
   }
 
-  .card-mini-icon-btn {
-    width: 22px;
-    height: 22px;
+  .letter-card .card-mini-icon-btn,
+  .letter-card .mastery-pill {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .letter-card .card-mini-icon-btn {
+    width: 44px;
+    height: 44px;
   }
 
   .mastery-pill {
@@ -4148,10 +4298,14 @@ button {
     gap: 8px;
   }
 
+  .rules-tab-text span {
+    display: none;
+  }
+
   .rules-tab-badge {
-    width: 30px;
-    height: 30px;
-    font-size: 13px;
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
   }
 
   .settings-grid {

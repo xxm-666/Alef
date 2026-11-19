@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -44,8 +44,16 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
   onSetMastery,
   speechRate,
 }) => {
+  const examplesRef = useRef<HTMLDivElement>(null);
+  const writingRef = useRef<HTMLDivElement>(null);
+
   const [dageshActive, setDageshActive] = useState(true);
   const [speechNotice, setSpeechNotice] = useState<string | null>(null);
+
+  function jumpToSection(ref: React.RefObject<HTMLDivElement>) {
+    ref.current?.focus({ preventScroll: true });
+    ref.current?.scrollIntoView({ block: 'start' });
+  }
 
   const currentIndex = letters.findIndex((l) => l.id === selectedLetter.id);
   const prevLetter = currentIndex > 0 ? letters[currentIndex - 1] : letters[letters.length - 1];
@@ -151,7 +159,23 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
         </button>
       </div>
 
-      {/* Hero comparison card */}
+      <div className="detail-section-links" role="group" aria-label="单字卡片快捷跳转">
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => jumpToSection(examplesRef)}
+        >
+          例词
+        </button>
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => jumpToSection(writingRef)}
+        >
+          书写练习
+        </button>
+      </div>
+
       <div className="detail-hero-card">
         <div className="hero-glyph-column">
           <div className="hero-glyph-pair">
@@ -410,7 +434,7 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
       {/* Examples + Stroke Order Pad */}
       <div className="detail-bottom-grid">
         <div className="detail-left-stack">
-          <div className="detail-section-card">
+          <div className="detail-section-card" ref={examplesRef} tabIndex={-1}>
             <h3 className="section-title">
               <BookOpen size={16} />
               <span>代表词汇与 Niqqud 元音拼读示例</span>
@@ -484,7 +508,9 @@ export const LetterDetailView: React.FC<LetterDetailViewProps> = ({
           )}
         </div>
 
-        <StrokeOrderPad letter={selectedLetter} />
+        <div ref={writingRef} tabIndex={-1}>
+          <StrokeOrderPad letter={selectedLetter} />
+        </div>
       </div>
     </div>
   );

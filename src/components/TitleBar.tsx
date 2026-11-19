@@ -71,6 +71,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             key={item.id}
             type="button"
             className={`nav-pill ${activeView === item.id ? 'active' : ''}`}
+            aria-label={item.label}
+            aria-current={activeView === item.id ? 'page' : undefined}
             onClick={() => onSelectView(item.id)}
           >
             {item.icon}

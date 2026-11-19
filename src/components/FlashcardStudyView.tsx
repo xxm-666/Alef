@@ -176,6 +176,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
   );
 
   const [subMode, setSubMode] = useState<StudySubMode>(initialFlash.subMode);
+  const [showDeckOptions, setShowDeckOptions] = useState(false);
   const [frontType, setFrontType] = useState<CardFrontType>(initialFlash.frontType);
   const [deckScope, setDeckScope] = useState<DeckScope>(initialFlash.deckScope);
   const [shuffledIds, setShuffledIds] = useState<string[] | null>(null);
@@ -304,7 +305,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
             className={subMode === 'flip' ? 'active' : ''}
             onClick={() => setSubMode('flip')}
           >
-            3D 翻转闪卡
+            翻转闪卡
           </button>
           <button
             type="button"
@@ -314,12 +315,27 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
               startNewQuestion(quizType);
             }}
           >
-            互动四选一测验
+            四选一
           </button>
         </div>
 
+        {subMode === 'flip' && (
+          <button
+            type="button"
+            className="btn-secondary btn-sm flash-deck-toggle"
+            aria-expanded={showDeckOptions}
+            aria-controls="flash-deck-options"
+            onClick={() => setShowDeckOptions((open) => !open)}
+          >
+            卡组选项
+          </button>
+        )}
+
         {subMode === 'flip' ? (
-          <div className="flashcard-controls-group">
+          <div
+            id="flash-deck-options"
+            className={`flashcard-controls-group flash-deck-options ${showDeckOptions ? 'flash-deck-options-open' : ''}`}
+          >
             <div className="segmented-control">
               <button
                 type="button"
@@ -446,7 +462,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
             <span>
               卡片 {safeIndex + 1} / {activeDeck.length}
             </span>
-            <span className="muted-caption">快捷键：空格键翻面 · ←/→ 切换上下张</span>
+            <span className="muted-caption flashcard-keyboard-hint">快捷键：空格键翻面 · ←/→ 切换上下张</span>
           </div>
 
           <div

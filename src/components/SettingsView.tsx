@@ -98,39 +98,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div className="view-container settings-view">
-      {/* Study Overview */}
-      <section className="settings-card">
-        <div className="settings-card-header">
-          <div className="settings-card-title">
-            <Flame size={16} />
-            <h3>学习进度概览</h3>
-          </div>
-          <span className="muted-caption">今日复习 {todayCount} 次</span>
-        </div>
-        <div className="settings-stats-grid">
-          <div className="settings-stat-box">
-            <span className="settings-stat-value">
-              {masteredLettersCount}/{totalLettersCount}
-            </span>
-            <span className="settings-stat-label">已掌握字母</span>
-          </div>
-          <div className="settings-stat-box">
-            <span className="settings-stat-value">
-              {masteredWordsCount}/{totalWordsCount}
-            </span>
-            <span className="settings-stat-label">已掌握高频词</span>
-          </div>
-          <div className="settings-stat-box">
-            <span className="settings-stat-value">{studyStats.streakDays} 天</span>
-            <span className="settings-stat-label">连续学习</span>
-          </div>
-          <div className="settings-stat-box">
-            <span className="settings-stat-value">{studyStats.totalReviews}</span>
-            <span className="settings-stat-label">累计复习次数</span>
-          </div>
-        </div>
-      </section>
-
       <div className="settings-grid">
         {/* Theme & Appearance */}
         <section className="settings-card">
@@ -326,6 +293,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </section>
       </div>
+
+      {/* Study Overview */}
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div className="settings-card-title">
+            <Flame size={16} />
+            <h3>学习进度概览</h3>
+          </div>
+          <span className="muted-caption">今日复习 {todayCount} 次</span>
+        </div>
+        <div className="settings-stats-grid">
+          <div className="settings-stat-box">
+            <span className="settings-stat-value">
+              {masteredLettersCount}/{totalLettersCount}
+            </span>
+            <span className="settings-stat-label">已掌握字母</span>
+          </div>
+          <div className="settings-stat-box">
+            <span className="settings-stat-value">
+              {masteredWordsCount}/{totalWordsCount}
+            </span>
+            <span className="settings-stat-label">已掌握高频词</span>
+          </div>
+          <div className="settings-stat-box">
+            <span className="settings-stat-value">{studyStats.streakDays} 天</span>
+            <span className="settings-stat-label">连续学习</span>
+          </div>
+          <div className="settings-stat-box">
+            <span className="settings-stat-value">{studyStats.totalReviews}</span>
+            <span className="settings-stat-label">累计复习次数</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
