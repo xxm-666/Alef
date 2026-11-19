@@ -3471,6 +3471,173 @@ button {
   color: var(--gold);
 }
 
+.reading-view {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.reading-controls,
+.reading-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reading-controls {
+  justify-content: space-between;
+}
+
+.reading-controls > button,
+.reading-picker > span {
+  flex-shrink: 0;
+}
+
+.reading-picker {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.reading-picker select {
+  min-width: 0;
+  font-size: 14px;
+}
+
+.reading-controls :is(button, select) {
+  min-height: 40px;
+}
+
+.reading-article {
+  padding: clamp(12px, 3.5vw, 28px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.reading-article h2 {
+  margin: 3px 0 6px;
+  font-size: clamp(20px, 4vw, 26px);
+  line-height: 1.25;
+}
+
+.reading-passage {
+  border-block: 1px solid var(--border);
+}
+
+.reading-line {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-block: 8px;
+}
+
+.reading-line + .reading-line {
+  border-top: 1px solid var(--border);
+}
+
+.reading-audio {
+  height: 40px;
+  padding: 0;
+}
+
+.reading-hebrew {
+  margin: 0;
+  font: normal clamp(24px, 5vw, 34px)/1.65 var(--font-hebrew);
+}
+
+.reading-word {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.reading-word[aria-pressed='true'] {
+  background: var(--accent-soft);
+}
+
+.reading-gloss:not(:empty) {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.reading-gloss bdi {
+  font-family: var(--font-hebrew);
+  font-size: 17px;
+  color: var(--accent);
+}
+
+.reading-translation {
+  padding-inline: 10px;
+  border-radius: 9px;
+  background: var(--bg-subtle);
+  font-size: 14px;
+}
+
+.reading-translation summary {
+  padding-block: 11px;
+  cursor: pointer;
+}
+
+.reading-translation p {
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
+
+.reading-question {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 14px;
+}
+
+.reading-question legend {
+  padding: 0 0 8px;
+  font-weight: 600;
+}
+
+.reading-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reading-choices button {
+  min-height: 40px;
+  text-align: start;
+}
+
+.reading-choices button:disabled {
+  cursor: default;
+}
+
+.reading-feedback:not(:empty) {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+}
+
+.reading-feedback:empty {
+  margin: 0;
+}
+
 /* Spelling Quiz */
 .spelling-quiz-body {
   display: flex;
@@ -4194,7 +4361,7 @@ button {
   .word-mode-control {
     justify-self: stretch;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .word-mode-progress {
@@ -4414,6 +4581,10 @@ button {
 }
 
 @media (max-width: 520px) {
+  .word-mode-control button svg {
+    display: none;
+  }
+
   .alphabet-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;

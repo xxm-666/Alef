@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   BookOpen,
+  BookText,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -34,6 +35,7 @@ import { HEBREW_PHRASES, PHRASE_SCENARIO_META, PhraseScenario } from '../data/he
 import { playFeedbackTone, speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
 import { useSwipeBack } from '../utils/useSwipeBack';
+import { ReadingView } from './ReadingView';
 
 interface WordsStudyViewProps {
   words: HebrewWord[];
@@ -49,7 +51,7 @@ interface WordsStudyViewProps {
 }
 
 type WordFilter = 'all' | 'favorites' | 'needs_review' | 'due_srs' | WordCategory;
-type WordsMode = 'browse' | 'cards' | 'phrases' | 'quiz';
+type WordsMode = 'browse' | 'cards' | 'phrases' | 'reading' | 'quiz';
 type WordQuizKind = 'meaning' | 'listening' | 'spelling';
 type WordSortOrder = 'default' | 'alpha';
 
@@ -634,6 +636,18 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={mode === 'reading'}
+            className={mode === 'reading' ? 'active' : ''}
+            onClick={() => {
+              setReview(null);
+              setMode('reading');
+            }}
+          >
+            <BookText size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
+            阅读
+          </button>
+          <button
+            type="button"
             aria-pressed={mode === 'quiz'}
             className={mode === 'quiz' ? 'active' : ''}
             onClick={() => {
@@ -653,7 +667,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             </button>
           </div>
         )}
-        <div className="word-quiz-filters" hidden={Boolean(review)}>
+        <div className="word-quiz-filters" hidden={Boolean(review) || mode === 'reading'}>
           <div className="toolbar-top-row">
             {mode !== 'phrases' && (
               <div className="search-box">
@@ -1474,6 +1488,13 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
             ))}
           </div>
         </div>
+      ) : mode === 'reading' ? (
+        <ReadingView
+          showNiqqud={showNiqqud}
+          onToggleNiqqud={() => setShowNiqqud((visible) => !visible)}
+          speechRate={speechRate}
+          onRecordActivity={onRecordActivity}
+        />
       ) : reviewComplete ? (
         <div className="quiz-stage">
           <section className="quiz-card" aria-labelledby="word-review-result">

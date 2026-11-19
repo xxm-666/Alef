@@ -42,7 +42,7 @@ const rules: Record<string, [label: string, check: Validator]> = {
   'alef.wordsState.v1': ['词表选项', fields({
     searchQuery: string, activeFilter: oneOf('all', 'favorites', 'needs_review', 'due_srs', ...Object.keys(WORD_CATEGORY_META)),
     initialLetter: string, sortOrder: oneOf('default', 'alpha'), showNiqqud: boolean, showCursive: boolean,
-    mode: oneOf('browse', 'cards', 'phrases', 'quiz'),
+    mode: oneOf('browse', 'cards', 'phrases', 'reading', 'quiz'),
     mobileSubView: (value) => value === undefined || oneOf('list', 'detail')(value),
     selectedWordId: string, cardsPage: (value) => integer(value) && value !== 0,
     scrollTop: (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0,

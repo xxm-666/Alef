@@ -168,7 +168,6 @@ function playRecordedClip(hebrewText: string, rate: number, onFail: () => void):
   const rel = AUDIO_FILE_MAP[hebrewText.trim()];
   if (!rel || typeof Audio === 'undefined') return false;
   try {
-    stopClip();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     const clip = new Audio(new URL(rel, document.baseURI).toString());
     const safe = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 1));
@@ -176,17 +175,16 @@ function playRecordedClip(hebrewText: string, rate: number, onFail: () => void):
     (clip as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
     clip.volume = 1;
     currentClip = clip;
-    clip.addEventListener('error', () => {
-      if (currentClip === clip) currentClip = null;
+    const fallback = () => {
+      if (currentClip !== clip) return;
+      currentClip = null;
       onFail();
-    });
+    };
+    clip.addEventListener('error', fallback);
     clip.addEventListener('ended', () => {
       if (currentClip === clip) currentClip = null;
     });
-    void clip.play().catch(() => {
-      if (currentClip === clip) currentClip = null;
-      onFail();
-    });
+    void clip.play().catch(fallback);
     return true;
   } catch {
     return false;
@@ -198,6 +196,12 @@ export function speakHebrew(
   phoneticFallback?: string,
   rate = 0.9
 ): SpeakResult {
+  stopClip();
+  if (speakTimer !== null) {
+    window.clearTimeout(speakTimer);
+    speakTimer = null;
+  }
+
   const recorded = playRecordedClip(hebrewText, rate, () =>
     speakWithSynthesis(hebrewText, phoneticFallback, rate)
   );
@@ -222,10 +226,6 @@ function speakWithSynthesis(
   try {
     unlockAudio();
     const synth = window.speechSynthesis;
-    if (speakTimer !== null) {
-      window.clearTimeout(speakTimer);
-      speakTimer = null;
-    }
 
     const voices = refreshVoices();
     const heVoice = getHebrewVoice();
