@@ -216,7 +216,7 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "הוּא כּוֹתֵב מִכְתָּב בְּעִבְרִית.": "audio/he_47b52ec90643.mp3",
   "קוֹרֵא": "audio/he_6833f6f9b784.mp3",
   "הִיא קוֹרֵאת סֵפֶר בַּסִּפְרִיָּה.": "audio/he_f45c551e4beb.mp3",
-  "מְדַבֵּר": "audio/he_73b0f26ad25b.mp3",
+  "מְדַבֵּר": "audio/he_f33a36a864c3.mp3",
   "הַאִם אַתָּה מְדַבֵּר אַנְגְּלִית?": "audio/he_d89bc669d7e6.mp3",
   "אוֹהֵב": "audio/he_bad96ef89297.mp3",
   "הוֹלֵךְ": "audio/he_682f19f6edb9.mp3",

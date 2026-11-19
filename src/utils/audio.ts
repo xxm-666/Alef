@@ -1,6 +1,12 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { AUDIO_FILE_MAP, HUMAN_AUDIO_KEYS } from '../data/audioManifest';
 
+// Hebrew vowel points and dagesh can appear in different Unicode orders.
+const recordedAudioFiles = new Map(
+  Object.entries(AUDIO_FILE_MAP).map(([text, file]) => [text.normalize('NFC'), file])
+);
+const humanAudioKeys = new Set(Array.from(HUMAN_AUDIO_KEYS, (text) => text.normalize('NFC')));
+
 export interface SpeakResult {
   mode: 'recorded' | 'hebrew-tts' | 'phonetic-tts' | 'unavailable';
   voiceName?: string;
@@ -132,8 +138,8 @@ function stopClip(): void {
 }
 
 /** 优先播放内置的真人 / 神经网络录音；成功发起播放返回 true。 */
-function playRecordedClip(hebrewText: string, rate: number, onFail: () => void): boolean {
-  const rel = AUDIO_FILE_MAP[hebrewText.trim()];
+function playRecordedClip(audioKey: string, rate: number, onFail: () => void): boolean {
+  const rel = recordedAudioFiles.get(audioKey);
   if (!rel) return false;
   const safeRate = Math.max(0.5, Math.min(1.5, Number.isFinite(rate) ? rate : 1));
   if (isIOSApp && Capacitor.isPluginAvailable('AlefPronunciation')) {
@@ -183,13 +189,14 @@ export function speakHebrew(
   stopClip();
   clearSpeakTimer();
 
-  const recorded = playRecordedClip(hebrewText, rate, () =>
+  const audioKey = hebrewText.trim().normalize('NFC');
+  const recorded = playRecordedClip(audioKey, rate, () =>
     speakWithSynthesis(hebrewText, phoneticFallback, rate)
   );
   if (recorded) {
     return {
       mode: 'recorded',
-      voiceName: HUMAN_AUDIO_KEYS.has(hebrewText.trim()) ? '真人录音' : '以色列神经网络语音',
+      voiceName: humanAudioKeys.has(audioKey) ? '真人录音' : '以色列神经网络语音',
     };
   }
   return speakWithSynthesis(hebrewText, phoneticFallback, rate);
