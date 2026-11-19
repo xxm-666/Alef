@@ -3860,6 +3860,31 @@ button {
     }
   }
 
+  .dock-glass-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .dock-glass-layer .glass {
+    width: 100%;
+    height: 100%;
+    box-shadow: none !important;
+  }
+
+  /* The dock already draws its rim. Hide the library's extra rim decorations. */
+  .dock-glass-layer > span {
+    display: none;
+  }
+
+  .titlebar-nav:has(.dock-glass-layer)::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .nav-label-desktop,
   .nav-label-mobile {
     display: none;
@@ -3969,7 +3994,7 @@ button {
       backdrop-filter: none;
     }
 
-    .nav-center-lens {
+    .dock-glass-layer {
       display: none;
     }
 

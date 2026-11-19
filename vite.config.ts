@@ -132,6 +132,7 @@ self.addEventListener('fetch', (event) => {
 export default defineConfig({
   plugins: [react(), alefOfflinePwaPlugin()],
   base: './',
+  optimizeDeps: { include: ['liquid-glass-react'] },
   server: {
     port: 5173,
     strictPort: true,

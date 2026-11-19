@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BookOpen,
   CreditCard,
@@ -38,6 +38,8 @@ interface TitleBarProps {
   onClose: () => void;
   onOpenBackup: () => void;
 }
+
+const DockGlass = lazy<React.ComponentType>(() => import('./DockGlass').catch(() => ({ default: () => null })));
 
 const NAV_ITEMS: { id: StudyViewMode; label: string; shortLabel: string; icon: React.ReactNode }[] = [
   { id: 'grid', label: '全字母表', shortLabel: '字母', icon: <Grid size={15} /> },
@@ -83,6 +85,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   return (
     <header className="titlebar">
       <nav className="titlebar-nav" aria-label="主视图切换">
+        {isBottomNav && CSS.supports('appearance', 'base-select') && (
+          <Suspense fallback={null}>
+            <DockGlass />
+          </Suspense>
+        )}
         {items.map((item) => {
           const isCenter = isBottomNav && item.id === 'grid';
           const button = (
