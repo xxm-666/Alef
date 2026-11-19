@@ -84,7 +84,7 @@ struct HebrewText: View {
     var body: some View {
         Text(text)
             .font(cursive ? .custom("GveretLevin-Regular", size: size, relativeTo: style) : .system(size: size * scale, design: .serif))
-            .accessibilitySpeechSpellsOutCharacters(text.count == 1)
+            .speechSpellsOutCharacters(text.count == 1)
     }
 }
 
