@@ -328,7 +328,8 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
   {
     id: 'ima',
     hebrew: 'אִמָּא',
-    hebrewUnpointed: 'אמא',
+    hebrewUnpointed: 'אימא',
+    alternateSpellings: ['אמא'],
     transliteration: 'Ima',
     ipa: '/ˈima/',
     meaningZh: '妈妈',
@@ -1308,7 +1309,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     grammarTag: 'Paal 词型',
     category: 'verbs',
     root: 'ק-ר-א',
-    note: '词尾 א 静音。常用句「我叫…」אֲנִי קוֹרֵא לְ... 或 שְׁמִי...。',
+    note: '词尾 א 静音。אֲנִי קוֹרֵא לְ… 表示「我在叫某人」。自我介绍时，「我叫……」可说 קוֹרְאִים לִי… 或 שְׁמִי…。',
     sentence: {
       hebrew: 'הִיא קוֹרֵאת סֵפֶר בַּסִּפְרִיָּה.',
       transliteration: 'Hi koret sefer ba-sifriyah.',

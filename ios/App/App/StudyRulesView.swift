@@ -105,7 +105,7 @@ struct StudyRulesView: View {
                         Text("\(item.vowelSound) · \(item.ipa)").foregroundStyle(progress.theme.mutedInk)
                     }
                     Spacer(minLength: 0)
-                    PronunciationButton(hebrew: item.nameHebrew, fallback: item.nameEnglish, iconOnly: true,
+                    PronunciationButton(hebrew: item.nameHebrew, iconOnly: true,
                                         title: "朗读\(item.nameChinese)")
                 }
                 Text(item.note).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
@@ -155,8 +155,8 @@ struct StudyRulesView: View {
                     StudySectionTitle("\(letter.studyName) · \(letter.nameChinese)")
                     let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
                     layout {
-                        variant("带达盖什", pair.withDagesh)
-                        variant("不带达盖什", pair.withoutDagesh)
+                        variant("带达盖什", pair.withDagesh, pair: pair)
+                        variant("不带达盖什", pair.withoutDagesh, pair: pair)
                     }
                     Label(pair.modernPreserved ? "现代保留音变" : "现代读音已合并", systemImage: "waveform")
                         .font(.subheadline.weight(.semibold))
@@ -190,12 +190,14 @@ struct StudyRulesView: View {
         }
     }
 
-    private func variant(_ title: String, _ value: StudyDagesh.Variant) -> some View {
-        VStack(spacing: 6) {
+    private func variant(_ title: String, _ value: StudyDagesh.Variant, pair: StudyDagesh) -> some View {
+        let sample = pair.modernExample(for: value)
+        return VStack(spacing: 6) {
             Text(title).font(.subheadline.weight(.semibold))
             HebrewText(text: value.glyph, size: 43)
             Text("现代 \(value.modernIpa)")
             Text("古典 \(value.biblicalIpa)").font(.footnote).foregroundStyle(progress.theme.mutedInk)
+            PronunciationButton(hebrew: sample, title: "听现代音节 \(sample)", bundledOnly: true)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
@@ -306,21 +308,25 @@ private struct StudySyllablesView: View {
                 }
                 .multilineTextAlignment(.center)
                 Spacer(minLength: 0)
-                PronunciationButton(hebrew: word(consonant, vowel), fallback: roman(consonant, vowel), iconOnly: true)
+                if vowel.id != "shva" {
+                    PronunciationButton(hebrew: word(consonant, vowel), iconOnly: true, bundledOnly: true)
+                }
             }
         }
         LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 190 : 98), spacing: 7)], spacing: 7) {
             ForEach(vowels) { item in
                 Button {
                     vowelID = item.id
-                    audio.speak(word(consonant, item), fallback: roman(consonant, item), rate: progress.speechRate)
+                    if item.id != "shva" {
+                        audio.speak(word(consonant, item), rate: progress.speechRate, bundledOnly: true)
+                    }
                 } label: {
                     StudyCard(highlighted: item.id == vowelID, padding: 6) {
                         VStack(spacing: 4) {
                             HebrewText(text: word(consonant, item), size: 31)
                             Text(item.id == "shva" ? "Shva" : roman(consonant, item))
                                 .font(.subheadline.weight(.medium))
-                            Image(systemName: "speaker.wave.2")
+                            Image(systemName: item.id == "shva" ? "info.circle" : "speaker.wave.2")
                                 .font(.caption).foregroundStyle(progress.theme.accent).accessibilityHidden(true)
                         }
                         .frame(maxWidth: .infinity, minHeight: 64)
@@ -335,9 +341,9 @@ private struct StudySyllablesView: View {
         StudyCard {
             DisclosureGroup {
                 WordExampleRow(example: StudyExample(hebrew: "סְלִיחָה", transliteration: "slicha", meaning: "对不起",
-                                                     note: "词首辅音下的 Shva 在这里静音。"))
+                                                     note: "词首辅音下的 Shva 在这里静音。"), bundledOnly: true)
                 WordExampleRow(example: StudyExample(hebrew: "מְדַבֵּר", transliteration: "medaber", meaning: "说话",
-                                                     note: "词首辅音下的 Shva 在这里轻读 /e/。"))
+                                                     note: "词首辅音下的 Shva 在这里轻读 /e/。"), bundledOnly: true)
             } label: {
                 StudyNotice(title: "Shva · 静音与轻读", symbol: "info.circle", note: "听两个例词，比较 Shva 的读法。")
             }
@@ -349,8 +355,8 @@ private struct StudySyllablesView: View {
             .font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
         StudyCard(highlighted: true) {
             StudySectionTitle("听发音，选出对应的音节")
-            PronunciationButton(hebrew: word(question.consonant, question.solution), fallback: roman(question.consonant, question.solution),
-                                title: "播放题目", prominent: true)
+            PronunciationButton(hebrew: word(question.consonant, question.solution),
+                                title: "播放题目", prominent: true, bundledOnly: true)
         }
         .id("syllable-question")
         ForEach(Array(question.choices.enumerated()), id: \.offset) { index, vowel in
@@ -402,6 +408,6 @@ private struct StudySyllablesView: View {
         question = Question(consonant: consonant, choices: choices, solution: solution)
         selection = nil
         answer = nil
-        audio.speak(word(consonant, solution), fallback: roman(consonant, solution), rate: progress.speechRate)
+        audio.speak(word(consonant, solution), rate: progress.speechRate, bundledOnly: true)
     }
 }

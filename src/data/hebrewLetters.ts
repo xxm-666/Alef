@@ -1300,7 +1300,7 @@ export const CONFUSABLE_GROUPS: ConfusableGroup[] = [
 export const NIQQUD_ITEMS: NiqqudItem[] = [
   {
     id: 'kamatz',
-    nameHebrew: 'קָמַץ',
+    nameHebrew: 'קָמָץ',
     nameEnglish: 'Kamatz',
     nameChinese: '卡马茨',
     sample: 'בָּ',

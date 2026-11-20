@@ -16,6 +16,7 @@ struct StudyContent: Decodable {
     let vowels: [StudyVowel]
     let defaultDisplay: [String: Bool]
     let displayPresets: [StudyDisplayPreset]
+    private let ambiguousSpellings: Set<String>
 
     enum CodingKeys: CodingKey {
         case letters, words, wordCategories, phrases, phraseCategories, readings, readingCategories
@@ -26,6 +27,10 @@ struct StudyContent: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         letters = try container.decode([StudyLetter].self, forKey: .letters)
         words = try container.decode([StudyWord].self, forKey: .words)
+        let entriesBySpelling = Dictionary(grouping: words, by: \.hebrewUnpointed)
+        ambiguousSpellings = Set(entriesBySpelling.compactMap { spelling, entries in
+            Set(entries.map(\.meaningZh)).count > 1 ? spelling : nil
+        })
         wordCategories = try container.decode([String: StudyCategory].self, forKey: .wordCategories)
         phrases = try container.decode([StudyPhrase].self, forKey: .phrases)
         phraseCategories = try container.decode([String: StudyCategory].self, forKey: .phraseCategories)
@@ -62,6 +67,19 @@ struct StudyContent: Decodable {
         return words.filter { schedule[$0.id]?.isDue == true }.sorted {
             (schedule[$0.id]?.nextReviewAt ?? 0) < (schedule[$1.id]?.nextReviewAt ?? 0)
         }
+    }
+
+    func meaningPrompt(for word: StudyWord, showNiqqud: Bool) -> String {
+        showNiqqud || ambiguousSpellings.contains(word.hebrewUnpointed) ? word.hebrew : word.hebrewUnpointed
+    }
+
+    func distractors(for word: StudyWord, listening: Bool) -> [StudyWord] {
+        var meanings: Set<String> = [word.meaningZh]
+        let candidates = words.shuffled().filter { candidate in
+            (!listening || candidate.ipa != word.ipa)
+                && meanings.insert(candidate.meaningZh).inserted
+        }
+        return Array(candidates.prefix(3))
     }
 
     static func load() throws -> Self {
@@ -123,6 +141,12 @@ struct StudyDagesh: Decodable {
     let withoutDagesh: Variant
     let modernPreserved: Bool
     let note: String
+
+    func modernExample(for variant: Variant) -> String {
+        let glyph = modernPreserved ? variant.glyph : withoutDagesh.glyph
+        let medial = glyph.components(separatedBy: " / ").first ?? glyph
+        return medial + "\u{05B5}"
+    }
 }
 
 struct StudySofit: Decodable {
@@ -167,6 +191,7 @@ struct StudyWord: Decodable, Identifiable {
     let id: String
     let hebrew: String
     let hebrewUnpointed: String
+    let alternateSpellings: [String]?
     let transliteration: String
     let ipa: String
     let meaningZh: String
@@ -176,6 +201,16 @@ struct StudyWord: Decodable, Identifiable {
     let root: String?
     let note: String
     let sentence: Sentence?
+
+    var canPracticeSpelling: Bool {
+        (2...8).contains(hebrewUnpointed.count)
+            && hebrewUnpointed.allSatisfy { "אבגדהוזחטיכלמנסעפצקרשתךםןףץ".contains($0) }
+    }
+
+    func acceptsSpelling(_ input: String) -> Bool {
+        let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        return answer == hebrew || answer == hebrewUnpointed || alternateSpellings?.contains(answer) == true
+    }
 }
 
 struct StudyInflection: Decodable {

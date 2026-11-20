@@ -30,41 +30,46 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
                                                name: AVAudioSession.interruptionNotification, object: nil)
     }
 
-    func speak(_ text: String, fallback: String? = nil, rate: Double) {
+    func speak(_ text: String, rate: Double, bundledOnly: Bool = false) {
         stopPronunciation()
         playbackError = nil
         let safeRate = min(1.5, max(0.5, rate.isFinite ? rate : 1))
         do {
             try activateSession()
 
-            if prefersRecordings, let asset = recordings[text.trimmingCharacters(in: .whitespacesAndNewlines)],
-               let folder = Bundle.main.resourceURL?.appendingPathComponent("StudyAssets", isDirectory: true),
-               let recording = try? AVAudioPlayer(contentsOf: folder.appendingPathComponent(asset)) {
-                recording.enableRate = true
-                recording.rate = Float(safeRate)
-                recording.delegate = self
-                if recording.play() {
-                    player = recording
-                    return
-                }
-            }
-
-            let hebrewVoice = AVSpeechSynthesisVoice(language: "he-IL")
-            guard hebrewVoice != nil || fallback != nil else {
-                playbackError = "没有可用的希伯来语语音。可在 iOS 的辅助功能语音设置中下载希伯来语。"
-                releaseSessionIfIdle()
+            let recordingFirst = prefersRecordings || bundledOnly
+            if recordingFirst, playRecording(text, rate: safeRate) { return }
+            if !bundledOnly, let hebrewVoice = AVSpeechSynthesisVoice(language: "he-IL") {
+                let spoken = AVSpeechUtterance(string: text)
+                spoken.voice = hebrewVoice
+                spoken.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate,
+                    AVSpeechUtteranceDefaultSpeechRate * Float(safeRate)))
+                utterance = spoken
+                synthesizer.speak(spoken)
                 return
             }
-            let spoken = AVSpeechUtterance(string: hebrewVoice == nil ? (fallback ?? text) : text)
-            spoken.voice = hebrewVoice ?? AVSpeechSynthesisVoice(language: "en-US")
-            spoken.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate,
-                AVSpeechUtteranceDefaultSpeechRate * Float(safeRate)))
-            utterance = spoken
-            synthesizer.speak(spoken)
+            if !recordingFirst, playRecording(text, rate: safeRate) { return }
+            playbackError = bundledOnly
+                ? "无法播放此发音的内置音频。"
+                : "没有可播放的希伯来语音频。可在 iOS 的辅助功能语音设置中下载希伯来语。"
+            releaseSessionIfIdle()
         } catch {
             playbackError = "暂时无法播放发音。请重试，或到「我的」查看发音设置。"
             releaseSessionIfIdle()
         }
+    }
+
+    private func playRecording(_ text: String, rate: Double) -> Bool {
+        guard let asset = recordings[text.trimmingCharacters(in: .whitespacesAndNewlines)],
+              let url = Bundle.main.resourceURL?.appendingPathComponent("StudyAssets", isDirectory: true)
+                .appendingPathComponent(asset),
+              let recording = try? AVAudioPlayer(contentsOf: url) else { return false }
+        recording.enableRate = true
+        recording.rate = Float(rate)
+        recording.delegate = self
+        guard recording.play() else { return false }
+        player = recording
+        return true
     }
 
     func playFeedback(_ kind: Feedback) {

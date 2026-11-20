@@ -150,7 +150,7 @@ struct AlphabetView: View {
             .accessibilityHint("打开字母详情")
             if quickActions {
                 HStack(spacing: 0) {
-                    PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish, iconOnly: true,
+                    PronunciationButton(hebrew: letter.nameHebrew, iconOnly: true,
                                         title: "朗读\(letter.nameChinese)")
                     Spacer(minLength: 0)
                     Menu {
@@ -396,10 +396,10 @@ struct LetterStudyView: View {
                 letterForm(cursive: true)
             }
             layout {
-                PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish,
-                                    title: "标准发音", prominent: true)
-                PronunciationButton(hebrew: letter.nameHebrew, fallback: letter.nameEnglish,
-                                    rate: 0.68, title: "慢速发音")
+                PronunciationButton(hebrew: letter.nameHebrew,
+                                    title: "朗读字母名", prominent: true)
+                PronunciationButton(hebrew: letter.nameHebrew,
+                                    rate: 0.68, title: "慢速字母名")
             }
         }
     }
@@ -433,8 +433,8 @@ struct LetterStudyView: View {
                           selection: $classical)
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
             layout {
-                soundVariant(variants.withDagesh, title: "带达盖什")
-                soundVariant(variants.withoutDagesh, title: "不带达盖什")
+                soundVariant(variants.withDagesh, title: "带达盖什", variants: variants)
+                soundVariant(variants.withoutDagesh, title: "不带达盖什", variants: variants)
             }
             Text(variants.note).font(.footnote).foregroundStyle(progress.theme.mutedInk)
             NavigationLink {
@@ -446,16 +446,20 @@ struct LetterStudyView: View {
         }
     }
 
-    private func soundVariant(_ variant: StudyDagesh.Variant, title: String) -> some View {
+    private func soundVariant(_ variant: StudyDagesh.Variant, title: String, variants: StudyDagesh) -> some View {
         VStack(spacing: 5) {
             HebrewText(text: variant.glyph, size: 35)
             Text(classical ? variant.biblicalIpa : variant.modernIpa).font(.headline)
             Text(title).font(.caption).foregroundStyle(progress.theme.mutedInk)
+            if !classical {
+                let sample = variants.modernExample(for: variant)
+                PronunciationButton(hebrew: sample, title: "听音节 \(sample)", bundledOnly: true)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(8)
         .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     private func finalFormDetails(_ form: StudySofit) -> some View {
@@ -514,7 +518,7 @@ struct StudySofitView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("\(letter.nameChinese)，\(form.medialGlyph) 的词尾形是 \(form.finalGlyph)")
-                            PronunciationButton(hebrew: form.exampleWord.hebrew, fallback: form.exampleWord.transliteration,
+                            PronunciationButton(hebrew: form.exampleWord.hebrew,
                                                 iconOnly: true, title: "朗读\(letter.studyName)的词尾例词")
                         }
                     }
@@ -548,6 +552,7 @@ struct WordExampleRow: View {
     let example: StudyExample
     var showNiqqud = true
     var cursive = false
+    var bundledOnly = false
 
     var body: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5)) : AnyLayout(HStackLayout(spacing: 10))
@@ -561,8 +566,8 @@ struct WordExampleRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                PronunciationButton(hebrew: example.hebrew, fallback: example.transliteration, iconOnly: true,
-                                    title: "播放例词或例句")
+                PronunciationButton(hebrew: example.hebrew, iconOnly: true,
+                                    title: "播放例词或例句", bundledOnly: bundledOnly)
             }
             if let note = example.note {
                 Text(note).font(.footnote).foregroundStyle(progress.theme.mutedInk)

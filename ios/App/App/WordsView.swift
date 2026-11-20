@@ -221,6 +221,7 @@ struct WordsView: View {
             default: true
             }
             let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
+                + (word.alternateSpellings ?? [])
             return include && (topic == nil || word.category == topic)
                 && (settings.initialLetter == "all" || word.hebrewUnpointed.hasPrefix(settings.initialLetter))
                 && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) }
@@ -296,7 +297,7 @@ struct WordsView: View {
                 .buttonStyle(.plain)
                 HStack(spacing: 0) {
                     if stacked { wordMasteryMenu(word, mastery: mastery) }
-                    PronunciationButton(hebrew: word.hebrew, fallback: word.transliteration, iconOnly: true,
+                    PronunciationButton(hebrew: word.hebrew, iconOnly: true,
                                         title: "播放\(word.meaningZh)的发音")
                     Button { progress.toggleFavorite(word.id) } label: {
                         Image(systemName: favorite ? "bookmark.fill" : "bookmark")
@@ -407,9 +408,9 @@ struct WordsView: View {
                 StudyNotice(title: note, symbol: "info.circle")
             }
             layout {
-                PronunciationButton(hebrew: phrase.hebrew, fallback: phrase.transliteration,
+                PronunciationButton(hebrew: phrase.hebrew,
                                     title: "正常 \(progress.speechRate.formatted(.number.precision(.fractionLength(2))))×", prominent: true)
-                PronunciationButton(hebrew: phrase.hebrew, fallback: phrase.transliteration, rate: 0.68, title: "慢速 0.68×")
+                PronunciationButton(hebrew: phrase.hebrew, rate: 0.68, title: "慢速 0.68×")
             }
         }
     }
@@ -536,6 +537,8 @@ private struct WordDetailView: View {
     @State var showNiqqud: Bool
     @State var showCursive: Bool
 
+    private var displayedWord: String { showNiqqud ? word.hebrew : word.hebrewUnpointed }
+
     private let formLabels = [("ms", "阳性单数"), ("fs", "阴性单数"), ("mp", "阳性复数"), ("fp", "阴性复数"),
                               ("infinitive", "不定式"), ("past3ms", "过去式"), ("singular", "单数"), ("plural", "复数")]
 
@@ -544,14 +547,14 @@ private struct WordDetailView: View {
             StudyCard {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed, cursive: showCursive,
+                        HebrewText(text: displayedWord, cursive: showCursive,
                                    size: 56, style: .largeTitle)
                         Text("\(word.transliteration)  \(word.ipa)")
                             .font(.subheadline.weight(.medium)).foregroundStyle(progress.theme.mutedInk)
                         Text(word.meaningZh).font(.title3.weight(.semibold)).foregroundStyle(progress.theme.ink)
                     }
                     Spacer(minLength: 0)
-                    PronunciationButton(hebrew: word.hebrew, fallback: word.transliteration, iconOnly: true,
+                    PronunciationButton(hebrew: word.hebrew, iconOnly: true,
                                         title: "播放单词发音")
                 }
                 ViewThatFits(in: .horizontal) {
@@ -597,7 +600,7 @@ private struct WordDetailView: View {
                                     Text(form.label ?? label).font(.caption).foregroundStyle(progress.theme.mutedInk)
                                 }
                                 Spacer(minLength: 0)
-                                PronunciationButton(hebrew: form.hebrew, fallback: form.translit, iconOnly: true,
+                                PronunciationButton(hebrew: form.hebrew, iconOnly: true,
                                                     title: "播放\(form.label ?? label)")
                             }
                         }
@@ -669,7 +672,7 @@ private struct WordDetailView: View {
     }
 
     private var letters: [(character: Character, letter: StudyLetter)] {
-        word.hebrewUnpointed.compactMap { character in
+        withoutHebrewMarks(displayedWord).compactMap { character in
             let glyph = String(character)
             guard let letter = content.letters.first(where: { $0.hebrew == glyph || $0.sofit == glyph }) else { return nil }
             return (character, letter)
@@ -759,7 +762,7 @@ private struct StudyReadingView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            PronunciationButton(hebrew: sentence.hebrew, fallback: sentence.transliteration,
+            PronunciationButton(hebrew: sentence.hebrew,
                                 title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
         }
     }
@@ -933,18 +936,19 @@ struct WordQuizView: View {
             switch kind {
             case .listening:
                 StudySectionTitle("听发音，选择词义")
-                PronunciationButton(hebrew: target.hebrew, fallback: target.transliteration,
-                                    title: "播放题目", prominent: true)
+                PronunciationButton(hebrew: target.hebrew,
+                                    title: "播放题目", prominent: true, bundledOnly: true)
             case .spelling:
                 Label("写出「\(target.meaningZh)」", systemImage: "pencil").font(.headline)
                 Text("提示 · \(target.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                Text("可输入带点写法或无点全拼").font(.caption).foregroundStyle(progress.theme.mutedInk)
             case .meaning:
                 StudySectionTitle("这个单词是什么意思？")
                 HStack {
                     Spacer(minLength: 0)
-                    HebrewText(text: showNiqqud ? target.hebrew : target.hebrewUnpointed, size: 52, style: .largeTitle)
+                    HebrewText(text: content.meaningPrompt(for: target, showNiqqud: showNiqqud), size: 52, style: .largeTitle)
                     Spacer(minLength: 0)
-                    PronunciationButton(hebrew: target.hebrew, fallback: target.transliteration, iconOnly: true)
+                    PronunciationButton(hebrew: target.hebrew, iconOnly: true)
                 }
             }
         }
@@ -953,11 +957,11 @@ struct WordQuizView: View {
     private func feedback(_ target: StudyWord, correct: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             StudyQuizFeedback(correct: correct,
-                              solution: kind == .spelling ? target.hebrewUnpointed : "\(target.hebrew) · \(target.meaningZh)",
+                              solution: kind == .spelling ? "\(target.hebrew) · \(target.hebrewUnpointed)" : "\(target.hebrew) · \(target.meaningZh)",
                               response: kind == .spelling ? spelling : options.first { $0.id == selectedOption }?.meaningZh,
                               explanation: "\(target.transliteration) · \(target.partOfSpeech)")
             if kind == .spelling {
-                PronunciationButton(hebrew: target.hebrew, fallback: target.transliteration, title: "听正确发音")
+                PronunciationButton(hebrew: target.hebrew, title: "听正确发音")
             }
             if reviewing, let schedule = progress.schedule[target.id] {
                 StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar")
@@ -1018,7 +1022,7 @@ struct WordQuizView: View {
             }
         } else {
             primaryButton("确认答案", symbol: "checkmark", action: confirm)
-                .disabled(kind == .spelling ? normalizedSpelling.isEmpty : selectedOption == nil)
+                .disabled(kind == .spelling ? spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : selectedOption == nil)
         }
     }
 
@@ -1035,17 +1039,13 @@ struct WordQuizView: View {
         .buttonStyle(StudyButtonStyle(prominent: true))
     }
 
-    private var normalizedSpelling: String {
-        withoutHebrewMarks(spelling).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private func confirm() {
         guard let target, result == nil else { return }
         let success: Bool
         if kind == .spelling {
-            guard !normalizedSpelling.isEmpty else { return }
+            guard !spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             inputFocused = false
-            success = normalizedSpelling == target.hebrewUnpointed
+            success = target.acceptsSpelling(spelling)
         } else {
             guard let selectedOption else { return }
             success = selectedOption == target.id
@@ -1085,9 +1085,11 @@ struct WordQuizView: View {
     }
 
     private func next(play: Bool) {
-        let pool = kind == .spelling ? words.filter {
-            (2...8).contains($0.hebrewUnpointed.count) && $0.hebrewUnpointed.allSatisfy { "אבגדהוזחטיכלמנסעפצקרשתךםןףץ".contains($0) }
-        } : words
+        let pool = switch kind {
+        case .spelling: words.filter(\.canPracticeSpelling)
+        case .listening: words.filter { content.audio[$0.hebrew] != nil }
+        case .meaning: words
+        }
         if reviewing {
             target = pool.indices.contains(reviewIndex) ? pool[reviewIndex] : nil
         } else {
@@ -1099,11 +1101,11 @@ struct WordQuizView: View {
         inputFocused = false
         spelling = ""
         guard let target else { return }
-        var meanings: Set<String> = [target.meaningZh]
-        let choices = content.words.shuffled().filter { meanings.insert($0.meaningZh).inserted }
-        options = ([target] + Array(choices.prefix(3))).shuffled()
+        if kind != .spelling {
+            options = ([target] + content.distractors(for: target, listening: kind == .listening)).shuffled()
+        }
         if kind == .listening, play {
-            audio.speak(target.hebrew, fallback: target.transliteration, rate: progress.speechRate)
+            audio.speak(target.hebrew, rate: progress.speechRate, bundledOnly: true)
         }
     }
 }

@@ -189,9 +189,9 @@ private struct StudySpeechView: View {
             StudyNotice(title: "\(Set(content.audio.values).count) 段内置离线录音", symbol: "waveform",
                         note: progress.prefersRecordings
                             ? "有录音时优先播放录音，缺少录音时使用 iOS 希伯来语语音。"
-                            : "使用 iOS 希伯来语语音。开启「优先离线录音」可恢复录音播放。")
-            StudyNotice(title: "系统语音与音译", symbol: "info.circle",
-                        note: "如果没有安装希伯来语语音，应用会尝试朗读音译。情景短语的慢速按钮固定为 0.68×。")
+                            : "优先使用 iOS 希伯来语语音。系统语音不可用时会尝试播放内置音频。")
+            StudyNotice(title: "练习音频", symbol: "info.circle",
+                        note: "单词听力和拼读示范使用内置音频。情景短语的慢速按钮固定为 0.68×。")
         }
         .studyDetail("发音与音效")
     }
@@ -222,7 +222,7 @@ private struct StudySpeechControls: View {
             .font(.caption)
             .foregroundStyle(progress.theme.mutedInk)
             .accessibilityHidden(true)
-            PronunciationButton(hebrew: "שָׁלוֹם", fallback: "shalom", title: "试听发音")
+            PronunciationButton(hebrew: "שָׁלוֹם", title: "试听发音")
             Toggle(isOn: $progress.prefersRecordings) { Label("优先离线录音", systemImage: "waveform") }
                 .frame(minHeight: 44)
             Toggle(isOn: $progress.feedbackEnabled) { Label("答题与翻卡音效", systemImage: "bell") }

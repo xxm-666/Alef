@@ -84,7 +84,7 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "שָׂמֵחַ": "audio/he_c5b5b9da05ea.mp3",
   "תּוֹדָה": "audio/he_e7abc8dbefeb.mp3",
   "תּוֹרָה": "audio/he_bd23da5ea16f.mp3",
-  "קָמַץ": "audio/he_61af29d996c7.mp3",
+  "קָמָץ": "audio/he_61af29d996c7.mp3",
   "פַּתַח": "audio/he_9972adf5a202.mp3",
   "צֵירֵי": "audio/he_b4dab02e5313.mp3",
   "סֶגּוֹל": "audio/he_04147c9d2c4e.mp3",

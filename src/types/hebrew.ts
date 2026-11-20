@@ -32,6 +32,7 @@ export interface HebrewWord {
   id: string;
   hebrew: string;
   hebrewUnpointed: string;
+  alternateSpellings?: string[];
   transliteration: string;
   ipa: string;
   meaningZh: string;

@@ -215,7 +215,7 @@ struct StudyFlashcardsView: View {
             .keyboardShortcut(.space, modifiers: [])
             .padding(.horizontal, 26)
             .overlay(alignment: .topTrailing) {
-                PronunciationButton(hebrew: current.nameHebrew, fallback: current.nameEnglish, iconOnly: true)
+                PronunciationButton(hebrew: current.nameHebrew, iconOnly: true, title: "朗读字母名")
             }
         }
     }
@@ -391,6 +391,7 @@ private struct FlashQuizView: View {
         let choices: [String]
         let solution: String
         let explanation: String
+        let modernExample: String?
     }
 
     var body: some View {
@@ -412,9 +413,11 @@ private struct FlashQuizView: View {
                         HebrewText(text: question.glyph, cursive: kind == .cursiveToBlock, size: 70, style: .largeTitle)
                             .frame(maxWidth: .infinity)
                         if answer != nil {
-                            PronunciationButton(hebrew: kind == .dagesh ? question.glyph : question.letter.nameHebrew,
-                                                fallback: kind == .dagesh ? question.solution : question.letter.nameEnglish,
-                                                title: "听发音")
+                            if let sample = question.modernExample {
+                                PronunciationButton(hebrew: sample, title: "听现代音节 \(sample)", bundledOnly: true)
+                            } else {
+                                PronunciationButton(hebrew: question.letter.nameHebrew, title: "朗读字母名")
+                            }
                         }
                     }
                     .id("flash-question")
@@ -508,6 +511,7 @@ private struct FlashQuizView: View {
         let solution: String
         let possible: [String]
         let explanation: String
+        var modernExample: String?
         switch kind {
         case .sofitMatch:
             solution = target.sofit ?? target.hebrew
@@ -524,6 +528,7 @@ private struct FlashQuizView: View {
             glyph = variant.glyph
             possible = pool.compactMap(\.begadkefat).flatMap { [$0.withDagesh.modernIpa, $0.withoutDagesh.modernIpa] }
             explanation = "\(variant.name)：现代 \(variant.modernIpa)，古典 \(variant.biblicalIpa)。\(variants.note)"
+            modernExample = variants.modernExample(for: variant)
         default:
             solution = soundLabel(target)
             possible = pool.map(soundLabel)
@@ -531,7 +536,7 @@ private struct FlashQuizView: View {
         }
         let distractors = Set(possible).subtracting([solution]).shuffled().prefix(3)
         question = Question(letter: target, glyph: glyph, choices: ([solution] + Array(distractors)).shuffled(),
-                            solution: solution, explanation: explanation)
+                            solution: solution, explanation: explanation, modernExample: modernExample)
         answer = nil
         selection = nil
     }

@@ -362,12 +362,12 @@ struct PronunciationButton: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     let hebrew: String
-    var fallback: String?
     var iconOnly = false
     var rate: Double?
     var title = "播放发音"
     var minimumHitSize: CGFloat?
     var prominent = false
+    var bundledOnly = false
 
     var body: some View {
         Group {
@@ -393,7 +393,7 @@ struct PronunciationButton: View {
     }
 
     private func play() {
-        audio.speak(hebrew, fallback: fallback, rate: rate ?? progress.speechRate)
+        audio.speak(hebrew, rate: rate ?? progress.speechRate, bundledOnly: bundledOnly)
     }
 }
 
