@@ -154,7 +154,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="settings-row">
               <div className="settings-row-info">
                 <strong>朗读语速：{speechRate.toFixed(2)}x</strong>
-                <span>内置离线以色列神经网络语音（支持调速）</span>
+                <span>内置希伯来语真人及合成音频（支持调速）</span>
               </div>
               <input
                 type="range"

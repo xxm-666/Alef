@@ -1,6 +1,6 @@
 # Alef — 希伯来语字母与词汇学习工具
 
-**Alef** 是一款基于 **Electron + React + TypeScript + Vite** 构建的希伯来语入门与桌面/移动端（PWA）学习应用，支持希伯来语 22 个字母的印刷体与手写体对照、笔顺描红、词尾形（Sofit）与 Begadkefat 发音规则、高频词库与间隔重复（SRS）闪卡复习，以及离线真声音频包。
+**Alef** 是一款基于 **Electron + React + TypeScript + Vite** 构建的希伯来语入门与桌面/移动端（PWA）学习应用，支持希伯来语 22 个字母的印刷体与手写体对照、笔顺描红、词尾形（Sofit）与 Begadkefat 发音规则、高频词库与间隔重复（SRS）闪卡复习，以及离线发音包。
 
 ---
 
@@ -20,9 +20,11 @@
 - **特殊规则速查**：[`SpecialRulesView`](src/components/SpecialRulesView.tsx) 系统梳理词尾形（ם ן ץ ף ך）、Begadkefat（ב ג ד כ פ ת）点音变化、喉音字母与易混字母辨析。
 - **元音音节实验室**：[`SyllableLab`](src/components/SyllableLab.tsx) 支持自由组合辅音字母与 Niqqud 元音符号，实时试听并练习拼读。
 
-### 4. 真声音频与离线 PWA 支持
+### 4. 离线发音与 PWA 支持
 - **多级音频播放策略**：[`audio.ts`](src/utils/audio.ts) 优先播放内置预录 MP3（`public/audio/`），无录音时回退至浏览器希伯来语 TTS 或音译拼读。iOS 应用使用原生播放器播放录音，结束后释放音频会话。
-- **离线音频包下载**：[`offlineAudio.ts`](src/utils/offlineAudio.ts) 支持在 PWA 中将全部字母、词汇与短语音频缓存至浏览器 `Cache Storage`，配合 Vite 构建自动生成的 `sw.js` 实现完全离线使用。
+- **离线音频包下载**：[`offlineAudio.ts`](src/utils/offlineAudio.ts) 支持在 PWA 中缓存字母、词汇、场景短句与阅读句子的内置音频，配合 Vite 生成的 `sw.js` 离线播放。
+- **音频来源**：补充音频的作者、原始文件和许可见[发音音频来源](public/audio/CREDITS.md)，这份清单随 Web 和 iOS 资源一起分发。
+- 待补录的词条和阅读句子见[离线发音缺失清单](设计文档/离线发音缺失清单.md)。
 
 ### 5. 桌面端特性、多主题与数据备份
 - **Electron 桌面增强**：[`electron/main.cjs`](electron/main.cjs) 提供无边框自定义标题栏、窗口置顶（Always on Top）以及轻量级迷你浮窗模式（[`MiniWidgetView`](src/components/MiniWidgetView.tsx)）。

@@ -31,6 +31,7 @@ await Promise.all(files.map(async (name) => {
   if (!/^audio\/he_[a-f0-9]{12}\.mp3$/.test(name)) throw new Error(`Invalid recording path ${name}`);
   await copyFile(new URL(`public/${name}`, root), new URL(name, assets));
 }));
+await copyFile(new URL('public/audio/CREDITS.md', root), new URL('audio/CREDITS.md', assets));
 await copyFile(new URL('build/fonts/GveretLevin-Regular.ttf', root), new URL('GveretLevin-Regular.ttf', assets));
 await copyFile(new URL('build/fonts/GveretLevin-OFL.txt', root), new URL('GveretLevin-OFL.txt', assets));
 await Promise.all([

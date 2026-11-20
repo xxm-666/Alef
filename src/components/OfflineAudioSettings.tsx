@@ -56,7 +56,7 @@ export function OfflineAudioSettings() {
         </div>
       </div>
       <p className="settings-desc">
-        基础发音包包含字母名称、有内置录音的常用词和全部场景短句。
+        基础发音包包含字母名称、场景短句，以及有内置音频的单词和阅读句子。
       </p>
       {supported && controlled ? (
         <>
