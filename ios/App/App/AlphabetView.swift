@@ -208,9 +208,15 @@ struct LetterTileContent: View {
                     if options["showBlock"] == true { glyph(cursive: false, labeled: showBoth) }
                     if options["showCursive"] == true { glyph(cursive: true, labeled: showBoth) }
                     if isCompact, options["showSofit"] == true, let sofit = letter.sofit {
-                        HebrewText(text: sofit, cursive: options["showBlock"] != true, size: 17)
-                            .foregroundStyle(progress.theme.mutedInk)
-                            .accessibilityLabel("词尾形 \(sofit)")
+                        Group {
+                            if options["showBlock"] == true {
+                                HebrewText(text: sofit, size: 17)
+                            } else {
+                                StudyCursiveLetter(letter: letter, finalForm: true, size: 17)
+                            }
+                        }
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .accessibilityLabel("词尾形 \(sofit)")
                     }
                 }
                 .frame(minHeight: glyphHeight)
@@ -247,10 +253,13 @@ struct LetterTileContent: View {
 
     private func glyph(cursive: Bool, labeled: Bool) -> some View {
         VStack(spacing: 2) {
-            HebrewText(text: letter.hebrew, cursive: cursive, size: cursive ? 30 : 35)
-                .foregroundStyle(progress.theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+            if cursive {
+                StudyCursiveLetter(letter: letter, size: 30)
+            } else {
+                HebrewText(text: letter.hebrew, size: 35)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
             if labeled {
                 Text(cursive ? "手写" : "印刷")
                     .font(.caption2)
@@ -418,7 +427,11 @@ struct LetterStudyView: View {
     private func letterForm(cursive: Bool) -> some View {
         VStack(spacing: 2) {
             Text(cursive ? "手写体" : "印刷体").font(.caption).foregroundStyle(progress.theme.mutedInk)
-            HebrewText(text: displayGlyph, cursive: cursive, size: 39, style: .title)
+            if cursive {
+                StudyCursiveLetter(letter: letter, finalForm: showsFinalForm, size: 39)
+            } else {
+                HebrewText(text: displayGlyph, size: 39, style: .title)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(8)
@@ -576,6 +589,32 @@ struct WordExampleRow: View {
     }
 }
 
+struct StudyCursiveLetter: View {
+    @Environment(StudyProgress.self) private var progress
+    @ScaledMetric private var scale: CGFloat = 1
+    let letter: StudyLetter
+    var finalForm = false
+    let size: CGFloat
+
+    var body: some View {
+        let guide = letter.strokeGuide
+        let strokes = finalForm ? (guide.sofitCursiveStrokes ?? guide.cursiveStrokes) : guide.cursiveStrokes
+        let side = size * scale * 1.25
+        Canvas { context, canvas in
+            let unit = canvas.width / 100
+            let transform = CGAffineTransform(scaleX: unit, y: unit)
+            let line = StrokeStyle(lineWidth: 5.5 * unit, lineCap: .round, lineJoin: .round)
+            for stroke in strokes {
+                context.stroke(stroke.path.applying(transform), with: .color(progress.theme.ink), style: line)
+            }
+        }
+        .frame(width: side, height: side)
+        .alignmentGuide(.firstTextBaseline) { $0.height * 0.78 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(finalForm ? (letter.sofit ?? letter.hebrew) : letter.hebrew)
+    }
+}
+
 private struct LetterWritingView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -583,6 +622,7 @@ private struct LetterWritingView: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     let guide: StudyStrokes
     @State private var shape: String
+    @State private var markedGlyph = ""
     @State private var practiceID = UUID()
     @State private var showTracing = true
     @State private var showsDemonstration = false
@@ -608,6 +648,9 @@ private struct LetterWritingView: View {
         ScrollViewReader { scroll in
             StudyPage(maxWidth: 760) {
                 StudySegments(title: "字形", options: shapes, selection: $shape)
+                if shape == "cursive", guide.cursiveMarks != nil {
+                    StudySegments(title: "手写字母加点", options: markOptions, selection: $markedGlyph)
+                }
 
                 if sideBySide {
                     HStack(alignment: .top, spacing: 12) {
@@ -643,11 +686,8 @@ private struct LetterWritingView: View {
         .onChange(of: showsDemonstration) { _, expanded in
             if !expanded { animationStart = nil }
         }
-        .onChange(of: shape) { _, _ in
-            animationStart = nil
-            selectedStroke = nil
-            practiceID = UUID()
-        }
+        .onChange(of: shape) { _, _ in resetPractice() }
+        .onChange(of: markedGlyph) { _, _ in resetPractice() }
         .task(id: animationStart) {
             guard let started = animationStart else { return }
             do {
@@ -660,6 +700,12 @@ private struct LetterWritingView: View {
     }
 
     private var sideBySide: Bool { widthClass == .regular && !typeSize.isAccessibilitySize }
+
+    private func resetPractice() {
+        animationStart = nil
+        selectedStroke = nil
+        practiceID = UUID()
+    }
 
     @ViewBuilder private var strokeSteps: some View {
         if !selectedSteps.isEmpty {
@@ -740,7 +786,7 @@ private struct LetterWritingView: View {
 
     private var selectedSteps: [String] {
         switch shape {
-        case "cursive": guide.cursiveSteps
+        case "cursive": guide.cursiveSteps + (selectedMark.map { [$0.step] } ?? [])
         case "sofit-block": guide.sofitBlockSteps ?? []
         case "sofit-cursive": guide.sofitCursiveSteps ?? []
         default: guide.blockSteps
@@ -749,10 +795,20 @@ private struct LetterWritingView: View {
 
     private var selectedStrokes: [StudyStrokes.Stroke] {
         switch shape {
-        case "cursive": guide.cursiveStrokes
+        case "cursive": guide.cursiveStrokes + (selectedMark.map { [$0.stroke] } ?? [])
         case "sofit-block": guide.sofitBlockStrokes ?? []
         case "sofit-cursive": guide.sofitCursiveStrokes ?? []
         default: guide.blockStrokes
+        }
+    }
+
+    private var selectedMark: StudyStrokes.CursiveMark? {
+        guide.cursiveMarks?.first { $0.glyph == markedGlyph }
+    }
+
+    private var markOptions: [(value: String, title: String)] {
+        [("", "无点")] + (guide.cursiveMarks ?? []).map { mark in
+            (mark.glyph, "\(mark.label) \(mark.glyph)")
         }
     }
 }
@@ -781,8 +837,9 @@ private struct StrokeDiagram: View {
             }
             context.stroke(guides.applying(transform), with: .color(.secondary.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
             let line = StrokeStyle(lineWidth: tracing ? 5 : 3, lineCap: .round, lineJoin: .round)
+            let activeMarker = selectedStroke ?? progress.map { min(Int($0), strokes.count - 1) }
             for (index, stroke) in strokes.enumerated() {
-                let whole = path(stroke.d).applying(transform)
+                let whole = stroke.path.applying(transform)
                 let highlighted = selectedStroke == index
                 let dimmed = selectedStroke != nil || progress != nil
                 let baseColor = tracing ? accent.opacity(0.24) : (highlighted ? accent : Color.primary.opacity(dimmed ? 0.27 : 1))
@@ -794,17 +851,30 @@ private struct StrokeDiagram: View {
                         context.stroke(visible, with: .color(accent), style: line)
                     }
                 }
-                guard !tracing else { continue }
+                guard let label = markerLabel(for: index, active: activeMarker) else { continue }
                 let start = CGPoint(x: stroke.startX, y: stroke.startY).applying(transform)
-                context.draw(Text("\(index + 1)").font(.caption2.bold()).foregroundColor(accent), at: CGPoint(x: start.x, y: start.y - 10))
+                context.draw(Text(label).font(.caption2.bold()).foregroundColor(accent), at: CGPoint(x: start.x, y: start.y - 10))
             }
         }
         .accessibilityLabel("笔顺示意图")
     }
 
-    private func path(_ description: String) -> Path {
+    private func markerLabel(for index: Int, active: Int?) -> String? {
+        guard !tracing else { return nil }
+        if let active { return index == active ? String(index + 1) : nil }
+        let stroke = strokes[index]
+        let sharedStart = strokes.indices.filter { other in
+            strokes[other].startX == stroke.startX && strokes[other].startY == stroke.startY
+        }
+        guard sharedStart.first == index else { return nil }
+        return sharedStart.map { String($0 + 1) }.joined(separator: "·")
+    }
+}
+
+private extension StudyStrokes.Stroke {
+    var path: Path {
         var path = Path()
-        let tokens = description.split(separator: " ")
+        let tokens = d.split(separator: " ")
         var i = 0
         while i < tokens.count {
             let command = tokens[i]

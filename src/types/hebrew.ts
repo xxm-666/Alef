@@ -68,10 +68,18 @@ export interface StrokeGuide {
   cursiveSteps: string[];
   blockStrokes: StrokePath[];
   cursiveStrokes: StrokePath[];
+  cursiveMarks?: CursiveMark[];
   sofitBlockSteps?: string[];
   sofitCursiveSteps?: string[];
   sofitBlockStrokes?: StrokePath[];
   sofitCursiveStrokes?: StrokePath[];
+}
+
+export interface CursiveMark {
+  glyph: string;
+  label: string;
+  step: string;
+  stroke: StrokePath;
 }
 
 export interface BegadkefatVariant {

@@ -330,7 +330,7 @@ struct StudyFlashcardsView: View {
                                size: 80, style: .largeTitle)
                 }
                 if ["cursive", "both"].contains(preferences.frontType) {
-                    HebrewText(text: letter.hebrew, cursive: true, size: 70, style: .largeTitle)
+                    StudyCursiveLetter(letter: letter, size: 70)
                 }
             }
         }
@@ -410,8 +410,14 @@ private struct FlashQuizView: View {
                     .monospacedDigit()
                     StudyCard {
                         StudySectionTitle(prompt)
-                        HebrewText(text: question.glyph, cursive: kind == .cursiveToBlock, size: 70, style: .largeTitle)
-                            .frame(maxWidth: .infinity)
+                        Group {
+                            if kind == .cursiveToBlock {
+                                StudyCursiveLetter(letter: question.letter, size: 70)
+                            } else {
+                                HebrewText(text: question.glyph, size: 70, style: .largeTitle)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
                         if answer != nil {
                             if let sample = question.modernExample {
                                 PronunciationButton(hebrew: sample, title: "听现代音节 \(sample)", bundledOnly: true)

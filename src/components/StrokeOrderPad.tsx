@@ -13,6 +13,7 @@ type FormKind = 'medial' | 'sofit';
 export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
   const [scriptKind, setScriptKind] = useState<ScriptKind>('cursive');
   const [formKind, setFormKind] = useState<FormKind>('medial');
+  const [markedGlyph, setMarkedGlyph] = useState('');
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showGhost, setShowGhost] = useState(true);
@@ -23,6 +24,8 @@ export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
 
   const hasSofit = Boolean(letter.sofit && letter.strokeGuide.sofitCursiveStrokes);
   const effectiveForm: FormKind = hasSofit ? formKind : 'medial';
+  const marks = scriptKind === 'cursive' && effectiveForm === 'medial' ? letter.strokeGuide.cursiveMarks : undefined;
+  const mark = marks?.find((entry) => entry.glyph === markedGlyph);
 
   let strokes: StrokePath[] = letter.strokeGuide.cursiveStrokes;
   let steps: string[] = letter.strokeGuide.cursiveSteps;
@@ -38,10 +41,14 @@ export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
   } else if (scriptKind === 'block') {
     strokes = letter.strokeGuide.blockStrokes;
     steps = letter.strokeGuide.blockSteps;
+  } else if (mark) {
+    strokes = [...strokes, mark.stroke];
+    steps = [...steps, mark.step];
   }
 
   useEffect(() => {
     setFormKind('medial');
+    setMarkedGlyph('');
     setActiveStep(null);
     setIsPlaying(false);
     clearCanvas();
@@ -50,7 +57,7 @@ export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
   useEffect(() => {
     setActiveStep(null);
     setIsPlaying(false);
-  }, [scriptKind, effectiveForm]);
+  }, [scriptKind, effectiveForm, mark]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -99,14 +106,18 @@ export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
     const { x, y } = getCanvasCoords(e);
     drawingRef.current = true;
     setHasDrawn(true);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 10;
     ctx.strokeStyle = getComputedStyle(document.documentElement)
       .getPropertyValue('--accent')
       .trim() || '#38bdf8';
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.arc(x, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -172,6 +183,29 @@ export const StrokeOrderPad: React.FC<StrokeOrderPadProps> = ({ letter }) => {
               >
                 词尾 ({letter.sofit})
               </button>
+            </div>
+          )}
+          {marks && (
+            <div className="segmented-control" role="group" aria-label="手写字母加点">
+              <button
+                type="button"
+                className={!mark ? 'active' : ''}
+                aria-pressed={!mark}
+                onClick={() => setMarkedGlyph('')}
+              >
+                无点
+              </button>
+              {marks.map((entry) => (
+                <button
+                  key={entry.glyph}
+                  type="button"
+                  className={mark === entry ? 'active' : ''}
+                  aria-pressed={mark === entry}
+                  onClick={() => setMarkedGlyph(entry.glyph)}
+                >
+                  {entry.label} <span lang="he" dir="rtl">{entry.glyph}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>

@@ -42,6 +42,9 @@ export const HebrewGlyphSvg: React.FC<HebrewGlyphSvgProps> = ({
         const isAnimating = activeStrokeIndex !== null;
         const isCurrent = activeStrokeIndex === idx;
         const isCompleted = activeStrokeIndex !== null && idx < activeStrokeIndex;
+        const sharedStart = showStartDots && !isAnimating
+          ? strokes.flatMap((item, index) => item.startX === stroke.startX && item.startY === stroke.startY ? [index] : [])
+          : [idx];
 
         let strokeOpacity = ghostOpacity;
         let strokeClass = 'glyph-stroke-path';
@@ -69,12 +72,13 @@ export const HebrewGlyphSvg: React.FC<HebrewGlyphSvgProps> = ({
               className={strokeClass}
               pathLength={100}
             />
-            {showStartDots && (
-              <g opacity={isCurrent || activeStrokeIndex === null ? 1 : 0.45}>
-                <circle
+            {showStartDots && (!isAnimating || isCurrent) && sharedStart[0] === idx && (
+              <g>
+                <ellipse
                   cx={stroke.startX}
                   cy={stroke.startY}
-                  r={5.5}
+                  rx={sharedStart.length > 1 ? 9 : 5.5}
+                  ry={5.5}
                   fill={isCurrent ? 'var(--accent)' : 'var(--accent-soft-solid)'}
                 />
                 <text
@@ -85,7 +89,7 @@ export const HebrewGlyphSvg: React.FC<HebrewGlyphSvgProps> = ({
                   fontWeight="700"
                   fill="#ffffff"
                 >
-                  {idx + 1}
+                  {sharedStart.map((index) => index + 1).join('·')}
                 </text>
               </g>
             )}

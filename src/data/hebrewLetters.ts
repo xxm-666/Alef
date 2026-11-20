@@ -1,8 +1,18 @@
 import {
   ConfusableGroup,
+  CursiveMark,
   HebrewLetter,
   NiqqudItem,
 } from '../types/hebrew';
+
+function cursiveDot(glyph: string, label: string, step: string, x: number, y: number): CursiveMark {
+  return {
+    glyph,
+    label,
+    step,
+    stroke: { d: `M ${x} ${y} L ${x} ${y + 1}`, startX: x, startY: y, label },
+  };
+}
 
 export const HEBREW_LETTERS: HebrewLetter[] = [
   {
@@ -107,6 +117,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
       cursiveStrokes: [
         { d: 'M 28 34 C 44 18 68 24 68 50 C 68 68 62 76 54 74 C 46 72 44 56 38 56 C 32 56 28 66 28 76', startX: 28, startY: 34, label: '外拱内凹弯' },
       ],
+      cursiveMarks: [cursiveDot('בּ', '带点', '最后在内侧小弧的上方点写达盖什。', 43, 46)],
     },
     examples: [
       { hebrew: 'בַּיִת', transliteration: 'bayit', meaning: '房子、家', note: '词首带 Dagesh 读 b' },
@@ -436,7 +447,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: [],
     meaning: '篮子 / 蛇盘 / 车轮 (Basket / Wheel)',
     etymology: '源于象形“编织篮”或“轮盘”；字母 טוֹב（好）即以此字母开头。',
-    cursiveDesc: '手写体一笔完成：从左上高处向下兜出 U 形圆底，升至右侧后向内微卷收尾。',
+    cursiveDesc: '手写体一笔完成：从右侧短钩起笔向下，绕过圆底后沿左侧向上收笔。',
     confusableWith: ['mem', 'samekh'],
     begadkefat: null,
     sofitInfo: null,
@@ -446,14 +457,14 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         '第 2 笔：接左竖底端向右绕出圆底并向上升至右上顶端，再向左下方短折内收。',
       ],
       cursiveSteps: [
-        '第 1 笔：从左上高处向下画出 U 形圆底，升至右侧后再向内弯钩收尾。',
+        '第 1 笔：从右侧短钩起笔，沿右侧下行，向左绕出圆底，再沿左侧弯向上方收笔。',
       ],
       blockStrokes: [
         { d: 'M 32 26 L 32 56', startX: 32, startY: 26, label: '左竖壁' },
         { d: 'M 32 56 C 32 78 68 78 68 56 L 68 28 L 50 38', startX: 32, startY: 56, label: '圆底与内折钩' },
       ],
       cursiveStrokes: [
-        { d: 'M 46 18 C 24 34 22 76 48 78 C 70 78 72 48 54 42', startX: 46, startY: 18, label: 'U 形内卷弧' },
+        { d: 'M 54 42 C 72 48 70 78 48 78 C 22 76 24 34 46 18', startX: 54, startY: 42, label: '右下左上圆弧' },
       ],
     },
     examples: [
@@ -568,6 +579,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
       cursiveStrokes: [
         { d: 'M 32 32 C 46 18 68 24 68 50 C 68 76 46 82 32 68', startX: 32, startY: 32, label: '圆润反 C 弧' },
       ],
+      cursiveMarks: [cursiveDot('כּ', '带点', '最后在圆弧内点写达盖什。', 43, 50)],
       sofitBlockSteps: [
         '第 1 笔：从左上向右画水平顶横（右端略微出头）。',
         '第 2 笔：从顶横偏右处垂直向下拉出穿透基准底线的长直竖。',
@@ -653,7 +665,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['sofit'],
     meaning: '水 (Water) · 象征流动、泉源与智慧',
     etymology: '源于象形“水波纹”（מַיִם 水），词中形 מ 开放如涌流之水，词尾形 ם 闭合如蓄水池。',
-    cursiveDesc: '词中手写体形似英文大写字母 "N"；词尾形 ם 为逆时针圆环加左侧向下伸出的垂尾。',
+    cursiveDesc: '词中手写体形似大写 N，先写右竖，再由右下斜向左上并沿左侧下行。词尾形 ם 为顺时针圆环加外侧左垂尾。',
     confusableWith: ['tet', 'samekh'],
     begadkefat: null,
     sofitInfo: {
@@ -674,7 +686,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
       ],
       cursiveSteps: [
         '第 1 笔：先在右侧画从上向下的竖笔。',
-        '第 2 笔：从左下向左上拉出左竖并向右下斜接至右竖底部（形似大写 "N"）。',
+        '第 2 笔：从右竖底端斜向左上，再沿左侧向下收笔。',
       ],
       blockStrokes: [
         { d: 'M 28 76 L 66 26 L 66 76 L 44 76', startX: 28, startY: 76, label: '斜干右壁与底' },
@@ -682,23 +694,23 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
       ],
       cursiveStrokes: [
         { d: 'M 68 24 L 64 76', startX: 68, startY: 24, label: '右竖笔' },
-        { d: 'M 28 76 L 32 24 L 64 76', startX: 28, startY: 76, label: '左竖与斜杠' },
+        { d: 'M 64 76 L 32 24 L 28 76', startX: 64, startY: 76, label: '斜线与左竖' },
       ],
       sofitBlockSteps: [
         '第 1 笔：从左上起笔向右画水平顶横，折角垂直向下画右竖。',
         '第 2 笔：紧接顶横左端垂直向下画左竖，折角向右画平底横封闭（左下呈方角，区分圆润的 ס）。',
       ],
       sofitCursiveSteps: [
-        '第 1 笔：自顶部逆时针画一个光滑圆环。',
-        '第 2 笔：从环内偏左向下拉出一条垂尾。',
+        '第 1 笔：从左上向右绕过顶部，沿右侧向下兜底，再向上合拢，画出顺时针圆环。',
+        '第 2 笔：从圆环左上外缘向左下拉出一条斜垂尾。',
       ],
       sofitBlockStrokes: [
         { d: 'M 30 26 L 68 26 L 68 74', startX: 44, startY: 26, label: '顶横与右竖' },
         { d: 'M 30 22 L 30 74 L 68 74', startX: 30, startY: 22, label: '左竖与底横' },
       ],
       sofitCursiveStrokes: [
-        { d: 'M 60 26 C 28 24 26 72 52 74 C 72 74 72 34 56 26', startX: 60, startY: 26, label: '圆环' },
-        { d: 'M 42 46 L 38 88', startX: 42, startY: 46, label: '垂尾' },
+        { d: 'M 44 27 C 52 20 68 24 71 44 C 74 60 63 77 50 76 C 35 75 32 62 34 49 C 35 39 38 32 44 27', startX: 44, startY: 27, label: '顺时针圆环' },
+        { d: 'M 41 24 L 25 84', startX: 41, startY: 24, label: '外侧左垂尾' },
       ],
     },
     examples: [
@@ -791,7 +803,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['sibilant'],
     meaning: '支撑 / 支柱 (Support / Prop)',
     etymology: '源于象形“支柱”，与希腊字母 Xi (Ξ) 同源。字形圆形封闭，注意与左下角为方角的 ם 区分。',
-    cursiveDesc: '手写体就是圆润闭合的椭圆或圆圈 "O"。',
+    cursiveDesc: '手写体从顶部向右，顺时针画出闭合椭圆。',
     confusableWith: ['mem_sofit', 'tet'],
     begadkefat: null,
     sofitInfo: null,
@@ -801,14 +813,14 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         '第 2 笔：从顶横左侧向下绕出圆弧 U 形底并回升接至顶横右端闭合（底圆如卵，区分方角的 ם）。',
       ],
       cursiveSteps: [
-        '第 1 笔：自顶部逆时针画一个光滑闭合的圆圈 "O"。',
+        '第 1 笔：从顶部向右，沿右侧向下绕过底部，再沿左侧向上合拢。',
       ],
       blockStrokes: [
         { d: 'M 28 26 L 68 26', startX: 28, startY: 26, label: '水平顶横' },
         { d: 'M 32 26 L 32 54 C 32 76 68 76 68 54 L 68 26', startX: 32, startY: 42, label: 'U 形圆底框' },
       ],
       cursiveStrokes: [
-        { d: 'M 50 24 C 22 24 22 76 50 76 C 78 76 78 24 50 24', startX: 50, startY: 24, label: '手写 O 圈' },
+        { d: 'M 50 24 C 78 24 78 76 50 76 C 22 76 22 24 50 24', startX: 50, startY: 24, label: '顺时针圆圈' },
       ],
     },
     examples: [
@@ -835,7 +847,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['guttural'],
     meaning: '眼睛 / 泉源 (Eye / Spring)',
     etymology: '源于象形“眼睛” (ʿayn)，被希腊字母采用并转为元音字母 Omicron (Ο) 与拉丁字母 O。',
-    cursiveDesc: '手写体左右对称，形似正立的希腊字母 "γ"（Gamma）：从左上交叉进入底部圆环再向右上穿出。',
+    cursiveDesc: '手写体从右上斜向左下绕出底环，再穿过交叉处，向左上收笔。',
     confusableWith: ['tsadi', 'alef'],
     begadkefat: null,
     sofitInfo: null,
@@ -845,14 +857,14 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         '第 2 笔：从左上斜向右下画支臂，交汇于主干中下部。',
       ],
       cursiveSteps: [
-        '第 1 笔：从左上向右下斜穿中心绕过底部圆环，再沿对称轨迹向右上穿出，成对称的 "γ" 形。',
+        '第 1 笔：从右上斜向左下，绕过圆底后沿右侧上行，穿过交叉处并收于左上。',
       ],
       blockStrokes: [
         { d: 'M 66 26 L 60 58 L 28 76', startX: 66, startY: 26, label: '右主干左下尾' },
         { d: 'M 32 26 L 46 64', startX: 32, startY: 26, label: '左上斜支臂' },
       ],
       cursiveStrokes: [
-        { d: 'M 28 26 C 42 36 60 54 58 68 C 56 80 40 80 38 68 C 36 54 54 36 68 26', startX: 28, startY: 26, label: '对称 γ 底环' },
+        { d: 'M 68 26 C 54 36 36 54 38 68 C 40 80 56 80 58 68 C 60 54 42 36 28 26', startX: 68, startY: 26, label: '右起交叉底环' },
       ],
     },
     examples: [
@@ -879,7 +891,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['begadkefat', 'sofit'],
     meaning: '嘴 / 言语 (Mouth)',
     etymology: '源于象形“张开的嘴” (pe)；字母内部留白的口形恰似口腔内部轮廓。具有词尾变形 ף (Pe Sofit)。',
-    cursiveDesc: '词中手写体从左上外圈顺时针绕出底圆再向内收卷成螺旋形；词尾形 ף 为一笔连写的高音谱号形：先沿中轴下行绕出底环，再穿中上行绕出顶环，最后向左下勾出腰部小环。',
+    cursiveDesc: '词中手写体从左上顺时针向内卷成螺旋。词尾形 ף 从下环左侧向下起笔，兜底后由右侧向上，顺时针绕出顶环，最后在中段左侧回勾。',
     confusableWith: ['kaf', 'bet', 'tsadi_sofit'],
     begadkefat: {
       withDagesh: {
@@ -927,19 +939,20 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
       cursiveStrokes: [
         { d: 'M 30 34 C 46 18 68 26 68 52 C 68 74 48 80 34 74 C 22 68 24 46 38 46 C 48 46 50 54 46 60', startX: 30, startY: 34, label: '外起顺时针内卷' },
       ],
+      cursiveMarks: [cursiveDot('פּ', '带点', '最后在内圈点写达盖什。', 37, 59)],
       sofitBlockSteps: [
         '第 1 笔：从左上向右画顶横，折角垂直向下拉出穿透底线的长直竖。',
         '第 2 笔：从顶横左侧垂直向下折向右内，画出短钩口舌。',
       ],
       sofitCursiveSteps: [
-        '第 1 笔：沿中轴向下穿过底线向左绕出底环 (1)，斜向右上穿过中轴 (2) 顺时针绕出顶环 (3)，再向左下穿过中轴勾出腰部小环收尾 (4)。',
+        '第 1 笔：由下环左侧向下，兜底向右，再沿右侧向上穿过中段，顺时针绕出顶环，最后在中段左侧回勾。',
       ],
       sofitBlockStrokes: [
         { d: 'M 30 26 L 66 26 L 66 94', startX: 46, startY: 26, label: '顶横与贯底竖' },
         { d: 'M 32 26 L 32 50 L 46 50', startX: 32, startY: 38, label: '内折短钩' },
       ],
       sofitCursiveStrokes: [
-        { d: 'M 46 36 L 46 80 C 46 92 36 92 36 80 C 36 68 44 44 48 28 C 50 16 64 18 62 32 C 60 44 36 44 36 54 C 36 62 46 58 54 52', startX: 46, startY: 36, label: '高音谱号连环' },
+        { d: 'M 44 57 C 37 64 29 77 34 85 C 40 93 50 85 51 74 C 52 61 44 51 45 38 C 46 25 50 15 58 18 C 67 20 69 29 61 37 C 55 43 48 47 39 51 C 32 54 31 60 38 65', startX: 44, startY: 57, label: '左起下环与顶部回勾' },
       ],
     },
     examples: [
@@ -966,7 +979,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['sibilant', 'sofit'],
     meaning: '鱼钩 / 义人 (Fishhook / Righteousness)',
     etymology: '源于象形“纸莎草花/鱼钩”；具有词尾变形 ץ (Tsadi Sofit)。',
-    cursiveDesc: '词中手写体一笔完成，形似上宽下略收且底端微翘的阿拉伯数字 "3"；词尾形 ץ 为一笔连写的 \"φ\" 形：先沿中轴下行穿过底线绕出底环，再穿中上行绕出右肚弧并沿左侧向上收尾。',
+    cursiveDesc: '词中手写体形似数字 3。词尾形 ץ 从下环左侧向下起笔，兜底后由右侧向上，再绕出上环并向左上收笔。',
     confusableWith: ['ayin', 'alef'],
     begadkefat: null,
     sofitInfo: {
@@ -1002,14 +1015,14 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         '第 2 笔：从右上向左下斜画支臂，接入长杆中部形成双叉。',
       ],
       sofitCursiveSteps: [
-        '第 1 笔：沿中轴向下穿过底线向左绕出底环 (1)，斜向右上穿过中轴 (2) 顺时针绕出右肚弧 (3)，再兜过底部沿左侧向上收尾 (4)。',
+        '第 1 笔：由下环左侧向下，兜底向右，再沿右侧上行绕出上环，最后沿上环外侧向左上收笔。',
       ],
       sofitBlockStrokes: [
         { d: 'M 38 24 L 38 94', startX: 38, startY: 24, label: '贯底直干' },
         { d: 'M 60 24 L 38 58', startX: 60, startY: 24, label: '右上分叉臂' },
       ],
       sofitCursiveStrokes: [
-        { d: 'M 46 26 L 46 80 C 46 92 36 92 36 80 C 36 68 44 44 48 24 C 52 16 64 22 62 38 C 60 50 50 54 42 52 C 34 50 32 36 38 22', startX: 46, startY: 26, label: 'φ 形连环长尾' },
+        { d: 'M 45 56 C 39 62 29 77 34 85 C 39 94 51 85 51 74 C 52 62 47 55 47 43 C 47 30 52 17 60 20 C 68 23 66 34 62 42 C 57 51 49 55 40 51 C 30 47 32 31 37 22', startX: 45, startY: 56, label: '左起下环与上环' },
       ],
     },
     examples: [
@@ -1126,7 +1139,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
     categories: ['sibilant'],
     meaning: '牙齿 / 尖峰 (Tooth) · 象征火、吞咽与变化',
     etymology: '源于象形“两颗门牙”或“三叉尖”，西里尔字母 Ш 直接借用了其形状。',
-    cursiveDesc: '手写体一笔完成，形似英文小写手写体 "e"（由内部向右上绕顶再向下兜出圆底至右下）。',
+    cursiveDesc: '手写体主体形似小写 e，由右下外尾起笔。写完主体后，Shin 点在右上，Sin 点在左上。',
     confusableWith: ['ayin', 'tsadi'],
     begadkefat: null,
     sofitInfo: null,
@@ -1137,7 +1150,7 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         '第 3 笔：从顶部中央向左下方斜画中支臂（与右斜壁平行）接至底横左部。',
       ],
       cursiveSteps: [
-        '第 1 笔：从内部起笔向右上绕过顶部，沿左侧向下兜出圆底至右下（形似小写 "e"）。',
+        '第 1 笔：从右下外尾向左兜过圆底，再沿左侧向上绕顶，从右侧向左下收回交点。',
       ],
       blockStrokes: [
         { d: 'M 74 26 L 62 74 L 30 74', startX: 74, startY: 26, label: '右斜壁与平底' },
@@ -1145,7 +1158,11 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         { d: 'M 50 26 L 38 74', startX: 50, startY: 26, label: '中斜支臂' },
       ],
       cursiveStrokes: [
-        { d: 'M 36 48 C 60 48 64 24 46 24 C 24 24 24 76 52 76 C 66 76 72 66 74 56', startX: 36, startY: 48, label: '手写 e 形' },
+        { d: 'M 73 62 C 60 79 37 77 29 58 C 23 45 36 26 48 24 C 67 22 68 43 53 50 C 44 55 35 58 29 58', startX: 73, startY: 62, label: '右下起笔的 e 形' },
+      ],
+      cursiveMarks: [
+        cursiveDot('שׁ', '右点', '最后在主体右上方点写 Shin 的右点。', 71, 24),
+        cursiveDot('שׂ', '左点', '最后在主体左上方点写 Sin 的左点。', 31, 23),
       ],
     },
     examples: [
@@ -1207,9 +1224,10 @@ export const HEBREW_LETTERS: HebrewLetter[] = [
         { d: 'M 34 26 L 34 74 L 22 74', startX: 34, startY: 42, label: '左竖带平脚' },
       ],
       cursiveStrokes: [
-        { d: 'M 36 28 C 52 20 70 30 68 54 C 67 66 62 74 58 76', startX: 48, startY: 25, label: '右拱外弧' },
-        { d: 'M 36 26 L 36 68 C 36 76 28 78 22 76', startX: 36, startY: 42, label: '带脚左竖' },
+        { d: 'M 36 28 C 52 20 70 30 68 54 C 67 66 62 74 58 76', startX: 36, startY: 28, label: '右拱外弧' },
+        { d: 'M 36 28 L 36 68 C 36 76 28 78 22 76', startX: 36, startY: 28, label: '带脚左竖' },
       ],
+      cursiveMarks: [cursiveDot('תּ', '带点', '最后在门框内点写达盖什。', 49, 55)],
     },
     examples: [
       { hebrew: 'תּוֹדָה', transliteration: 'toda', meaning: '谢谢' },

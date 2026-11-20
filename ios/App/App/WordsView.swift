@@ -654,13 +654,21 @@ private struct WordDetailView: View {
         ScrollView(.horizontal) {
             HStack(spacing: 7) {
                 ForEach(Array(letters.enumerated()), id: \.offset) { _, entry in
+                    let glyph = String(entry.character)
+                    let finalForm = entry.letter.sofit == glyph
                     NavigationLink {
-                        LetterStudyView(letter: entry.letter, content: content, showsFinalForm: entry.letter.sofit == String(entry.character))
+                        LetterStudyView(letter: entry.letter, content: content, showsFinalForm: finalForm)
                     } label: {
-                        HebrewText(text: String(entry.character), cursive: showCursive, size: 25)
-                            .frame(minWidth: 48, minHeight: 44)
-                            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 10))
-                            .contentShape(Rectangle())
+                        Group {
+                            if showCursive {
+                                StudyCursiveLetter(letter: entry.letter, finalForm: finalForm, size: 25)
+                            } else {
+                                HebrewText(text: glyph, size: 25)
+                            }
+                        }
+                        .frame(minWidth: 48, minHeight: 44)
+                        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(entry.letter.nameChinese)

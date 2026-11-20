@@ -164,12 +164,20 @@ struct StudyStrokes: Decodable {
         let startY: Double
     }
 
+    struct CursiveMark: Decodable {
+        let glyph: String
+        let label: String
+        let step: String
+        let stroke: Stroke
+    }
+
     let blockSteps: [String]
     let cursiveSteps: [String]
     let sofitBlockSteps: [String]?
     let sofitCursiveSteps: [String]?
     let blockStrokes: [Stroke]
     let cursiveStrokes: [Stroke]
+    let cursiveMarks: [CursiveMark]?
     let sofitBlockStrokes: [Stroke]?
     let sofitCursiveStrokes: [Stroke]?
 }
