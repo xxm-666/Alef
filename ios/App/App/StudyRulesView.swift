@@ -4,206 +4,212 @@ struct StudyRulesView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
+    let topic: String?
+
+    init(content: StudyContent, topic: String? = nil) {
+        self.content = content
+        self.topic = topic
+    }
 
     private let categories = [
-        ("sofit", "词尾变形", "textformat.abc", "对照五个字母的普通形和词尾形"),
-        ("begadkefat", "达盖什", "circle.grid.2x2", "比较带点与不带点的现代及古典读音"),
-        ("confusable", "易混字母", "square.on.square", "辨认外形相近的字母"),
-        ("guttural", "喉音字母", "speaker.wave.2", "学习喉音的元音搭配与词尾读法"),
-        ("niqqud", "元音点", "character.cursor.ibeam", "查看元音点示例并听名称")
+        ("sofit", "词尾变形", "textformat.abc", "Sofit", "5 组"),
+        ("begadkefat", "达盖什", "ellipsis", "Begadkefat", "6 组"),
+        ("confusable", "易混字母", "arrow.left.arrow.right", "对照辨析", ""),
+        ("guttural", "喉音字母", "headphones", "发音规则", ""),
+        ("niqqud", "元音点", "character.cursor.ibeam", "Niqqud", "名称与读音")
     ]
 
     var body: some View {
-        List {
-            Section("练习") {
-                ruleLink("syllables", title: "拼读实验室", symbol: "waveform", description: "组合辅音和元音，练习听辨音节")
-            }
-            Section("查阅") {
-                ForEach(categories, id: \.0) { key, title, symbol, description in
-                    ruleLink(key, title: title, symbol: symbol, description: description)
-                }
-            }
-        }
-        .studyGroupedBackground()
-        .navigationTitle("拼读与规则")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func ruleLink(_ key: String, title: String, symbol: String, description: String) -> some View {
-        NavigationLink {
-            details(key)
-                .navigationTitle(title)
-                .onAppear { progress.write(key, for: "alef.rulesTab.v1") }
-        } label: {
-            Label {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline)
-                    Text(description).font(.subheadline).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            } icon: {
-                Image(systemName: symbol).foregroundStyle(.tint)
-            }
+        if let topic, let category = categories.first(where: { $0.0 == topic }) {
+            ruleDetails(topic, title: category.1)
+        } else {
+            overview
         }
     }
 
-    @ViewBuilder private func details(_ category: String) -> some View {
-        switch category {
-        case "syllables":
-            StudySyllablesView(consonants: content.consonants, vowels: content.vowels)
-        case "niqqud":
-            List(content.niqqud) { item in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(item.nameEnglish) · \(item.nameChinese)").font(.headline)
-                    HebrewText(text: item.sample, size: 42).foregroundStyle(.tint)
-                    LabeledContent("读音", value: "\(item.vowelSound) · \(item.ipa)")
-                    PronunciationButton(hebrew: item.nameHebrew, fallback: item.nameEnglish,
-                                        title: "朗读元音点名称", minimumHitSize: 44)
-                    Text(item.note).foregroundStyle(.secondary)
-                }
-            }
-            .studyGroupedBackground()
-        case "confusable":
-            List(content.confusables) { group in
-                let letters = content.letters.filter { group.letterIds.contains($0.id) }
-                Section(group.title) {
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .firstTextBaseline, spacing: 20) {
-                            ForEach(letters) { letter in comparisonLetter(letter) }
-                        }
-                        .padding(.vertical, 6)
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    ForEach(Array(group.comparisonNotes.enumerated()), id: \.offset) { _, note in Text(note) }
-                    Text(group.tip).foregroundStyle(.secondary)
-                }
-            }
-            .studyGroupedBackground()
-        case "sofit":
-            List {
-                DisclosureGroup("词尾规则与记忆口诀") {
-                    Text("记忆口诀：כמנפ״ץ（Kamnapetz）。五个字母位于词尾时分别写作 ך · ם · ן · ף · ץ。除闭合的 ם 外，其余四个词尾形都向下越过基线。")
-                }
-                ForEach(content.letters.filter { $0.sofitInfo != nil }) { letter in
-                    if let pair = letter.sofitInfo {
-                        Section("\(letter.nameEnglish) · \(letter.nameChinese)") {
-                            comparisonLayout {
-                                sofitGlyph("词中", glyph: pair.medialGlyph)
-                                sofitGlyph("词尾", glyph: pair.finalGlyph)
+    private var overview: some View {
+        StudyPage {
+            StudyHeading(section: "规则", title: "让每个声音，有迹可循")
+            NavigationLink {
+                StudySyllablesView(consonants: content.consonants, vowels: content.vowels)
+            } label: {
+                StudyCard(highlighted: true) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 8) {
+                            StudySectionTitle("拼读实验室")
+                            HStack(spacing: 12) {
+                                HebrewText(text: "בַּ", size: 33)
+                                HebrewText(text: "בִּ", size: 33)
+                                HebrewText(text: "בֶּ", size: 33)
                             }
-                            Text(pair.rule)
-                            WordExampleRow(example: pair.exampleWord)
-                            LabeledContent("字母数值", value: "\(letter.gematria) → \(pair.sofitGematria)")
-                            letterLink(letter)
+                            .accessibilityHidden(true)
+                            Text("探索辅音与元音的组合").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                         }
+                        Spacer(minLength: 4)
+                        Image(systemName: "waveform")
+                            .font(.largeTitle)
+                            .foregroundStyle(progress.theme.accent)
+                            .accessibilityHidden(true)
                     }
+                    Label("进入实验室", systemImage: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(progress.theme.primaryButton, in: Capsule())
                 }
             }
-            .studyGroupedBackground()
-        case "begadkefat":
-            List {
-                DisclosureGroup("带点与不带点的规则") {
-                    Text("ב · ג · ד · כ · פ · ת 的中心点（Dagesh Kal）标记硬音。现代希伯来语只有 ב · כ · פ 保留硬音和软音的区别，ג · ד · ת 的擦音化见于古典朗诵。")
+            .buttonStyle(.plain)
+
+            StudySectionTitle("规则速查")
+            VStack(spacing: 7) {
+                ForEach(categories, id: \.0) { key, title, symbol, subtitle, count in
+                    NavigationLink {
+                        StudyRulesView(content: content, topic: key)
+                    } label: {
+                        StudyCard(padding: 9) {
+                            StudyRow(title: title, symbol: symbol, subtitle: subtitle, value: count.isEmpty ? nil : count)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
-                ForEach(content.letters.filter { $0.begadkefat != nil }) { letter in
-                    if let pair = letter.begadkefat {
-                        Section("\(letter.nameEnglish) · \(letter.nameChinese)") {
-                            comparisonLayout {
-                                variant("带点", pair.withDagesh)
-                                variant("不带点", pair.withoutDagesh)
+            }
+        }
+        .studyHome()
+    }
+
+    @ViewBuilder private func ruleDetails(_ category: String, title: String) -> some View {
+        if category == "sofit" {
+            StudySofitView(content: content)
+                .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
+        } else {
+            StudyPage {
+                switch category {
+                case "niqqud": niqqudDetails
+                case "confusable": confusableDetails
+                case "begadkefat": begadkefatDetails
+                default: gutturalDetails
+                }
+            }
+            .studyDetail(title)
+            .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
+        }
+    }
+
+    private var niqqudDetails: some View {
+        ForEach(content.niqqud) { item in
+            StudyCard {
+                HStack(spacing: 9) {
+                    HebrewText(text: item.sample, size: 42)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(item.nameEnglish) · \(item.nameChinese)").font(.headline)
+                        Text("\(item.vowelSound) · \(item.ipa)").foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                    PronunciationButton(hebrew: item.nameHebrew, fallback: item.nameEnglish, iconOnly: true,
+                                        title: "朗读\(item.nameChinese)")
+                }
+                Text(item.note).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+            }
+        }
+    }
+
+    private var confusableDetails: some View {
+        ForEach(content.confusables) { group in
+            let letters = content.letters.filter { group.letterIds.contains($0.id) }
+            StudyCard {
+                StudySectionTitle(group.title)
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(letters) { letter in
+                            NavigationLink {
+                                LetterStudyView(letter: letter, content: content)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    HebrewText(text: letter.hebrew, size: 44)
+                                    Text(letter.nameChinese).font(.subheadline.weight(.medium))
+                                    Text(letter.modernIpa).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                                }
+                                .padding(10)
+                                .frame(minWidth: 66, minHeight: 44)
+                                .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
+                                .contentShape(Rectangle())
+                                .accessibilityElement(children: .combine)
                             }
-                            Label(pair.modernPreserved ? "现代保留音变" : "现代读音已合并", systemImage: "waveform")
-                            Text(pair.note)
-                            letterLink(letter)
+                            .buttonStyle(.plain)
                         }
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                ForEach(Array(group.comparisonNotes.enumerated()), id: \.offset) { _, note in Text(note).font(.subheadline) }
+                StudyNotice(title: group.tip, symbol: "lightbulb")
             }
-            .studyGroupedBackground()
-        default:
-            List {
-                Section("发音规则") {
-                    Text("א、ה、ח、ע 和特性相近的 ר 不接受双写点（Dagesh Chazak）。")
-                    Text("这些字母常与复合元音 אֲ · אֱ · אֳ 搭配。")
-                    Text("词尾 ח、ע 及带 Mappiq 的 הּ 若紧跟非 /a/ 元音，可能带前置 Patach。")
-                }
-                Section("词尾举例") {
-                    LabeledContent("带前置 Patach", value: "רוּחַ · ruach")
-                    LabeledContent("已有 /a/，无需另加", value: "אָח · ach")
-                }
-                ForEach(content.letters.filter { $0.categories.contains("guttural") || $0.id == "resh" }) { letter in
-                    Section("\(letter.hebrew) · \(letter.nameChinese)") {
-                        LabeledContent("现代 · 古典", value: "\(letter.modernIpa) · \(letter.biblicalIpa)")
-                        Text(letter.biblicalDiff)
-                        letterLink(letter)
+        }
+    }
+
+    @ViewBuilder private var begadkefatDetails: some View {
+        StudyNotice(title: "带点与不带点", symbol: "info.circle",
+                    note: "达盖什轻点标记硬音。现代希伯来语中，ב、כ、פ 仍保留硬音和软音的区别。")
+        ForEach(content.letters.filter { $0.begadkefat != nil }) { letter in
+            if let pair = letter.begadkefat {
+                StudyCard {
+                    StudySectionTitle("\(letter.studyName) · \(letter.nameChinese)")
+                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+                    layout {
+                        variant("带达盖什", pair.withDagesh)
+                        variant("不带达盖什", pair.withoutDagesh)
                     }
+                    Label(pair.modernPreserved ? "现代保留音变" : "现代读音已合并", systemImage: "waveform")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.accent)
+                    Text(pair.note).font(.subheadline)
+                    letterLink(letter)
                 }
             }
-            .studyGroupedBackground()
         }
     }
 
-    private func comparisonLetter(_ letter: StudyLetter) -> some View {
-        NavigationLink {
-            LetterStudyView(letter: letter, content: content)
-        } label: {
-            VStack(spacing: 4) {
-                HebrewText(text: letter.hebrew, size: 44).foregroundStyle(.tint)
-                Text(letter.nameChinese).font(.subheadline.weight(.medium))
-                Text(letter.modernIpa).font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(minWidth: 66, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
+    @ViewBuilder private var gutturalDetails: some View {
+        StudyCard(highlighted: true) {
+            StudySectionTitle("发音规则")
+            Text("א、ה、ח、ע 和特性相近的 ר 不接受双写点（Dagesh Chazak）。")
+            Text("这些字母常与复合元音 אֲ · אֱ · אֳ 搭配。")
+            Text("词尾 ח、ע 及带 Mappiq 的 הּ 若紧跟非 /a/ 元音，可能带前置 Patach。")
         }
-        .buttonStyle(.plain)
-    }
-
-    private func comparisonLayout<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        let layout = typeSize >= .xxLarge ? AnyLayout(VStackLayout(spacing: 16)) : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
-        return layout { content() }.padding(.vertical, 8)
-    }
-
-    private func sofitGlyph(_ title: String, glyph: String) -> some View {
-        VStack(spacing: 6) {
-            Text(title).font(.subheadline.weight(.semibold))
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                HebrewText(text: glyph, size: 36)
-                HebrewText(text: glyph, cursive: true, size: 36)
+        StudySectionTitle("词尾举例")
+        StudyCard {
+            WordExampleRow(example: StudyExample(hebrew: "רוּחַ", transliteration: "ruach", meaning: "风", note: "带前置 Patach"))
+            WordExampleRow(example: StudyExample(hebrew: "אָח", transliteration: "ach", meaning: "兄弟", note: "已有 /a/，无需另加"))
+        }
+        ForEach(content.letters.filter { $0.categories.contains("guttural") || $0.id == "resh" }) { letter in
+            StudyCard {
+                StudySectionTitle("\(letter.hebrew) · \(letter.nameChinese)")
+                LabeledContent("现代 · 古典", value: "\(letter.modernIpa) · \(letter.biblicalIpa)")
+                Text(letter.biblicalDiff).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                letterLink(letter)
             }
         }
-        .frame(maxWidth: .infinity)
     }
 
     private func variant(_ title: String, _ value: StudyDagesh.Variant) -> some View {
         VStack(spacing: 6) {
             Text(title).font(.subheadline.weight(.semibold))
-            HebrewText(text: value.glyph, size: 40)
+            HebrewText(text: value.glyph, size: 43)
             Text("现代 \(value.modernIpa)")
-            Text("古典 \(value.biblicalIpa)").font(.footnote).foregroundStyle(.secondary)
+            Text("古典 \(value.biblicalIpa)").font(.footnote).foregroundStyle(progress.theme.mutedInk)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
+        .padding(9)
+        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func letterLink(_ letter: StudyLetter) -> some View {
         NavigationLink {
             LetterStudyView(letter: letter, content: content)
         } label: {
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    HebrewText(text: letter.hebrew)
-                    Text(letter.nameChinese).fixedSize()
-                    Spacer()
-                    Text(letter.modernIpa).foregroundStyle(.secondary).fixedSize()
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    HebrewText(text: letter.hebrew)
-                    Text(letter.nameChinese)
-                    Text(letter.modernIpa).foregroundStyle(.secondary)
-                }
-            }
+            StudyRow(title: "查看\(letter.nameChinese)", symbol: "book", subtitle: letter.studyName)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -214,8 +220,10 @@ private struct StudySyllablesView: View {
     let consonants: [StudyConsonant]
     let vowels: [StudyVowel]
     @State private var consonantID = "bet"
+    @State private var vowelID = "kamatz"
     @State private var quizzing = false
     @State private var question: Question?
+    @State private var selection: String?
     @State private var answer: String?
     @State private var correct = 0
     @State private var total = 0
@@ -227,60 +235,43 @@ private struct StudySyllablesView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                if typeSize.isAccessibilitySize { modePicker.pickerStyle(.menu) }
-                else { modePicker.pickerStyle(.segmented) }
+        ScrollViewReader { scroll in
+            StudyPage {
+                StudySegments(title: "拼读模式", options: [(false, "拼读探索"), (true, "听音测验")], selection: $quizzing)
                 if quizzing {
-                    LabeledContent("当前得分", value: "\(correct) / \(total)")
-                        .font(.subheadline).monospacedDigit()
-                } else {
-                    Picker("辅音", selection: $consonantID) {
-                        ForEach(consonants) { item in Text("\(item.glyph) · \(item.label)").tag(item.id) }
-                    }
-                    .pickerStyle(.menu)
+                    if let question { quiz(question) }
+                    else { ContentUnavailableView("没有可用的音节", systemImage: "waveform") }
+                } else if let consonant = consonants.first(where: { $0.id == consonantID }),
+                          let vowel = vowels.first(where: { $0.id == vowelID }) ?? vowels.first {
+                    exploration(consonant, vowel: vowel)
                 }
             }
-            .frame(maxWidth: 560)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
-
-            ScrollViewReader { scroll in
-                List {
-                    if quizzing {
-                        if let question { quiz(question) }
-                    } else if let consonant = consonants.first(where: { $0.id == consonantID }) {
-                        Section("辅音与元音组合") {
-                            ForEach(vowels) { vowel in combination(consonant, vowel) }
-                        }
-                        Section("Shva 的静音与轻读") {
-                            WordExampleRow(example: StudyExample(hebrew: "סְלִיחָה", transliteration: "slicha", meaning: "对不起",
-                                                                 note: "词首辅音下的 Shva 在这里静音。"))
-                            WordExampleRow(example: StudyExample(hebrew: "מְדַבֵּר", transliteration: "medaber", meaning: "说话",
-                                                                 note: "词首辅音下的 Shva 在这里轻读 /e/。"))
-                        }
-                    }
-                }
-                .studyGroupedBackground()
-                .contentMargins(.vertical, 8, for: .scrollContent)
-                .onChange(of: answer) { _, newAnswer in
-                    if quizzing {
-                        scroll.scrollTo(newAnswer == nil ? "syllable-question" : "syllable-result",
-                                        anchor: .top)
-                    }
+            .onChange(of: answer) { _, value in
+                if quizzing {
+                    scroll.scrollTo(value == nil ? "syllable-question" : "syllable-result", anchor: value == nil ? .top : .bottom)
                 }
             }
         }
-        .background(progress.theme.canvas)
+        .studyDetail("拼读实验室")
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if quizzing && answer != nil {
-                StudyActionBar {
-                    Button(action: next) {
-                        Label("下一题", systemImage: "arrow.right").frame(maxWidth: .infinity, minHeight: 34)
+            StudyActionBar {
+                if quizzing {
+                    if let question {
+                        Button {
+                            if answer != nil { next() }
+                            else if let selection { grade(selection, solution: question.solution.id) }
+                        } label: {
+                            Label(answer == nil ? "确认答案" : "下一题", systemImage: answer == nil ? "checkmark" : "arrow.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(StudyButtonStyle(prominent: true))
+                        .disabled(answer == nil && selection == nil)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                } else {
+                    Button { quizzing = true } label: {
+                        Label("开始听音测验", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
                 }
             }
         }
@@ -288,37 +279,94 @@ private struct StudySyllablesView: View {
             if active { next() }
             else { audio.stop() }
         }
+        .onDisappear { audio.stop() }
     }
 
-    private var modePicker: some View {
-        Picker("练习方式", selection: $quizzing) {
-            Text("拼读探索").tag(false)
-            Text("听音测验").tag(true)
+    @ViewBuilder private func exploration(_ consonant: StudyConsonant, vowel: StudyVowel) -> some View {
+        StudyCard(padding: 8) {
+            HStack {
+                Text("辅音").font(.subheadline.weight(.semibold))
+                Spacer(minLength: 0)
+                Picker("辅音", selection: $consonantID) {
+                    ForEach(consonants) { item in Text("\(item.glyph) · \(item.label)").tag(item.id) }
+                }
+                .pickerStyle(.menu)
+                .frame(minHeight: 44)
+            }
+        }
+        StudyCard(highlighted: true) {
+            HStack {
+                Spacer(minLength: 0)
+                VStack(spacing: 3) {
+                    HebrewText(text: word(consonant, vowel), size: 64, style: .largeTitle)
+                    Text("\(roman(consonant, vowel)) · \(ipa(consonant, vowel))")
+                        .font(.headline).foregroundStyle(progress.theme.accent)
+                    Text("\(vowel.name) · \(vowel.nameZh)").font(.subheadline)
+                    Text(vowel.tip).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                }
+                .multilineTextAlignment(.center)
+                Spacer(minLength: 0)
+                PronunciationButton(hebrew: word(consonant, vowel), fallback: roman(consonant, vowel), iconOnly: true)
+            }
+        }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 190 : 98), spacing: 7)], spacing: 7) {
+            ForEach(vowels) { item in
+                Button {
+                    vowelID = item.id
+                    audio.speak(word(consonant, item), fallback: roman(consonant, item), rate: progress.speechRate)
+                } label: {
+                    StudyCard(highlighted: item.id == vowelID, padding: 6) {
+                        VStack(spacing: 4) {
+                            HebrewText(text: word(consonant, item), size: 31)
+                            Text(item.id == "shva" ? "Shva" : roman(consonant, item))
+                                .font(.subheadline.weight(.medium))
+                            Image(systemName: "speaker.wave.2")
+                                .font(.caption).foregroundStyle(progress.theme.accent).accessibilityHidden(true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .contentShape(Rectangle())
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(item.nameZh)，\(roman(consonant, item))")
+                .accessibilityAddTraits(item.id == vowelID ? .isSelected : [])
+            }
+        }
+        StudyCard {
+            DisclosureGroup {
+                WordExampleRow(example: StudyExample(hebrew: "סְלִיחָה", transliteration: "slicha", meaning: "对不起",
+                                                     note: "词首辅音下的 Shva 在这里静音。"))
+                WordExampleRow(example: StudyExample(hebrew: "מְדַבֵּר", transliteration: "medaber", meaning: "说话",
+                                                     note: "词首辅音下的 Shva 在这里轻读 /e/。"))
+            } label: {
+                StudyNotice(title: "Shva · 静音与轻读", symbol: "info.circle", note: "听两个例词，比较 Shva 的读法。")
+            }
         }
     }
 
     @ViewBuilder private func quiz(_ question: Question) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("听发音，选出对应的希伯来语音节。").font(.headline)
-                PronunciationButton(hebrew: word(question.consonant, question.solution), fallback: roman(question.consonant, question.solution),
-                                    title: "播放题目", minimumHitSize: 44)
+        Label("得分 \(correct) / \(total)", systemImage: "star")
+            .font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
+        StudyCard(highlighted: true) {
+            StudySectionTitle("听发音，选出对应的音节")
+            PronunciationButton(hebrew: word(question.consonant, question.solution), fallback: roman(question.consonant, question.solution),
+                                title: "播放题目", prominent: true)
+        }
+        .id("syllable-question")
+        ForEach(Array(question.choices.enumerated()), id: \.offset) { index, vowel in
+            StudyAnswerButton(title: word(question.consonant, vowel), submitted: answer != nil,
+                              selected: selection == vowel.id, correct: vowel.id == question.solution.id, isHebrew: true,
+                              optionLabel: studyOptionLabel(index)) {
+                selection = vowel.id
             }
-            .id("syllable-question")
-            if let answer {
-                let selected = question.choices.first { $0.id == answer }
-                StudyQuizFeedback(correct: answer == question.solution.id,
-                                  solution: word(question.consonant, question.solution),
-                                  response: selected.map { word(question.consonant, $0) },
-                                  explanation: question.solution.tip)
-                    .id("syllable-result")
-            }
-            ForEach(question.choices) { vowel in
-                StudyAnswerButton(title: word(question.consonant, vowel), submitted: answer != nil,
-                                  selected: answer == vowel.id, correct: vowel.id == question.solution.id, isHebrew: true) {
-                    grade(vowel.id, solution: question.solution.id)
-                }
-            }
+        }
+        if let answer {
+            let selected = question.choices.first { $0.id == answer }
+            StudyQuizFeedback(correct: answer == question.solution.id,
+                              solution: word(question.consonant, question.solution),
+                              response: selected.map { word(question.consonant, $0) },
+                              explanation: question.solution.tip)
+                .id("syllable-result")
         }
     }
 
@@ -332,20 +380,6 @@ private struct StudySyllablesView: View {
         progress.recordStudy()
     }
 
-    private func combination(_ consonant: StudyConsonant, _ vowel: StudyVowel) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 5) {
-                HebrewText(text: word(consonant, vowel), size: 37)
-                Text("\(vowel.name) · \(vowel.nameZh)").font(.subheadline)
-                let consonantIpa = consonant.isSilent == true ? "" : consonant.ipa
-                Text("\(roman(consonant, vowel)) · /\(consonantIpa)\(vowel.vowelIpa)/").foregroundStyle(.secondary)
-                Text(vowel.tip).font(.footnote)
-            }
-            Spacer()
-            PronunciationButton(hebrew: word(consonant, vowel), fallback: roman(consonant, vowel), iconOnly: true, minimumHitSize: 44)
-        }
-    }
-
     private func word(_ consonant: StudyConsonant, _ vowel: StudyVowel) -> String {
         consonant.glyph + vowel.mark + (vowel.suffix ?? "")
     }
@@ -355,12 +389,18 @@ private struct StudySyllablesView: View {
         return consonant.roman + vowel.vowelRoman
     }
 
+    private func ipa(_ consonant: StudyConsonant, _ vowel: StudyVowel) -> String {
+        let prefix = consonant.isSilent == true ? "" : consonant.ipa
+        return vowel.id == "shva" ? "/\(prefix)(e)/" : "/\(prefix)\(vowel.vowelIpa)/"
+    }
+
     private func next() {
         let core = ["kamatz", "tzere", "chirik", "cholam", "shuruk"]
         let choices = Array(vowels.filter { core.contains($0.id) }.shuffled().prefix(4))
         guard let consonant = consonants.filter({ $0.isSilent != true }).randomElement(),
               let solution = choices.randomElement() else { return }
         question = Question(consonant: consonant, choices: choices, solution: solution)
+        selection = nil
         answer = nil
         audio.speak(word(consonant, solution), fallback: roman(consonant, solution), rate: progress.speechRate)
     }

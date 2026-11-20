@@ -41,6 +41,29 @@ struct StudyContent: Decodable {
         displayPresets = try container.decode([StudyDisplayPreset].self, forKey: .displayPresets)
     }
 
+    var introductoryDisplay: [String: Bool] {
+        let visible: Set<String> = ["showBlock", "showSofit", "showEnglishName", "showMastery"]
+        return Dictionary(uniqueKeysWithValues: defaultDisplay.keys.map { ($0, visible.contains($0)) })
+    }
+
+    func letterDisplay(in progress: StudyProgress) -> [String: Bool] {
+        displayWithGlyph(introductoryDisplay.merging(progress.read("alef.displayConfig.v1", default: [:])) { _, saved in saved })
+    }
+
+    func displayWithGlyph(_ options: [String: Bool]) -> [String: Bool] {
+        guard options["showBlock"] != true && options["showCursive"] != true else { return options }
+        var visible = options
+        visible["showBlock"] = true
+        return visible
+    }
+
+    func dueWords(in progress: StudyProgress) -> [StudyWord] {
+        let schedule = progress.schedule
+        return words.filter { schedule[$0.id]?.isDue == true }.sorted {
+            (schedule[$0.id]?.nextReviewAt ?? 0) < (schedule[$1.id]?.nextReviewAt ?? 0)
+        }
+    }
+
     static func load() throws -> Self {
         guard let url = Bundle.main.url(forResource: "content", withExtension: "json", subdirectory: "StudyAssets") else {
             throw CocoaError(.fileNoSuchFile)
@@ -83,6 +106,8 @@ struct StudyLetter: Decodable, Identifiable {
     let sofitInfo: StudySofit?
     let strokeGuide: StudyStrokes
     let examples: [StudyExample]
+
+    var studyName: String { nameEnglish.components(separatedBy: " / ").first ?? nameEnglish }
 }
 
 struct StudyDagesh: Decodable {

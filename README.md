@@ -96,7 +96,7 @@ npm run dist:linux
 
 ### iPhone 安装与「每日字母」小组件
 
-此 iOS 版本面向 iOS 17 及以上，使用 SwiftUI 学习页面、PencilKit 手写练习及原生离线发音。词库和录音从项目共用的数据生成。小组件会按手机本地日期轮换 22 个希伯来字母，可离线使用。
+此 iOS 版本面向 iOS 17 及以上，使用 SwiftUI 学习页面、PencilKit 手写练习及原生离线发音。词库和录音从项目共用的数据生成。小组件会按手机本地日期轮换 22 个希伯来字母，可离线使用。点按小组件可打开对应的字母详情。
 
 1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。默认使用 **Xcode 27** 预览 runner。若 GitHub 无法分配该 runner，可以新建一次运行并选择 **Xcode 26 (Intel)**。两个选项都会把应用和小组件打进 IPA。
 2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`。IPA 需要签名后才能安装。
@@ -105,7 +105,7 @@ npm run dist:linux
 
 在 Mac 本地开发时，先执行 `npm ci` 和 `npm run prepare:ios`，再打开 `ios/App/App.xcodeproj`。更新词库或录音后重新执行 `npm run prepare:ios`。
 
-旧版升级时，Alef 尝试从原应用容器读取学习进度。也可以在旧版导出 Alef JSON 备份，然后在新版「设置 → 备份与恢复」导入。
+旧版升级时，Alef 尝试从原应用容器读取学习进度。也可以在旧版导出 Alef JSON 备份，然后在新版「我的 → 数据备份与恢复」导入。
 
 ---
 

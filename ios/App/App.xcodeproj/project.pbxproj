@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1EF30000000000000000001 /* DailyLetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF30000000000000000003 /* DailyLetter.swift */; };
+		A1EF30000000000000000002 /* DailyLetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF30000000000000000003 /* DailyLetter.swift */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -50,6 +52,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A1EF30000000000000000003 /* DailyLetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/DailyLetter.swift; sourceTree = SOURCE_ROOT; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -87,6 +90,7 @@
 			children = (
 				504EC3061FED79650016851F /* App */,
 				A1EF10000000000000000008 /* DailyLetterWidget */,
+				A1EF30000000000000000003 /* DailyLetter.swift */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -224,6 +228,7 @@
 				A1EF20000000000000000012 /* StudySettingsView.swift in Sources */,
 				A1EF20000000000000000010 /* StudyRulesView.swift in Sources */,
 				A1EF2000000000000000000E /* StudyRootView.swift in Sources */,
+				A1EF30000000000000000001 /* DailyLetter.swift in Sources */,
 				A1EF2000000000000000000C /* StudyProgress.swift in Sources */,
 				A1EF2000000000000000000A /* StudyFlashcardsView.swift in Sources */,
 				A1EF20000000000000000008 /* StudyContent.swift in Sources */,
@@ -238,6 +243,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1EF10000000000000000001 /* DailyLetterWidget.swift in Sources */,
+				A1EF30000000000000000002 /* DailyLetter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

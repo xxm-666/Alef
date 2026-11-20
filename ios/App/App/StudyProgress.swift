@@ -13,14 +13,6 @@ enum Mastery: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var next: Self {
-        switch self {
-        case .unlearned: .learning
-        case .learning: .mastered
-        case .mastered: .unlearned
-        }
-    }
-
     var symbol: String {
         switch self {
         case .unlearned: "circle"
@@ -50,7 +42,16 @@ struct ReviewSchedule: Codable {
     let nextReviewAt: Int64
     let intervalDays: Int
 
-    var isDue: Bool { nextReviewAt <= Int64(Date.now.timeIntervalSince1970 * 1_000) }
+    var reviewDate: Date { Date(timeIntervalSince1970: Double(nextReviewAt) / 1_000) }
+    var isDue: Bool { reviewDate <= .now }
+
+    var displayDate: String {
+        let calendar = Calendar.current
+        if isDue { return "已到期" }
+        if calendar.isDateInToday(reviewDate) { return "今天" }
+        if calendar.isDateInTomorrow(reviewDate) { return "明天" }
+        return reviewDate.formatted(.dateTime.month().day().locale(Locale(identifier: "zh_CN")))
+    }
 }
 
 struct StudyStatistics: Codable {
@@ -102,6 +103,7 @@ struct StudyStatistics: Codable {
     private let defaults: UserDefaults
     private var entries: [String: Data]
     private(set) var restorePoint: BackupUndo?
+    var dailyLetterRequest: String?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -148,20 +150,19 @@ struct StudyStatistics: Codable {
         set { write(newValue, for: "alef.speechRate.v1") }
     }
 
+    var feedbackEnabled: Bool {
+        get { read("alef.native.feedback.v1", default: true) }
+        set { write(newValue, for: "alef.native.feedback.v1") }
+    }
+
+    var prefersRecordings: Bool {
+        get { read("alef.native.recordings.v1", default: true) }
+        set { write(newValue, for: "alef.native.recordings.v1") }
+    }
+
     var alphabetFromRight: Bool {
         get { read("alef.order.v1", default: "rtl") == "rtl" }
         set { write(newValue ? "rtl" : "ltr", for: "alef.order.v1") }
-    }
-
-    func display(_ key: String, default defaultValue: Bool = true) -> Bool {
-        let options: [String: Bool] = read("alef.displayConfig.v1", default: [:])
-        return options[key] ?? defaultValue
-    }
-
-    func setDisplay(_ key: String, enabled: Bool) {
-        var options: [String: Bool] = read("alef.displayConfig.v1", default: [:])
-        options[key] = enabled
-        write(options, for: "alef.displayConfig.v1")
     }
 
     func setLetter(_ id: String, mastery: Mastery) {
@@ -176,6 +177,16 @@ struct StudyStatistics: Codable {
     }
 
     func setWord(_ id: String, mastery: Mastery, date: Date = .now) {
+        if (wordMastery[id] ?? .unlearned) == mastery,
+           (schedule[id] == nil) == (mastery == .unlearned) { return }
+        saveWord(id, mastery: mastery, reviewed: false, date: date)
+    }
+
+    func completeReview(_ id: String, correct: Bool, date: Date = .now) {
+        saveWord(id, mastery: correct ? .mastered : .learning, reviewed: true, date: date)
+    }
+
+    private func saveWord(_ id: String, mastery: Mastery, reviewed: Bool, date: Date) {
         var values = wordMastery
         var dates = schedule
         values[id] = mastery
@@ -183,9 +194,9 @@ struct StudyStatistics: Codable {
         case .unlearned:
             dates.removeValue(forKey: id)
         case .learning, .mastered:
-            let previous = dates[id]?.intervalDays ?? 1
+            let previous = reviewed ? dates[id]?.intervalDays ?? 1 : 1
             let interval = mastery == .learning ? 1 : ([3, 7, 14, 30].first { $0 > previous } ?? 30)
-            let next = date.addingTimeInterval(Double(interval) * 86_400)
+            let next = Calendar.current.date(byAdding: .day, value: interval, to: date) ?? date
             dates[id] = ReviewSchedule(nextReviewAt: Int64(next.timeIntervalSince1970 * 1_000), intervalDays: interval)
         }
         var stats = statistics
@@ -249,7 +260,7 @@ struct StudyStatistics: Codable {
     }
 
     func previewBackup(_ data: Data) throws -> [String: Data] {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               root["app"] as? String == "Alef", root["version"] as? Int == 1,
               let values = root["data"] as? [String: Any] else { throw BackupError.invalid }
 
@@ -319,7 +330,7 @@ struct StudyStatistics: Codable {
         switch key {
         case "alef.mastery.v1", "alef.wordMastery.v1":
             _ = try decoder.decode([String: Mastery].self, from: data)
-        case "alef.favoriteWords.v1":
+        case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
             _ = try decoder.decode([String].self, from: data)
         case "alef.wordSrs.v1":
             let dates = try decoder.decode([String: ReviewSchedule].self, from: data)
@@ -338,6 +349,8 @@ struct StudyStatistics: Codable {
         case "alef.order.v1":
             let order = try decoder.decode(String.self, from: data)
             guard ["rtl", "ltr"].contains(order) else { throw BackupError.invalid }
+        case "alef.native.feedback.v1", "alef.native.recordings.v1":
+            _ = try decoder.decode(Bool.self, from: data)
         case "alef.displayConfig.v1":
             _ = try decoder.decode([String: Bool].self, from: data)
         default:

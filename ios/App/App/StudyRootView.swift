@@ -5,28 +5,45 @@ struct StudyRootView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     let content: StudyContent
+    @State private var dailyLetterPath = NavigationPath()
 
     var body: some View {
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
+            NavigationStack(path: $dailyLetterPath) {
+                AlphabetView(content: content)
+                    .navigationDestination(for: String.self) { id in
+                        if let letter = content.letters.first(where: { $0.id == id }) {
+                            LetterStudyView(letter: letter, content: content)
+                        }
+                    }
+            }
+            .tabItem { Label("字母", systemImage: "book") }
+            .tag("grid")
             NavigationStack { WordsView(content: content) }
-                .tabItem { Label("单词", systemImage: "character.book.closed") }
+                .tabItem { Label("词库", systemImage: "square.stack.3d.up") }
                 .tag("words")
-            NavigationStack { StudyFlashcardsView(content: content) }
-                .tabItem { Label("闪卡", systemImage: "rectangle.on.rectangle") }
+            NavigationStack { PracticeCenterView(content: content) }
+                .tabItem { Label("练习", systemImage: "pencil") }
                 .tag("flashcards")
-            NavigationStack { AlphabetView(content: content) }
-                .tabItem { Label("字母", systemImage: "textformat.abc") }
-                .tag("grid")
             NavigationStack { StudyRulesView(content: content) }
-                .tabItem { Label("规则", systemImage: "book") }
+                .tabItem { Label("规则", systemImage: "list.bullet.rectangle") }
                 .tag("rules")
             NavigationStack { StudySettingsView(content: content) }
-                .tabItem { Label("设置", systemImage: "gearshape") }
+                .tabItem { Label("我的", systemImage: "person.crop.circle") }
                 .tag("settings")
         }
+        .background(progress.theme.canvas)
         .tint(progress.theme.accent)
         .preferredColorScheme(progress.theme.preferredScheme)
+        .onChange(of: progress.feedbackEnabled, initial: true) { _, enabled in audio.feedbackEnabled = enabled }
+        .onChange(of: progress.prefersRecordings, initial: true) { _, enabled in audio.prefersRecordings = enabled }
         .onChange(of: selectedTab) { _, _ in audio.stop() }
+        .onChange(of: progress.dailyLetterRequest, initial: true) { _, id in
+            guard let id, content.letters.contains(where: { $0.id == id }) else { return }
+            progress.dailyLetterRequest = nil
+            progress.write("grid", for: "alef.activeView.v1")
+            dailyLetterPath = NavigationPath([id])
+        }
         .alert("发音", isPresented: Binding(get: { audio.playbackError != nil }, set: { visible in
             if !visible { audio.dismissError() }
         })) {
@@ -51,70 +68,293 @@ extension StudyTheme {
         }
     }
 
-    var accent: Color {
-        switch self {
-        case .system:
-            Color(uiColor: UIColor { traits in
-                let color: UIColor = traits.userInterfaceStyle == .dark ? .systemCyan : .systemBlue
-                return color.resolvedColor(with: traits)
-            })
-        case .white: Color(uiColor: .systemBlue)
-        case .parchment: .blue
-        case .rose: Color(red: 0.65, green: 0.12, blue: 0.28)
-        case .violet: Color(red: 0.40, green: 0.22, blue: 0.66)
-        case .dark: Color(uiColor: .systemCyan)
-        }
-    }
-
+    var accent: Color { palette(light: dayAccent, dark: 0x83D7D3) }
     var canvas: Color {
-        Color(uiColor: usesWhitePalette ? Self.whiteCanvas : .systemGroupedBackground)
+        let light: UInt32 = switch self {
+        case .white: 0xF9FBF9
+        case .parchment: 0xF7F0E3
+        case .rose: 0xFBF1F3
+        case .violet: 0xF5F1FA
+        default: 0xF8F7F3
+        }
+        return palette(light: light, dark: 0x11232B)
     }
 
+    var ink: Color { palette(light: 0x142B34, dark: 0xEDF5F5) }
+    var mutedInk: Color { palette(light: 0x4F656C, dark: 0xA9C0C7) }
     var cardSurface: Color {
-        guard usesWhitePalette else { return Color(uiColor: .secondarySystemGroupedBackground) }
-        return Color(uiColor: Self.whiteCardSurface)
-    }
-
-    fileprivate var usesWhitePalette: Bool { self == .system || self == .white }
-
-    private static let whiteCanvas = UIColor { traits in
-        let color: UIColor = traits.userInterfaceStyle == .dark ? .systemGroupedBackground : .systemBackground
-        return color.resolvedColor(with: traits)
-    }
-
-    private static let whiteCardSurface = UIColor { traits in
-        if traits.userInterfaceStyle == .dark {
-            return UIColor.secondarySystemGroupedBackground.resolvedColor(with: traits)
+        let light: UInt32 = switch self {
+        case .parchment: 0xFFFBF3
+        case .rose: 0xFFFAFB
+        case .violet: 0xFDFAFF
+        default: 0xFFFFFD
         }
-        return UIColor(red: 0.965, green: 0.969, blue: 0.977, alpha: 1)
+        return palette(light: light, dark: 0x1B313A)
     }
-
-    fileprivate var groupedCanvas: Color {
-        guard usesWhitePalette else { return Color(uiColor: .systemGroupedBackground) }
-        return Color(uiColor: Self.whiteGroupedCanvas)
-    }
-
-    private static let whiteGroupedCanvas = UIColor { traits in
-        if traits.userInterfaceStyle == .dark {
-            return UIColor.systemGroupedBackground.resolvedColor(with: traits)
+    var insetSurface: Color {
+        let light: UInt32 = switch self {
+        case .parchment: 0xF3EADC
+        case .rose: 0xF7E8ED
+        case .violet: 0xEEE8F7
+        default: 0xEFF3F3
         }
-        return UIColor(white: 0.977, alpha: 1)
+        return palette(light: light, dark: 0x233F49)
+    }
+    var highlightedSurface: Color {
+        let light: UInt32 = switch self {
+        case .rose: 0xF7E3EA
+        case .violet: 0xEEE5F8
+        default: 0xDDEFF0
+        }
+        return palette(light: light, dark: 0x244950)
+    }
+    var outline: Color { palette(light: 0xDCE5E4, dark: 0x38535C) }
+    var primaryButton: Color { palette(light: dayAccent, dark: 0x166369) }
+    var success: Color { palette(light: 0x246457, dark: 0xA9E4D0) }
+    var successSurface: Color { palette(light: 0xE3F0E9, dark: 0x24443C) }
+    var error: Color { palette(light: 0x993D45, dark: 0xFFB2B8) }
+    var errorSurface: Color { palette(light: 0xF8E8EA, dark: 0x4E3039) }
+    var reminder: Color { palette(light: 0x88612A, dark: 0xF3C989) }
+    var reminderSurface: Color { palette(light: 0xFBF0DA, dark: 0x473B2D) }
+
+    private var dayAccent: UInt32 {
+        switch self {
+        case .rose: 0x893B58
+        case .violet: 0x5D4685
+        default: 0x17686D
+        }
+    }
+
+    private func palette(light: UInt32, dark: UInt32) -> Color {
+        Color(uiColor: UIColor { traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((hex >> 16) & 255) / 255,
+                           green: CGFloat((hex >> 8) & 255) / 255,
+                           blue: CGFloat(hex & 255) / 255, alpha: 1)
+        })
     }
 }
 
-private struct StudyGroupedBackground: ViewModifier {
+struct StudyPage<Content: View>: View {
     @Environment(StudyProgress.self) private var progress
+    var maxWidth: CGFloat = 620
+    @ViewBuilder let content: () -> Content
 
-    func body(content: Content) -> some View {
-        content
-            .scrollContentBackground(progress.theme.usesWhitePalette ? .hidden : .automatic)
-            .background(progress.theme.groupedCanvas)
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16, content: content)
+                .frame(maxWidth: maxWidth, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+        }
+        .background(progress.theme.canvas.ignoresSafeArea())
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+    }
+}
+
+struct StudyHeading: View {
+    @Environment(StudyProgress.self) private var progress
+    let section: String
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("ALEF / \(section)")
+                .font(.caption.weight(.semibold))
+                .tracking(2)
+                .foregroundStyle(progress.theme.accent)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(progress.theme.ink)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct StudySectionTitle: View {
+    @Environment(StudyProgress.self) private var progress
+    let title: String
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(progress.theme.ink)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+struct StudyCard<Content: View>: View {
+    @Environment(StudyProgress.self) private var progress
+    var highlighted = false
+    var padding: CGFloat = 14
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10, content: content)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(padding)
+            .background(highlighted ? progress.theme.highlightedSurface : progress.theme.cardSurface,
+                        in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(progress.theme.outline, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+struct StudyRow: View {
+    @Environment(StudyProgress.self) private var progress
+    let title: String
+    let symbol: String
+    var subtitle: String? = nil
+    var value: String? = nil
+    var chevron = true
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.body.weight(.medium))
+                .foregroundStyle(progress.theme.accent)
+                .frame(minWidth: 27)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
+                if let subtitle {
+                    Text(subtitle).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                }
+            }
+            Spacer(minLength: 0)
+            if let value {
+                Text(value).font(.caption).foregroundStyle(progress.theme.mutedInk)
+            }
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct StudyNotice: View {
+    @Environment(StudyProgress.self) private var progress
+    let title: String
+    let symbol: String
+    var note: String? = nil
+    var reminder = false
+
+    var body: some View {
+        StudyRow(title: title, symbol: symbol, subtitle: note, chevron: false)
+            .padding(.horizontal, 9)
+            .background(reminder ? progress.theme.reminderSurface : progress.theme.highlightedSurface,
+                        in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct StudyButtonStyle: ButtonStyle {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.isEnabled) private var enabled
+    var prominent = false
+    var selected = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(prominent || selected ? Color.white : progress.theme.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .frame(minHeight: 44)
+            .background(prominent || selected ? progress.theme.primaryButton : progress.theme.insetSurface, in: Capsule())
+            .opacity(enabled ? (configuration.isPressed ? 0.78 : 1) : 0.58)
+            .contentShape(Capsule())
+    }
+}
+
+struct StudySegments<Value: Hashable>: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let title: String
+    let options: [(value: Value, title: String)]
+    @Binding var selection: Value
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            Picker(title, selection: $selection) {
+                ForEach(options, id: \.value) { option in Text(option.title).tag(option.value) }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(progress.theme.insetSurface, in: Capsule())
+        } else {
+            HStack(spacing: 3) {
+                ForEach(options, id: \.value) { option in
+                    Button {
+                        selection = option.value
+                    } label: {
+                        Text(option.title)
+                            .font(.subheadline.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(selection == option.value ? Color.white : progress.theme.ink)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.horizontal, 3)
+                            .background(selection == option.value ? progress.theme.primaryButton : Color.clear, in: Capsule())
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selection == option.value ? .isSelected : [])
+                }
+            }
+            .padding(3)
+            .background(progress.theme.insetSurface, in: Capsule())
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
+        }
     }
 }
 
 extension View {
-    func studyGroupedBackground() -> some View {
-        modifier(StudyGroupedBackground())
+    func studyHome() -> some View {
+        modifier(StudyHomeBars())
+    }
+
+    func studyDetail(_ title: String) -> some View {
+        navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+    }
+}
+
+private struct StudyHomeBars: ViewModifier {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        let page = content
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.visible, for: .tabBar)
+        if reduceTransparency {
+            page
+                .toolbarBackground(progress.theme.cardSurface, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+        } else if #available(iOS 26, *) {
+            page
+        } else {
+            page
+                .toolbarBackground(.thinMaterial, for: .tabBar)
+                .toolbarBackground(.visible, for: .tabBar)
+        }
     }
 }
 
@@ -127,27 +367,38 @@ struct PronunciationButton: View {
     var rate: Double?
     var title = "播放发音"
     var minimumHitSize: CGFloat?
+    var prominent = false
 
     var body: some View {
-        Button {
-            audio.speak(hebrew, fallback: fallback, rate: rate ?? progress.speechRate)
-        } label: {
-            Group {
-                if iconOnly {
+        Group {
+            if iconOnly {
+                Button(action: play) {
                     Image(systemName: "speaker.wave.2")
-                } else {
-                    Label(title, systemImage: "speaker.wave.2")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(progress.theme.accent)
+                        .frame(width: 32, height: 32)
+                        .background(progress.theme.highlightedSurface, in: Circle())
+                        .frame(minWidth: minimumHitSize ?? 44, minHeight: minimumHitSize ?? 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: play) {
+                    Label(title, systemImage: "play.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle(prominent: prominent))
             }
-            .frame(minWidth: minimumHitSize, minHeight: minimumHitSize)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
         .accessibilityLabel(title)
+    }
+
+    private func play() {
+        audio.speak(hebrew, fallback: fallback, rate: rate ?? progress.speechRate)
     }
 }
 
 struct HebrewText: View {
+    @Environment(StudyProgress.self) private var progress
     let text: String
     var cursive = false
     var size: CGFloat = 26
@@ -156,18 +407,41 @@ struct HebrewText: View {
 
     var body: some View {
         Text(text)
-            .font(cursive ? .custom("GveretLevin-Regular", size: size, relativeTo: style) : .system(size: size * scale, design: .serif))
+            .font(cursive ? .custom("GveretLevin-Regular", size: size, relativeTo: style)
+                  : .system(size: size * scale, weight: .semibold, design: .serif))
+            .foregroundStyle(progress.theme.ink)
+            .multilineTextAlignment(.center)
+            .environment(\.layoutDirection, .rightToLeft)
             .speechSpellsOutCharacters(text.count == 1)
     }
 }
 
 struct MasteryPicker: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Binding var value: Mastery
 
     var body: some View {
-        Picker("掌握度", selection: $value) {
-            ForEach(Mastery.allCases) { level in
-                Text(level.title).tag(level)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("掌握度").font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 6))
+            layout {
+                ForEach(Mastery.allCases) { level in
+                    Button {
+                        value = level
+                    } label: {
+                        Label(level.title, systemImage: level.symbol)
+                            .font(.caption.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .foregroundStyle(level == value ? progress.theme.accent : progress.theme.ink)
+                            .background(level == value ? progress.theme.highlightedSurface : progress.theme.insetSurface,
+                                        in: RoundedRectangle(cornerRadius: 11))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(level == value ? .isSelected : [])
+                }
             }
         }
     }
@@ -175,51 +449,77 @@ struct MasteryPicker: View {
 
 struct StudyActionBar<Content: View>: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            content()
-                .frame(maxWidth: 560)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-        }
-        .background(progress.theme.canvas)
+        content()
+            .frame(maxWidth: 620)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background {
+                if reduceTransparency { progress.theme.canvas.ignoresSafeArea(edges: .bottom) }
+                else { Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom) }
+            }
+            .overlay(alignment: .top) { Rectangle().fill(progress.theme.outline).frame(height: 1) }
     }
 }
 
 struct StudyAnswerButton: View {
+    @Environment(StudyProgress.self) private var progress
     let title: String
     let submitted: Bool
     let selected: Bool
     let correct: Bool
     var isHebrew = false
+    var optionLabel: String?
     let action: () -> Void
+
+    private var surface: Color {
+        if submitted && correct { return progress.theme.successSurface }
+        if submitted && selected { return progress.theme.errorSurface }
+        return selected ? progress.theme.highlightedSurface : progress.theme.cardSurface
+    }
 
     var body: some View {
         Button(action: action) {
-            HStack {
-                if isHebrew { HebrewText(text: title, size: 32).foregroundStyle(.primary) }
-                else { Text(title).foregroundStyle(.primary) }
+            HStack(spacing: 10) {
+                if let optionLabel {
+                    Text(optionLabel)
+                        .font(.caption.monospaced().weight(.semibold))
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .frame(width: 25, height: 25)
+                        .background(progress.theme.insetSurface, in: Circle())
+                        .accessibilityHidden(true)
+                }
+                if isHebrew { HebrewText(text: title, size: 28) }
+                else { Text(title).foregroundStyle(progress.theme.ink) }
                 Spacer()
                 if submitted && (selected || correct) {
                     Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundStyle(correct ? Color.green : Color.red)
+                        .foregroundStyle(correct ? progress.theme.success : progress.theme.error)
                         .accessibilityLabel(correct ? "正确答案" : "答案有误")
                 }
             }
-            .frame(minHeight: 44)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 48)
+            .background(surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(selected ? progress.theme.accent : progress.theme.outline, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .disabled(submitted)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
 struct StudyQuizFeedback: View {
+    @Environment(StudyProgress.self) private var progress
     @AccessibilityFocusState(for: .voiceOver) private var focused: Bool
     @State private var didFocus = false
     let correct: Bool
@@ -229,25 +529,65 @@ struct StudyQuizFeedback: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(correct ? "答对了" : "答案有误",
+            Label(correct ? "回答正确" : "答案有误",
                   systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.headline)
+                .foregroundStyle(correct ? progress.theme.success : progress.theme.error)
             if !correct, let response {
-                Text("你的答案  \(response)").foregroundStyle(.secondary)
+                Text("你的答案  \(response)").foregroundStyle(progress.theme.mutedInk)
             }
             Text("正确答案  \(solution)")
             if let explanation, !explanation.isEmpty {
-                Text(explanation).foregroundStyle(.secondary)
+                Text(explanation).foregroundStyle(progress.theme.mutedInk)
             }
         }
+        .font(.subheadline)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(correct ? progress.theme.successSurface : progress.theme.errorSurface, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityFocused($focused)
         .onAppear {
             guard !didFocus else { return }
             focused = true
             didFocus = true
+        }
+    }
+}
+
+func studyOptionLabel(_ index: Int) -> String {
+    let labels = ["A", "B", "C", "D"]
+    return labels.indices.contains(index) ? labels[index] : String(index + 1)
+}
+
+struct StudyQuizSummary: View {
+    @Environment(StudyProgress.self) private var progress
+    let title: String
+    let correct: Int
+    let answered: Int
+    var message: String? = nil
+
+    var body: some View {
+        StudyCard(highlighted: true) {
+            VStack(spacing: 14) {
+                Image(systemName: "trophy")
+                    .font(.largeTitle)
+                    .foregroundStyle(progress.theme.reminder)
+                    .accessibilityHidden(true)
+                Text(title).font(.title2.bold()).foregroundStyle(progress.theme.ink)
+                Text("\(correct) / \(answered)")
+                    .font(.title.bold().monospacedDigit())
+                    .accessibilityLabel("答对 \(correct) 题，共 \(answered) 题")
+                if let message {
+                    Label(message, systemImage: "calendar")
+                        .font(.subheadline)
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
         }
     }
 }
