@@ -23,6 +23,10 @@ struct DailyVocabularyEntry: View {
 }
 
 private struct DailyVocabularyView: View {
+    private enum ScrollTarget: Hashable {
+        case question, feedback
+    }
+
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
@@ -32,52 +36,77 @@ private struct DailyVocabularyView: View {
     @State private var spelling = ""
 
     private var plan: DailyVocabularyPlan { progress.dailyVocabulary }
-    private var activeIndex: Int? { plan.groups.firstIndex(where: { $0.id == activeId }) }
-
     var body: some View {
         let current = plan
-        let index = activeIndex
+        let index = current.groups.firstIndex { $0.id == activeId }
         let group = index.map { current.groups[$0] }
-        ScrollViewReader { scroll in
-            StudyPage {
-                if let group, let index {
-                    StudySectionTitle("第 \(index + 1) 组").id("daily-question")
-                    groupContent(group)
-                } else {
-                    TimelineView(.periodic(from: .now, by: 30)) { timeline in
-                        let today = progress.dailyVocabularyPlan(words: content.words, date: timeline.date)
-                        planContent(today)
-                            .onChange(of: today.day, initial: true) { _, _ in
-                                progress.prepareDailyVocabulary(words: content.words)
-                            }
+
+        scrollingPage(group: group, index: index, day: current.day)
+            .studyDetail("今日记词")
+            .toolbar {
+                if group != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("今日计划") { openGroup(nil) }
                     }
                 }
             }
-            .onChange(of: group?.studied) { _, _ in scroll.scrollTo("daily-question", anchor: .top) }
-            .onChange(of: group?.feedbackPending) { _, pending in
-                scroll.scrollTo(pending == true ? "daily-feedback" : "daily-question", anchor: pending == true ? .bottom : .top)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                actionBar(group: group, day: current.day)
             }
-            .onChange(of: activeId) { _, _ in scroll.scrollTo("daily-question", anchor: .top) }
-        }
-        .studyDetail("今日记词")
-        .toolbar {
-            if group != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("今日计划") { openGroup(nil) }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && group == nil {
+                    progress.prepareDailyVocabulary(words: content.words)
                 }
             }
+            .onDisappear { audio.stop() }
+    }
+
+    private func scrollingPage(group: DailyVocabularyGroup?, index: Int?, day: String) -> some View {
+        ScrollViewReader { scroll in
+            studyPage(group: group, index: index, day: day)
+                .onChange(of: group?.studied) { _, _ in
+                    scroll.scrollTo(ScrollTarget.question, anchor: .top)
+                }
+                .onChange(of: group?.feedbackPending) { _, pending in
+                    if pending == true {
+                        scroll.scrollTo(ScrollTarget.feedback, anchor: .bottom)
+                    } else {
+                        scroll.scrollTo(ScrollTarget.question, anchor: .top)
+                    }
+                }
+                .onChange(of: activeId) { _, _ in
+                    scroll.scrollTo(ScrollTarget.question, anchor: .top)
+                }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let group, !group.isComplete, let word = currentWord(group) {
-                StudyActionBar { groupAction(group, word: word, day: current.day) }
+    }
+
+    private func studyPage(group: DailyVocabularyGroup?, index: Int?, day: String) -> some View {
+        StudyPage {
+            if let group, let index {
+                let title: String = "第 \(index + 1) 组"
+                StudySectionTitle(title)
+                    .id(ScrollTarget.question)
+                groupContent(group, day: day)
+            } else {
+                planTimeline
             }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active && activeIndex == nil {
-                progress.prepareDailyVocabulary(words: content.words)
-            }
+    }
+
+    private var planTimeline: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+            let today = progress.dailyVocabularyPlan(words: content.words, date: timeline.date)
+            planContent(today)
+                .onChange(of: today.day, initial: true) { _, _ in
+                    progress.prepareDailyVocabulary(words: content.words)
+                }
         }
-        .onDisappear { audio.stop() }
+    }
+
+    @ViewBuilder private func actionBar(group: DailyVocabularyGroup?, day: String) -> some View {
+        if let group, !group.isComplete, let word = currentWord(group) {
+            StudyActionBar { groupAction(group, word: word, day: day) }
+        }
     }
 
     private func planContent(_ today: DailyVocabularyPlan) -> some View {
@@ -154,7 +183,7 @@ private struct DailyVocabularyView: View {
         }
     }
 
-    @ViewBuilder private func groupContent(_ group: DailyVocabularyGroup) -> some View {
+    @ViewBuilder private func groupContent(_ group: DailyVocabularyGroup, day: String) -> some View {
         if group.isComplete {
             StudyQuizSummary(title: "本组完成", correct: group.correctCount, answered: group.wordIds.count)
             if group.correctCount < group.wordIds.count {
@@ -181,26 +210,34 @@ private struct DailyVocabularyView: View {
                 meter("认读 · 第 \(group.studied + 1) / \(total) 词", value: group.studied, total: total, label: "认读进度")
                 wordCard(word)
             } else {
-                let index = group.answers.count - (group.feedbackPending ? 1 : 0)
-                meter("拼写 · 第 \(index + 1) / \(total) 词", value: group.answers.count, total: total, label: "拼写进度")
-                StudyCard {
-                    StudySectionTitle("写出「\(word.meaningZh)」")
-                    Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                    Text("可输入带点写法或无点全拼").font(.caption).foregroundStyle(progress.theme.mutedInk)
-                }
-                let answer = group.feedbackPending ? group.answers.last : nil
-                WordSpellingInput(content: content, wordId: word.id, spelling: Binding(
-                    get: { answer?.input ?? spelling }, set: { spelling = $0 }
-                ), submitted: answer != nil) { submit(group, word: word, day: plan.day) }
-                if let answer {
-                    VStack(alignment: .leading, spacing: 8) {
-                        StudyQuizFeedback(correct: answer.correct, solution: "\(word.hebrew) · \(word.hebrewUnpointed)",
-                                          response: answer.input)
-                        PronunciationButton(hebrew: word.hebrew, title: "听正确发音")
-                    }
-                    .id("daily-feedback")
-                }
+                spellingContent(group, word: word, day: day)
             }
+        }
+    }
+
+    @ViewBuilder private func spellingContent(_ group: DailyVocabularyGroup, word: StudyWord, day: String) -> some View {
+        let total = group.wordIds.count
+        let index = group.answers.count - (group.feedbackPending ? 1 : 0)
+        let title = "拼写 · 第 \(index + 1) / \(total) 词"
+        let answer = group.feedbackPending ? group.answers.last : nil
+        let input = Binding<String>(get: { answer?.input ?? spelling }, set: { spelling = $0 })
+
+        meter(title, value: group.answers.count, total: total, label: "拼写进度")
+        StudyCard {
+            StudySectionTitle("写出「\(word.meaningZh)」")
+            Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+            Text("可输入带点写法或无点全拼").font(.caption).foregroundStyle(progress.theme.mutedInk)
+        }
+        WordSpellingInput(content: content, wordId: word.id, spelling: input, submitted: answer != nil) {
+            submit(group, word: word, day: day)
+        }
+        if let answer {
+            let solution = "\(word.hebrew) · \(word.hebrewUnpointed)"
+            VStack(alignment: .leading, spacing: 8) {
+                StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input)
+                PronunciationButton(hebrew: word.hebrew, title: "听正确发音")
+            }
+            .id(ScrollTarget.feedback)
         }
     }
 
