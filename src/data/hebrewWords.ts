@@ -51,7 +51,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     grammarTag: '阴性单数',
     category: 'greetings',
     root: 'י-ד-ה',
-    note: '词首 תּ 带有 Dagesh 强音点（现代音均读 /t/），词尾 ה 表示阴性名词结尾 /-ah/。',
+    note: 'תּוֹ 读 /to/，דָה 读 /da/，重音在第二音节。词首 תּ 带达盖什，词尾 ה 在这里是静音字母，标记阴性词尾 /a/。',
     sentence: {
       hebrew: 'תּוֹדָה רַבָּה עַל הָעֶזְרָה.',
       transliteration: 'Todah rabbah al ha-ezrah.',

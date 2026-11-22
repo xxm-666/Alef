@@ -26,6 +26,7 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 | `he_f4927d333f38.mp3` | שְׁאֵלָה | Buffer | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Buffer-%D7%A9%D7%90%D7%9C%D7%94.wav) |
 | `he_9d14e2c67acb.mp3` | תְּאֵנָה | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%AA%D7%90%D7%A0%D7%94.wav) |
 | `he_688569dbdc01.mp3` | תּוּת | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%AA%D7%95%D7%AA.wav) |
+| `he_be3a63de8fe8.mp3` | תּוֹדָה | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%AA%D7%95%D7%93%D7%94.wav) |
 | `he_6689be161930.mp3` | זְכוּכִית | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%96%D6%B0%D7%9B%D7%95%D6%BC%D7%9B%D6%B4%D7%99%D7%AA.wav) |
 | `he_52bc44aad452.mp3` | אֲדָמָה | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%90%D7%93%D7%9E%D7%94.wav) |
 | `he_0a2ad548c7c2.mp3` | עַל | Uziel302 | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | [Commons](https://commons.wikimedia.org/wiki/File:LL-Q9288_%28heb%29-Uziel302-%D7%A2%D7%9C.wav) |
