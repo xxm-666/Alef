@@ -3657,11 +3657,180 @@ button {
   background: var(--accent-soft);
 }
 
+.hebrew-space-key {
+  font: 500 0.75rem var(--font-ui);
+}
+
 .spelling-actions-row {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.spelling-text-input {
+  display: block;
+  width: 100%;
+  text-align: center;
+  letter-spacing: normal;
+}
+
+.spelling-text-input::placeholder {
+  color: var(--text-secondary);
+  font: 400 0.9rem var(--font-ui);
+}
+
+.daily-vocabulary-entry,
+.daily-vocabulary-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+  padding: 15px;
+}
+
+.daily-vocabulary-entry {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  background: var(--accent-soft);
+}
+
+.words-daily-entry {
+  flex-shrink: 0;
+}
+
+.daily-vocabulary-entry > svg,
+.daily-vocabulary-result > svg,
+.daily-vocabulary-done {
+  color: var(--accent);
+}
+
+.daily-vocabulary-entry h2,
+.daily-vocabulary-heading h2,
+.daily-vocabulary-card h3 {
+  margin: 0;
+}
+
+.daily-vocabulary-entry h2,
+.daily-vocabulary-card h3 {
+  font-size: 1rem;
+}
+
+.daily-vocabulary-entry p,
+.daily-vocabulary-card p,
+.daily-vocabulary-groups small {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.daily-vocabulary-view {
+  width: 100%;
+  max-width: 660px;
+  margin-inline: auto;
+  gap: 14px;
+}
+
+.daily-vocabulary-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.daily-vocabulary-heading h2,
+.daily-vocabulary-card [tabindex="-1"] {
+  scroll-margin-block-start: 12px;
+}
+
+.daily-vocabulary-view button {
+  min-height: 44px;
+}
+
+.daily-vocabulary-entry button {
+  min-height: 44px;
+}
+
+.daily-vocabulary-card,
+.daily-vocabulary-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.daily-vocabulary-card > .segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.daily-vocabulary-meter {
+  gap: 5px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-vocabulary-meter progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.daily-vocabulary-groups,
+.daily-vocabulary-mistakes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-vocabulary-groups li,
+.daily-vocabulary-mistakes li {
+  padding-block: 11px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.daily-vocabulary-groups li p {
+  margin-top: 3px;
+}
+
+.daily-vocabulary-mistakes b,
+.daily-vocabulary-card .feedback-text b {
+  font-family: var(--font-hebrew);
+  font-size: 1.2em;
+}
+
+.daily-vocabulary-word,
+.daily-vocabulary-result {
+  align-items: center;
+  text-align: center;
+  padding-block: 22px;
+}
+
+.daily-vocabulary-word h3 {
+  font: 600 clamp(2.25rem, 8vw, 3.5rem) var(--font-hebrew);
+}
+
+.daily-vocabulary-reveal {
+  min-height: 68px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+}
+
+.daily-vocabulary-view .spelling-prompt-box {
+  text-align: center;
+}
+
+@media (max-width: 360px) {
+  .daily-vocabulary-entry button {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
 }
 
 /* Backup Modal */

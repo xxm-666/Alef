@@ -85,6 +85,85 @@ struct StudyStatistics: Codable {
     }
 }
 
+struct DailySpellingAnswer: Codable, Equatable {
+    let input: String
+    let correct: Bool
+}
+
+struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
+    let wordIds: [String]
+    var studied = 0
+    var answers: [DailySpellingAnswer] = []
+    var feedbackPending = false
+
+    var id: String { wordIds.first ?? "" }
+    var hasStarted: Bool { studied > 0 }
+    var isComplete: Bool { answers.count == wordIds.count && !feedbackPending }
+    var correctCount: Int { answers.filter(\.correct).count }
+    var status: String {
+        if isComplete { return "拼对 \(correctCount) / \(wordIds.count)" }
+        if studied == wordIds.count { return "拼写 \(answers.count) / \(wordIds.count)" }
+        return hasStarted ? "认读 \(studied) / \(wordIds.count)" : "先认读，再拼写"
+    }
+}
+
+struct DailyVocabularyPlan: Codable, Equatable {
+    static let storageKey = "alef.dailyVocabulary.v1"
+    static let groupOptions = [1, 2, 3]
+    static let groupSize = 5
+
+    var day = ""
+    var groupsPerDay = 2
+    var groups: [DailyVocabularyGroup] = []
+
+    var completedCount: Int { groups.filter(\.isComplete).count }
+    var nextGroup: DailyVocabularyGroup? { groups.first { !$0.isComplete } }
+    var hasStarted: Bool { groups.contains(where: \.hasStarted) }
+
+    static func dayKey(for date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
+    func plan(for date: Date, words: [StudyWord], mastery: [String: Mastery], schedule: [String: ReviewSchedule]) -> Self {
+        let today = Self.dayKey(for: date)
+        let available = Set(words.map(\.id))
+        let valid = groups.filter { $0.wordIds.allSatisfy(available.contains) }
+        if day == today, valid.count == groups.count { return self }
+
+        var assignments = valid.filter { day == today || ($0.hasStarted && !$0.isComplete) }
+        let assigned = Set(assignments.flatMap(\.wordIds))
+        let newIds = words.filter { !assigned.contains($0.id) && mastery[$0.id] != .mastered && schedule[$0.id] == nil }.map(\.id)
+        for offset in stride(from: 0, to: newIds.count, by: Self.groupSize) {
+            guard assignments.count < groupsPerDay else { break }
+            assignments.append(DailyVocabularyGroup(wordIds: Array(newIds.dropFirst(offset).prefix(Self.groupSize))))
+        }
+        return Self(day: today, groupsPerDay: groupsPerDay, groups: assignments)
+    }
+
+    var isValid: Bool {
+        guard Self.groupOptions.contains(groupsPerDay), groups.count <= Self.groupOptions.count,
+              day.isEmpty ? groups.isEmpty : day.range(of: #"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"#, options: .regularExpression) != nil
+        else { return false }
+        var ids = Set<String>()
+        var foundIncomplete = false
+        for group in groups {
+            guard (1...Self.groupSize).contains(group.wordIds.count),
+                  (0...group.wordIds.count).contains(group.studied), group.answers.count <= group.wordIds.count,
+                  group.studied == group.wordIds.count || group.answers.isEmpty,
+                  !group.feedbackPending || !group.answers.isEmpty,
+                  group.answers.allSatisfy({ !$0.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+                  !foundIncomplete || !group.hasStarted,
+                  group.wordIds.allSatisfy({ !$0.isEmpty && ids.insert($0).inserted })
+            else { return false }
+            if !group.isComplete { foundIncomplete = true }
+        }
+        return true
+    }
+}
+
 @Observable final class StudyProgress {
     struct BackupUndo: Codable {
         let previous: [String: Data]
@@ -116,6 +195,10 @@ struct StudyStatistics: Codable {
     var schedule: [String: ReviewSchedule] { read("alef.wordSrs.v1", default: [:]) }
     var favorites: [String] { read("alef.favoriteWords.v1", default: []) }
     var statistics: StudyStatistics { read("alef.studyStats.v1", default: StudyStatistics()) }
+    var dailyVocabulary: DailyVocabularyPlan {
+        let plan = read(DailyVocabularyPlan.storageKey, default: DailyVocabularyPlan())
+        return plan.isValid ? plan : DailyVocabularyPlan()
+    }
     var needsLegacyMigration: Bool { !defaults.bool(forKey: Self.migrationKey) }
 
     private var appearanceOverride: AppearanceOverride { read(Self.appearanceKey, default: .manual) }
@@ -186,7 +269,61 @@ struct StudyStatistics: Codable {
         saveWord(id, mastery: correct ? .mastered : .learning, reviewed: true, date: date)
     }
 
-    private func saveWord(_ id: String, mastery: Mastery, reviewed: Bool, date: Date) {
+    func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
+        dailyVocabulary.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+    }
+
+    func prepareDailyVocabulary(words: [StudyWord], date: Date = .now) {
+        let current = dailyVocabulary
+        let plan = current.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+        if current != plan { write(plan, for: DailyVocabularyPlan.storageKey) }
+    }
+
+    func setDailyVocabularyLimit(_ count: Int, words: [StudyWord], date: Date = .now) {
+        guard DailyVocabularyPlan.groupOptions.contains(count) else { return }
+        var plan = dailyVocabularyPlan(words: words, date: date)
+        guard plan.groupsPerDay != count else { return }
+        plan.groupsPerDay = count
+        if !plan.hasStarted {
+            plan.day = ""
+            plan.groups = []
+            plan = plan.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+        }
+        write(plan, for: DailyVocabularyPlan.storageKey)
+    }
+
+    @discardableResult
+    func advanceDailyVocabulary(_ expected: DailyVocabularyGroup, day: String) -> Bool {
+        var plan = dailyVocabulary
+        guard plan.day == day, plan.nextGroup == expected,
+              let index = plan.groups.firstIndex(of: expected) else { return false }
+        if expected.studied < expected.wordIds.count {
+            plan.groups[index].studied += 1
+        } else if expected.feedbackPending {
+            plan.groups[index].feedbackPending = false
+        } else {
+            return false
+        }
+        write(plan, for: DailyVocabularyPlan.storageKey)
+        return true
+    }
+
+    func answerDailyVocabulary(_ expected: DailyVocabularyGroup, day: String, word: StudyWord, input: String,
+                               date: Date = .now) -> DailySpellingAnswer? {
+        var plan = dailyVocabulary
+        let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard plan.day == day, plan.nextGroup == expected, let index = plan.groups.firstIndex(of: expected),
+              !answer.isEmpty, expected.studied == expected.wordIds.count, !expected.feedbackPending,
+              expected.wordIds.indices.contains(expected.answers.count), expected.wordIds[expected.answers.count] == word.id
+        else { return nil }
+        let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer))
+        plan.groups[index].answers.append(attempt)
+        plan.groups[index].feedbackPending = true
+        saveWord(word.id, mastery: attempt.correct ? .mastered : .learning, reviewed: true, date: date, dailyPlan: plan)
+        return attempt
+    }
+
+    private func saveWord(_ id: String, mastery: Mastery, reviewed: Bool, date: Date, dailyPlan: DailyVocabularyPlan? = nil) {
         var values = wordMastery
         var dates = schedule
         values[id] = mastery
@@ -205,6 +342,7 @@ struct StudyStatistics: Codable {
             entries["alef.wordMastery.v1"] = try encoder.encode(values)
             entries["alef.wordSrs.v1"] = try encoder.encode(dates)
             entries["alef.studyStats.v1"] = try encoder.encode(stats)
+            if let dailyPlan { entries[DailyVocabularyPlan.storageKey] = try encoder.encode(dailyPlan) }
         }
     }
 
@@ -335,6 +473,8 @@ struct StudyStatistics: Codable {
         case "alef.wordSrs.v1":
             let dates = try decoder.decode([String: ReviewSchedule].self, from: data)
             guard dates.values.allSatisfy({ $0.nextReviewAt >= 0 && $0.intervalDays >= 0 }) else { throw BackupError.invalid }
+        case DailyVocabularyPlan.storageKey:
+            guard try decoder.decode(DailyVocabularyPlan.self, from: data).isValid else { throw BackupError.invalid }
         case "alef.studyStats.v1":
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }

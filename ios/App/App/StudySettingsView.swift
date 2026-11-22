@@ -576,6 +576,7 @@ private struct StudyBackupView: View {
         case "alef.mastery.v1": "字母掌握度"
         case "alef.wordMastery.v1": "单词掌握度"
         case "alef.wordSrs.v1": "单词复习排期"
+        case DailyVocabularyPlan.storageKey: "今日记词进度"
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.native.phraseFavorites.v1": "收藏短语"
         case "alef.native.feedback.v1": "答题与翻卡音效"

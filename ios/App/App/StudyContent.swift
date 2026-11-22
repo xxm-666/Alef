@@ -216,8 +216,12 @@ struct StudyWord: Decodable, Identifiable {
     }
 
     func acceptsSpelling(_ input: String) -> Bool {
-        let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        return answer == hebrew || answer == hebrewUnpointed || alternateSpellings?.contains(answer) == true
+        func normalized(_ value: String) -> String {
+            value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                .replacingOccurrences(of: "\"", with: "״")
+        }
+        let answer = normalized(input)
+        return ([hebrew, hebrewUnpointed] + (alternateSpellings ?? [])).contains { normalized($0) == answer }
     }
 }
 

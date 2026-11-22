@@ -16,6 +16,7 @@ import { playFeedbackTone, speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
 
 interface FlashcardStudyViewProps {
+  dailyEntry: React.ReactNode;
   letters: HebrewLetter[];
   masteryMap: Record<string, MasteryLevel>;
   onSetMastery: (letterId: string, level: MasteryLevel) => void;
@@ -170,6 +171,7 @@ interface PersistedFlashcardState {
 }
 
 export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
+  dailyEntry,
   letters,
   masteryMap,
   onSetMastery,
@@ -317,6 +319,7 @@ export const FlashcardStudyView: React.FC<FlashcardStudyViewProps> = ({
 
   return (
     <div className="view-container flashcard-view">
+      {dailyEntry}
       <div className="toolbar-card flashcard-toolbar">
         <div className="segmented-control">
           <button

@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Circle,
   Clock,
-  Delete,
   Eye,
   EyeOff,
   HelpCircle,
@@ -29,6 +28,7 @@ import {
   WordCategory,
   WordSrsRecord,
 } from '../types/hebrew';
+import { acceptsWordSpelling, canPracticeSpelling } from '../data/dailyVocabulary';
 import { WORD_CATEGORY_META } from '../data/hebrewWords';
 import { WORD_INFLECTIONS } from '../data/wordInflections';
 import { HEBREW_PHRASES, PHRASE_SCENARIO_META, PhraseScenario } from '../data/hebrewPhrases';
@@ -36,8 +36,10 @@ import { playFeedbackTone, speakHebrew } from '../utils/audio';
 import { readStorage, writeStorage } from '../utils/storage';
 import { useSwipeBack } from '../utils/useSwipeBack';
 import { ReadingView } from './ReadingView';
+import { WordSpellingInput } from './WordSpellingInput';
 
 interface WordsStudyViewProps {
+  dailyEntry: React.ReactNode;
   words: HebrewWord[];
   letters: HebrewLetter[];
   wordMasteryMap: Record<string, MasteryLevel>;
@@ -54,11 +56,6 @@ type WordFilter = 'all' | 'favorites' | 'needs_review' | 'due_srs' | WordCategor
 type WordsMode = 'browse' | 'cards' | 'phrases' | 'reading' | 'quiz';
 type WordQuizKind = 'meaning' | 'listening' | 'spelling';
 type WordSortOrder = 'default' | 'alpha';
-
-const HEBREW_KEYBOARD_LETTERS = [
-  'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'כ', 'ך',
-  'ל', 'מ', 'ם', 'נ', 'ן', 'ס', 'ע', 'פ', 'ף', 'צ', 'ץ', 'ק', 'ר', 'ש', 'ת',
-];
 
 const ROW_HEIGHT = 72;
 const ROW_GAP = 6;
@@ -134,6 +131,7 @@ interface PersistedWordsState {
 const WORDS_STATE_KEY = 'alef.wordsState.v1';
 
 export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
+  dailyEntry,
   words,
   letters,
   wordMasteryMap,
@@ -185,6 +183,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   const listScrollRef = useRef<HTMLDivElement | null>(null);
   const mobileViewRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const dailyEntryRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(initialSaved.scrollTop);
   const [viewportHeight, setViewportHeight] = useState(520);
   const [toolbarHeight, setToolbarHeight] = useState(0);
@@ -377,12 +376,16 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
       setToolbarHeight(0);
       return;
     }
-    const tb = toolbarRef.current;
-    if (!tb) return;
-    const updateTb = () => setToolbarHeight(tb.offsetHeight + 16);
-    updateTb();
-    const observer = new ResizeObserver(updateTb);
-    observer.observe(tb);
+    const toolbar = toolbarRef.current;
+    const viewport = mobileViewRef.current;
+    if (!toolbar || !viewport) return;
+    const updateOffset = () => {
+      setToolbarHeight(toolbar.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top + viewport.scrollTop + 16);
+    };
+    updateOffset();
+    const observer = new ResizeObserver(updateOffset);
+    observer.observe(toolbar);
+    if (dailyEntryRef.current) observer.observe(dailyEntryRef.current);
     return () => observer.disconnect();
   }, [isMobileListScroll]);
 
@@ -485,9 +488,10 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
   ) {
     const effectivePool =
       targetKind === 'spelling'
-        ? pool.filter((w) => /^[\u05D0-\u05EA]{2,8}$/.test(w.hebrewUnpointed))
+        ? pool.filter(canPracticeSpelling)
         : pool;
-    const safePool = effectivePool.length > 0 ? effectivePool : words;
+    const safePool = effectivePool.length > 0 ? effectivePool : targetKind === 'spelling' ? words.filter(canPracticeSpelling) : words;
+    if (!safePool.length) return;
     const next = safePool[Math.floor(Math.random() * safePool.length)];
     showQuizWord(next);
     if (targetKind === 'listening') {
@@ -539,7 +543,7 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
     if (spellingSubmitted || !spellingInput.trim()) return;
     setSpellingSubmitted(true);
     onRecordActivity();
-    const isCorrect = spellingInput.trim() === quizTarget.hebrewUnpointed;
+    const isCorrect = acceptsWordSpelling(quizTarget, spellingInput);
     playFeedbackTone(isCorrect ? 'correct' : 'wrong');
     setQuizScore((prev) => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
@@ -592,6 +596,9 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
         isMobileListScroll ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined
       }
     >
+      {!(isNarrowViewport && mode === 'browse' && mobileSubView === 'detail') && (
+        <div ref={dailyEntryRef} className="words-daily-entry">{dailyEntry}</div>
+      )}
       {/* Top Toolbar */}
       <div
         ref={toolbarRef}
@@ -1577,62 +1584,20 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                   </div>
                 </div>
 
-                <div className="spelling-display-box" dir="rtl">
-                  {spellingInput || (
-                    <span className="muted-caption" dir="ltr">
-                      请点击下方希伯来字母从右向左拼写...
-                    </span>
-                  )}
-                </div>
-
-                <div className="hebrew-keyboard-grid" dir="rtl">
-                  {HEBREW_KEYBOARD_LETTERS.map((ch) => (
-                    <button
-                      key={ch}
-                      type="button"
-                      className="hebrew-key-btn"
-                      disabled={spellingSubmitted}
-                      onClick={() => setSpellingInput((prev) => prev + ch)}
-                    >
-                      {ch}
-                    </button>
-                  ))}
-                </div>
-
+                <WordSpellingInput
+                  value={spellingInput}
+                  onChange={setSpellingInput}
+                  onSubmit={handleCheckSpelling}
+                  submitted={spellingSubmitted}
+                />
                 <div className="spelling-actions-row">
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    disabled={spellingSubmitted || spellingInput.length === 0}
-                    onClick={() => setSpellingInput((prev) => prev.slice(0, -1))}
-                  >
-                    <Delete size={14} />
-                    <span>退格</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost btn-sm"
-                    disabled={spellingSubmitted || spellingInput.length === 0}
-                    onClick={() => setSpellingInput('')}
-                  >
-                    清空
-                  </button>
-                  {!spellingSubmitted ? (
-                    <button
-                      type="button"
-                      className="btn-primary btn-sm"
-                      disabled={spellingInput.length === 0}
-                      onClick={handleCheckSpelling}
-                    >
-                      提交拼写
+                  {spellingSubmitted ? (
+                    <button type="button" className="btn-primary btn-sm" onClick={() => loadNextQuiz(undefined, 'spelling')}>
+                      下一题
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      className="btn-primary btn-sm"
-                      onClick={() => loadNextQuiz(undefined, 'spelling')}
-                    >
-                      下一题
+                    <button type="button" className="btn-primary btn-sm" disabled={!spellingInput.trim()} onClick={handleCheckSpelling}>
+                      提交拼写
                     </button>
                   )}
                 </div>
@@ -1640,12 +1605,12 @@ export const WordsStudyView: React.FC<WordsStudyViewProps> = ({
                 {spellingSubmitted && (
                   <div
                     className={`quiz-feedback-box ${
-                      spellingInput.trim() === quizTarget.hebrewUnpointed ? 'correct' : 'wrong'
+                      acceptsWordSpelling(quizTarget, spellingInput) ? 'correct' : 'wrong'
                     }`}
                   >
                     <div className="feedback-text">
                       <strong>
-                        {spellingInput.trim() === quizTarget.hebrewUnpointed
+                        {acceptsWordSpelling(quizTarget, spellingInput)
                           ? '拼写完全正确！'
                           : '再核对一下拼写：'}
                       </strong>

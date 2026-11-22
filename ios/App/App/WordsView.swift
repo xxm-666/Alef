@@ -49,6 +49,7 @@ struct WordsView: View {
     var body: some View {
         StudyPage {
             StudyHeading(section: "词库", title: "把字母读成单词")
+            DailyVocabularyEntry(content: content)
             StudySegments(title: "词库内容", options: [("browse", "单词"), ("phrases", "情景短语")],
                           selection: Binding(get: { phrasesSelected ? "phrases" : "browse" }, set: {
                 var state = preferences
@@ -840,8 +841,6 @@ struct WordQuizView: View {
     @State private var spelling = ""
     @State private var result: Bool?
     @State private var selectedOption: String?
-    @State private var systemInput = false
-    @FocusState private var inputFocused: Bool
     @State private var correct = 0
     @State private var answered = 0
     @State private var streak = 0
@@ -862,7 +861,7 @@ struct WordQuizView: View {
                     quizHeader
                     questionPrompt(target).id("word-question")
                     if kind == .spelling {
-                        spellingInput
+                        WordSpellingInput(content: content, wordId: target.id, spelling: $spelling, submitted: result != nil, onSubmit: confirm)
                     } else {
                         ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                             StudyAnswerButton(title: option.meaningZh, submitted: result != nil,
@@ -977,43 +976,6 @@ struct WordQuizView: View {
         }
     }
 
-    private var spellingInput: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            StudyCard {
-                if systemInput && result == nil {
-                    TextField("输入希伯来语单词", text: $spelling)
-                        .font(.title2)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .focused($inputFocused)
-                        .submitLabel(.done)
-                        .onSubmit(confirm)
-                        .multilineTextAlignment(.leading)
-                        .frame(minHeight: 44)
-                        .environment(\.layoutDirection, .rightToLeft)
-                } else if spelling.isEmpty {
-                    Text("在下方选择希伯来字母")
-                        .foregroundStyle(progress.theme.mutedInk)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                } else {
-                    HebrewText(text: spelling, size: 44, style: .largeTitle)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .textSelection(.enabled)
-                }
-            }
-            if result == nil {
-                if !systemInput { spellingKeyboard }
-                Button {
-                    systemInput.toggle()
-                    inputFocused = systemInput
-                } label: {
-                    Label(systemInput ? "使用屏内键盘" : "使用系统键盘", systemImage: "globe")
-                }
-                .buttonStyle(StudyButtonStyle())
-            }
-        }
-    }
-
     @ViewBuilder private var quizAction: some View {
         if showsSummary {
             primaryButton("完成", symbol: "checkmark") { dismiss() }
@@ -1052,7 +1014,6 @@ struct WordQuizView: View {
         let success: Bool
         if kind == .spelling {
             guard !spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            inputFocused = false
             success = target.acceptsSpelling(spelling)
         } else {
             guard let selectedOption else { return }
@@ -1065,31 +1026,6 @@ struct WordQuizView: View {
         if reviewing { progress.completeReview(target.id, correct: success) }
         else { progress.recordStudy() }
         audio.playFeedback(success ? .correct : .wrong)
-    }
-
-    private var spellingKeyboard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 5)], spacing: 5) {
-                ForEach(content.letters.map(\.hebrew) + content.letters.compactMap(\.sofit), id: \.self) { character in
-                    Button { spelling += character } label: {
-                        HebrewText(text: character, size: 23)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .environment(\.layoutDirection, .rightToLeft)
-            HStack {
-                Button("退格", systemImage: "delete.left") { if !spelling.isEmpty { spelling.removeLast() } }
-                Button("清空", systemImage: "eraser") { spelling = "" }
-            }
-            .buttonStyle(StudyButtonStyle())
-            .disabled(spelling.isEmpty)
-        }
-        .padding(8)
-        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func next(play: Bool) {
@@ -1106,7 +1042,6 @@ struct WordQuizView: View {
         }
         result = nil
         selectedOption = nil
-        inputFocused = false
         spelling = ""
         guard let target else { return }
         if kind != .spelling {
@@ -1115,5 +1050,87 @@ struct WordQuizView: View {
         if kind == .listening, play {
             audio.speak(target.hebrew, rate: progress.speechRate, bundledOnly: true)
         }
+    }
+}
+
+struct WordSpellingInput: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+    let wordId: String
+    @Binding var spelling: String
+    let submitted: Bool
+    let onSubmit: () -> Void
+    @State private var systemInput = false
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            StudyCard {
+                if systemInput && !submitted {
+                    TextField("输入希伯来语单词", text: $spelling)
+                        .font(.title2)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .focused($inputFocused)
+                        .submitLabel(.done)
+                        .onSubmit(onSubmit)
+                        .multilineTextAlignment(.leading)
+                        .frame(minHeight: 44)
+                        .environment(\.layoutDirection, .rightToLeft)
+                } else if spelling.isEmpty {
+                    Text("在下方选择希伯来字母")
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                } else {
+                    HebrewText(text: spelling, size: 44, style: .largeTitle)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .textSelection(.enabled)
+                }
+            }
+            if !submitted {
+                if !systemInput { spellingKeyboard }
+                Button {
+                    systemInput.toggle()
+                    inputFocused = systemInput
+                } label: {
+                    Label(systemInput ? "使用屏内键盘" : "使用系统键盘", systemImage: "globe")
+                }
+                .buttonStyle(StudyButtonStyle())
+            }
+        }
+        .onChange(of: wordId) { _, _ in inputFocused = false }
+        .onChange(of: submitted) { _, done in if done { inputFocused = false } }
+    }
+
+    private var spellingKeyboard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 5)], spacing: 5) {
+                ForEach(content.letters.map(\.hebrew) + content.letters.compactMap(\.sofit) + ["״", " "], id: \.self) { character in
+                    Button { spelling += character } label: {
+                        Group {
+                            if character == " " {
+                                Text("空格").font(.caption.weight(.medium))
+                            } else {
+                                HebrewText(text: character, size: 23)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(character == " " ? "空格" : character == "״" ? "希伯来语双引号" : character)
+                }
+            }
+            .environment(\.layoutDirection, .rightToLeft)
+            HStack {
+                Button("退格", systemImage: "delete.left") { if !spelling.isEmpty { spelling.removeLast() } }
+                Button("清空", systemImage: "eraser") { spelling = "" }
+            }
+            .buttonStyle(StudyButtonStyle())
+            .disabled(spelling.isEmpty)
+        }
+        .padding(8)
+        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 14))
     }
 }

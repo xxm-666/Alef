@@ -7,9 +7,15 @@ import {
 import { HEBREW_WORDS } from './data/hebrewWords';
 import { DEFAULT_DISPLAY_CONFIG } from './data/letterDisplay';
 import {
+  acceptsWordSpelling, buildDailyPlan, DAILY_VOCABULARY_KEY, DailyVocabularyGroup,
+  DailyVocabularyPlan, EMPTY_DAILY_PLAN, hasStartedDailyGroup, isDailyGroupComplete,
+  isDailyVocabularyPlan, vocabularyDay,
+} from './data/dailyVocabulary';
+import {
   AlphabetOrder,
   CustomDisplayConfig,
   ElectronWindowState,
+  HebrewWord,
   MasteryLevel,
   StudyStats,
   StudyViewMode,
@@ -17,7 +23,7 @@ import {
   WordSrsRecord,
 } from './types/hebrew';
 import { DEFAULT_WINDOW_STATE, getElectronAPI } from './utils/electronBridge';
-import { readStorage, writeStorage } from './utils/storage';
+import { readStorage, writeStorage, writeStorageBatch } from './utils/storage';
 import { useSwipeBack } from './utils/useSwipeBack';
 import { TitleBar } from './components/TitleBar';
 import { AlphabetGridView } from './components/AlphabetGridView';
@@ -28,6 +34,7 @@ import { MiniWidgetView } from './components/MiniWidgetView';
 import { WordsStudyView } from './components/WordsStudyView';
 import { SettingsView } from './components/SettingsView';
 import { BackupModal } from './components/BackupModal';
+import { DailyVocabularyEntry, DailyVocabularyView } from './components/DailyVocabularyView';
 
 const NATIVE_TAB_VIEWS = ['words', 'flashcards', 'grid', 'rules', 'settings'] as const;
 const iosWindow = window as Window & {
@@ -40,6 +47,7 @@ const iosWindow = window as Window & {
   };
 };
 const usesNativeTabs = iosWindow.alefNativeTabs === true;
+const wordsById = new Map(HEBREW_WORDS.map((word) => [word.id, word]));
 
 const STORAGE_KEYS = {
   displayConfig: 'alef.displayConfig.v1',
@@ -56,12 +64,39 @@ const STORAGE_KEYS = {
   selectedLetterId: 'alef.selectedLetterId.v1',
 };
 
-function getLocalDateKey(offsetDays = 0): string {
-  const d = new Date(Date.now() + offsetDays * 86_400_000);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+function shiftCalendarDate(date: Date, days: number): Date {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function readDailyPlan(fallback = EMPTY_DAILY_PLAN): DailyVocabularyPlan {
+  const value = readStorage<unknown>(DAILY_VOCABULARY_KEY, fallback);
+  return isDailyVocabularyPlan(value) ? value : fallback;
+}
+
+function recordStudyOn(previous: StudyStats, date: Date): StudyStats {
+  const today = vocabularyDay(date);
+  const sameDay = previous.lastActiveDate === today;
+  const consecutive = previous.lastActiveDate === vocabularyDay(shiftCalendarDate(date, -1));
+  return {
+    streakDays: sameDay ? Math.max(1, previous.streakDays) : consecutive ? previous.streakDays + 1 : 1,
+    lastActiveDate: today,
+    todayReviews: sameDay ? previous.todayReviews + 1 : 1,
+    totalReviews: previous.totalReviews + 1,
+  };
+}
+
+function scheduleWordReview(previous: Record<string, WordSrsRecord>, wordId: string, level: MasteryLevel, date: Date) {
+  const updated = { ...previous };
+  if (level === 'unlearned') {
+    delete updated[wordId];
+  } else {
+    const previousInterval = previous[wordId]?.intervalDays ?? 1;
+    const intervalDays = level === 'learning' ? 1 : [3, 7, 14, 30].find((days) => days > previousInterval) ?? 30;
+    updated[wordId] = { intervalDays, nextReviewAt: shiftCalendarDate(date, intervalDays).getTime() };
+  }
+  return updated;
 }
 
 export const App: React.FC = () => {
@@ -90,6 +125,9 @@ export const App: React.FC = () => {
   const [wordSrsMap, setWordSrsMap] = useState<Record<string, WordSrsRecord>>(() =>
     readStorage(STORAGE_KEYS.wordSrs, {})
   );
+  const [dailyPlan, setDailyPlan] = useState(readDailyPlan);
+  const [today, setToday] = useState(vocabularyDay);
+  const [dailyOrigin, setDailyOrigin] = useState<'words' | 'flashcards'>();
   const [favoriteWordIds, setFavoriteWordIds] = useState<string[]>(() =>
     readStorage<string[]>(STORAGE_KEYS.favoriteWords, [])
   );
@@ -114,6 +152,26 @@ export const App: React.FC = () => {
   );
 
   const [windowState, setWindowState] = useState<ElectronWindowState>(DEFAULT_WINDOW_STATE);
+
+  useEffect(() => {
+    const refreshDay = () => setToday(vocabularyDay());
+    const timer = window.setInterval(refreshDay, 30_000);
+    const syncPlan = (event: StorageEvent) => {
+      if (event.key === DAILY_VOCABULARY_KEY || event.key === null) setDailyPlan(readDailyPlan());
+      if (event.key === STORAGE_KEYS.wordSrs || event.key === null) setWordSrsMap(readStorage(STORAGE_KEYS.wordSrs, {}));
+      if (event.key === STORAGE_KEYS.wordMastery || event.key === null) setWordMasteryMap(readStorage(STORAGE_KEYS.wordMastery, {}));
+      if (event.key === STORAGE_KEYS.studyStats) {
+        setStudyStats((previous) => readStorage(STORAGE_KEYS.studyStats, previous));
+      }
+    };
+    document.addEventListener('visibilitychange', refreshDay);
+    window.addEventListener('storage', syncPlan);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshDay);
+      window.removeEventListener('storage', syncPlan);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -204,23 +262,8 @@ export const App: React.FC = () => {
   );
 
   function recordStudyActivity() {
-    const today = getLocalDateKey(0);
-    const yesterday = getLocalDateKey(-1);
-    setStudyStats((prev) => {
-      const isSameDay = prev.lastActiveDate === today;
-      const isConsecutive = prev.lastActiveDate === yesterday;
-      const nextStreak = isSameDay
-        ? Math.max(1, prev.streakDays)
-        : isConsecutive
-        ? prev.streakDays + 1
-        : 1;
-      return {
-        streakDays: nextStreak,
-        lastActiveDate: today,
-        todayReviews: isSameDay ? prev.todayReviews + 1 : 1,
-        totalReviews: prev.totalReviews + 1,
-      };
-    });
+    const date = new Date();
+    setStudyStats((previous) => recordStudyOn(previous, date));
   }
 
   function handleToggleFavoriteWord(wordId: string) {
@@ -251,30 +294,101 @@ export const App: React.FC = () => {
   function handleSetWordMastery(wordId: string, level: MasteryLevel) {
     recordStudyActivity();
     setWordMasteryMap((prev) => ({ ...prev, [wordId]: level }));
-    const now = Date.now();
-    const DAY_MS = 86_400_000;
-    setWordSrsMap((prev) => {
-      if (level === 'unlearned') {
-        const next = { ...prev };
-        delete next[wordId];
-        return next;
-      }
-      if (level === 'learning') {
-        return {
-          ...prev,
-          [wordId]: { intervalDays: 1, nextReviewAt: now + DAY_MS },
-        };
-      }
-      const prevDays = prev[wordId]?.intervalDays ?? 1;
-      const nextDays = prevDays < 3 ? 3 : prevDays < 7 ? 7 : prevDays < 14 ? 14 : 30;
-      return {
-        ...prev,
-        [wordId]: { intervalDays: nextDays, nextReviewAt: now + nextDays * DAY_MS },
-      };
+    const date = new Date();
+    setWordSrsMap((previous) => scheduleWordReview(previous, wordId, level, date));
+  }
+
+  const plannedToday = useMemo(
+    () => buildDailyPlan(dailyPlan, HEBREW_WORDS, wordMasteryMap, wordSrsMap, today),
+    [dailyPlan, wordMasteryMap, wordSrsMap, today]
+  );
+
+  function saveDailyPlan(plan: DailyVocabularyPlan) {
+    writeStorage(DAILY_VOCABULARY_KEY, plan);
+    setDailyPlan(plan);
+  }
+
+  function refreshDailyPlan() {
+    const day = vocabularyDay();
+    setToday(day);
+    const saved = readDailyPlan(dailyPlan);
+    const plan = buildDailyPlan(saved, HEBREW_WORDS, wordMasteryMap, wordSrsMap, day);
+    if (plan !== saved) saveDailyPlan(plan);
+    else setDailyPlan(plan);
+  }
+
+  function openDailyVocabulary(from: 'words' | 'flashcards') {
+    refreshDailyPlan();
+    handleSelectView('words');
+    setDailyOrigin(from);
+    requestAnimationFrame(() => {
+      mainScrollRef.current?.scrollTo({ top: 0 });
+      document.getElementById('daily-vocabulary-heading')?.focus({ preventScroll: true });
     });
   }
 
+  function changeDailyLimit(groupsPerDay: number) {
+    const saved = readDailyPlan(dailyPlan);
+    const day = vocabularyDay();
+    const current = buildDailyPlan(saved, HEBREW_WORDS, wordMasteryMap, wordSrsMap, day);
+    if (current.groupsPerDay === groupsPerDay) return;
+    const adjusted = { ...current, groupsPerDay };
+    saveDailyPlan(current.groups.some(hasStartedDailyGroup) ? adjusted : buildDailyPlan(
+      { ...adjusted, day: '', groups: [] }, HEBREW_WORDS, wordMasteryMap, wordSrsMap, day
+    ));
+  }
+
+  function updatedDailyPlan(expected: DailyVocabularyGroup, change: (group: DailyVocabularyGroup) => DailyVocabularyGroup | null) {
+    const current = readDailyPlan(dailyPlan);
+    const index = current.groups.findIndex((group) => !isDailyGroupComplete(group));
+    const group = current.groups[index];
+    if (current.day !== dailyPlan.day || !group || group.wordIds.length !== expected.wordIds.length ||
+        !group.wordIds.every((id, index) => id === expected.wordIds[index]) ||
+        group.studied !== expected.studied || group.answers.length !== expected.answers.length ||
+        group.feedbackPending !== expected.feedbackPending) {
+      setDailyPlan(current);
+      return null;
+    }
+    const updated = change(group);
+    return updated ? { ...current, groups: current.groups.map((item, offset) => offset === index ? updated : item) } : null;
+  }
+
+  function advanceDailyGroup(expected: DailyVocabularyGroup) {
+    const updated = updatedDailyPlan(expected, (group) => {
+      if (group.studied < group.wordIds.length) return { ...group, studied: group.studied + 1 };
+      return group.feedbackPending ? { ...group, feedbackPending: false } : null;
+    });
+    if (!updated) return false;
+    saveDailyPlan(updated);
+    return true;
+  }
+
+  function answerDailyWord(expected: DailyVocabularyGroup, word: HebrewWord, input: string) {
+    const answer = { input: input.trim(), correct: acceptsWordSpelling(word, input) };
+    if (!answer.input) return null;
+    const updated = updatedDailyPlan(expected, (group) =>
+      !group.feedbackPending && group.studied === group.wordIds.length && group.wordIds[group.answers.length] === word.id
+        ? { ...group, answers: [...group.answers, answer], feedbackPending: true } : null
+    );
+    if (!updated) return null;
+    const date = new Date();
+    const level = answer.correct ? 'mastered' : 'learning';
+    const mastery: Record<string, MasteryLevel> = { ...readStorage(STORAGE_KEYS.wordMastery, wordMasteryMap), [word.id]: level };
+    const schedule = scheduleWordReview(readStorage(STORAGE_KEYS.wordSrs, wordSrsMap), word.id, level, date);
+    const stats = recordStudyOn(readStorage(STORAGE_KEYS.studyStats, studyStats), date);
+    if (!writeStorageBatch([
+      [STORAGE_KEYS.wordMastery, mastery], [STORAGE_KEYS.wordSrs, schedule],
+      [STORAGE_KEYS.studyStats, stats], [DAILY_VOCABULARY_KEY, updated],
+    ])) throw new Error('Daily vocabulary storage write failed.');
+    setWordMasteryMap(mastery);
+    setWordSrsMap(schedule);
+    setStudyStats(stats);
+    setDailyPlan(updated);
+    return answer;
+  }
+
   const handleSelectView = useCallback((nextView: StudyViewMode) => {
+    setDailyOrigin(undefined);
     if (nextView === 'detail' && activeView !== 'detail') {
       letterDetailReturnView.current = activeView;
     }
@@ -418,8 +532,22 @@ export const App: React.FC = () => {
           />
         )}
 
-        {activeView === 'words' && (
+        {activeView === 'words' && dailyOrigin && (
+          <DailyVocabularyView
+            plan={dailyPlan}
+            words={wordsById}
+            speechRate={speechRate}
+            onExit={() => handleSelectView(dailyOrigin)}
+            onReturnToPlan={refreshDailyPlan}
+            onSetLimit={changeDailyLimit}
+            onAdvance={advanceDailyGroup}
+            onAnswer={answerDailyWord}
+          />
+        )}
+
+        {activeView === 'words' && !dailyOrigin && (
           <WordsStudyView
+            dailyEntry={<DailyVocabularyEntry plan={plannedToday} onOpen={() => openDailyVocabulary('words')} />}
             words={HEBREW_WORDS}
             letters={HEBREW_LETTERS}
             wordMasteryMap={wordMasteryMap}
@@ -435,6 +563,7 @@ export const App: React.FC = () => {
 
         {activeView === 'flashcards' && (
           <FlashcardStudyView
+            dailyEntry={<DailyVocabularyEntry plan={plannedToday} onOpen={() => openDailyVocabulary('flashcards')} />}
             letters={HEBREW_LETTERS}
             masteryMap={masteryMap}
             onSetMastery={handleSetMastery}

@@ -25,6 +25,7 @@
 		A1EF20000000000000000012 /* StudySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000011 /* StudySettingsView.swift */; };
 		A1EF20000000000000000014 /* WordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000013 /* WordsView.swift */; };
 		A1EF20000000000000000016 /* StudyAssets in Resources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000015 /* StudyAssets */; };
+		A1EF20000000000000000018 /* DailyVocabularyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000017 /* DailyVocabularyView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		A1EF20000000000000000011 /* StudySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudySettingsView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000013 /* WordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordsView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000015 /* StudyAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = StudyAssets; sourceTree = "<group>"; };
+		A1EF20000000000000000017 /* DailyVocabularyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyVocabularyView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +112,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				A1EF20000000000000000015 /* StudyAssets */,
 				A1EF20000000000000000013 /* WordsView.swift */,
+				A1EF20000000000000000017 /* DailyVocabularyView.swift */,
 				A1EF20000000000000000011 /* StudySettingsView.swift */,
 				A1EF2000000000000000000F /* StudyRulesView.swift */,
 				A1EF2000000000000000000D /* StudyRootView.swift */,
@@ -225,6 +228,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				A1EF20000000000000000014 /* WordsView.swift in Sources */,
+				A1EF20000000000000000018 /* DailyVocabularyView.swift in Sources */,
 				A1EF20000000000000000012 /* StudySettingsView.swift in Sources */,
 				A1EF20000000000000000010 /* StudyRulesView.swift in Sources */,
 				A1EF2000000000000000000E /* StudyRootView.swift in Sources */,

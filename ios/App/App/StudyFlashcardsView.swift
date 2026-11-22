@@ -9,6 +9,7 @@ struct PracticeCenterView: View {
         let due = content.dueWords(in: progress)
         StudyPage {
             StudyHeading(section: "练习", title: "把学过的，记牢")
+            DailyVocabularyEntry(content: content)
             NavigationLink {
                 WordReviewView(content: content, words: due)
             } label: {

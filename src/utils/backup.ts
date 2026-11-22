@@ -1,5 +1,6 @@
 import { WORD_CATEGORY_META } from '../data/hebrewWords';
 import { HEBREW_LETTERS } from '../data/hebrewLetters';
+import { DAILY_VOCABULARY_KEY, isDailyVocabularyPlan } from '../data/dailyVocabulary';
 
 type Validator = (value: unknown) => boolean;
 type RestoreEntry = [key: string, value: string | null];
@@ -23,6 +24,7 @@ const rules: Record<string, [label: string, check: Validator]> = {
   'alef.mastery.v1': ['字母掌握度', mastery],
   'alef.wordMastery.v1': ['单词掌握度', mastery],
   'alef.wordSrs.v1': ['单词复习排期', recordOf(fields({ nextReviewAt: integer, intervalDays: integer }))],
+  [DAILY_VOCABULARY_KEY]: ['今日记词进度', isDailyVocabularyPlan],
   'alef.favoriteWords.v1': ['收藏单词', (value) => Array.isArray(value) && value.every(string)],
   'alef.studyStats.v1': ['学习统计', fields({
     streakDays: integer, lastActiveDate: string, todayReviews: integer, totalReviews: integer,
