@@ -10,6 +10,9 @@ enum StudySyncMerger {
     ]
     private static let favoriteKeys = ["alef.favoriteWords.v1", "alef.native.phraseFavorites.v1"]
 
+    private static let appearanceKeys = [StudyProgress.appearanceKey, StudyProgress.themeKey, StudyProgress.dayThemeKey]
+    private static let appearanceVersionItem = "selection"
+
     static func stampChanges(from old: [String: Data], to updated: inout [String: Data], at timestamp: Int64) {
         var versions = decode(ItemVersions.self, from: old[itemVersionsKey]) ?? [:]
         for (scheduleKey, masteryKey) in reviewKeys {
@@ -31,6 +34,9 @@ enum StudySyncMerger {
                 versions[key, default: [:]][id] = timestamp
             }
         }
+        if appearanceKeys.contains(where: { old[$0] != updated[$0] }) {
+            versions[StudyProgress.appearanceKey, default: [:]][appearanceVersionItem] = timestamp
+        }
         if !versions.isEmpty { updated[itemVersionsKey] = encode(versions) }
     }
 
@@ -43,6 +49,30 @@ enum StudySyncMerger {
         var remaining = Set(local.keys).union(remote.keys)
         remaining.remove(itemVersionsKey)
         if !versions.isEmpty { result[itemVersionsKey] = encode(versions) }
+
+        let localVersion = localVersions[StudyProgress.appearanceKey]?[appearanceVersionItem]
+        let remoteVersion = remoteVersions[StudyProgress.appearanceKey]?[appearanceVersionItem]
+        let localHasAppearance = localVersion != nil || local[StudyProgress.appearanceKey] != nil || local[StudyProgress.themeKey] != nil
+        let remoteHasAppearance = remoteVersion != nil || remote[StudyProgress.appearanceKey] != nil || remote[StudyProgress.themeKey] != nil
+        if localHasAppearance || remoteHasAppearance {
+            let useRemote: Bool
+            switch (localHasAppearance, remoteHasAppearance) {
+            case (false, true): useRemote = true
+            case (true, false): useRemote = false
+            default:
+                if localVersion != remoteVersion {
+                    useRemote = (remoteVersion ?? -1) > (localVersion ?? -1)
+                } else {
+                    useRemote = remoteUpdatedAt > localUpdatedAt
+                }
+            }
+            let appearance = useRemote ? remote : local
+            // Legacy documents omit the override for manual themes. Keep that absence as part of the selection.
+            for key in appearanceKeys {
+                remaining.remove(key)
+                result[key] = appearance[key]
+            }
+        }
 
         for (scheduleKey, masteryKey) in reviewKeys {
             remaining.remove(scheduleKey)

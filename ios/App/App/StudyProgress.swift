@@ -317,7 +317,9 @@ struct DailyVocabularyPlan: Codable, Equatable {
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
     static let nonSyncedKeys: Set<String> = [lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1"]
-    private static let appearanceKey = "alef.native.appearance.v1"
+    static let appearanceKey = "alef.native.appearance.v1"
+    static let themeKey = "alef.theme.v1"
+    static let dayThemeKey = "alef.dayTheme.v1"
     private enum AppearanceOverride: String, Codable {
         case manual, system, white
     }
@@ -384,7 +386,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
             switch appearanceOverride {
             case .system: .system
             case .white: .white
-            case .manual: read("alef.theme.v1", default: .system)
+            case .manual: read(Self.themeKey, default: .system)
             }
         }
         set {
@@ -395,10 +397,10 @@ struct DailyVocabularyPlan: Codable, Equatable {
                 case .white:
                     values[Self.appearanceKey] = try encoder.encode(AppearanceOverride.white)
                 case .parchment, .rose, .violet, .dark:
-                    values.removeValue(forKey: Self.appearanceKey)
+                    values[Self.appearanceKey] = try encoder.encode(AppearanceOverride.manual)
                     let theme = try encoder.encode(newValue)
-                    values["alef.theme.v1"] = theme
-                    if newValue != .dark { values["alef.dayTheme.v1"] = theme }
+                    values[Self.themeKey] = theme
+                    if newValue != .dark { values[Self.dayThemeKey] = theme }
                 }
             }
         }
@@ -623,6 +625,15 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     func previewBackup(_ data: Data) throws -> [String: Data] {
+        var restored = try decodeBackupEntries(data)
+        // A backup made before native appearance overrides can still restore its theme.
+        if restored[Self.themeKey] != nil, restored[Self.appearanceKey] == nil, appearanceOverride != .manual {
+            restored[Self.appearanceKey] = try JSONEncoder().encode(AppearanceOverride.manual)
+        }
+        return restored
+    }
+
+    private func decodeBackupEntries(_ data: Data) throws -> [String: Data] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               root["app"] as? String == "Alef", root["version"] as? Int == 1,
               let values = root["data"] as? [String: Any] else { throw BackupError.invalid }
@@ -632,10 +643,6 @@ struct DailyVocabularyPlan: Codable, Equatable {
             let data = try JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed)
             try validateBackupEntry(key, data: data)
             restored[key] = data
-        }
-        // A backup made before native appearance overrides can still restore its theme.
-        if restored["alef.theme.v1"] != nil, restored[Self.appearanceKey] == nil, appearanceOverride != .manual {
-            restored[Self.appearanceKey] = try JSONEncoder().encode(AppearanceOverride.manual)
         }
         guard !restored.isEmpty else { throw BackupError.invalid }
         return restored
@@ -712,7 +719,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     func parseSyncDocument(_ data: Data) throws -> (entries: [String: Data], updatedAt: Int64) {
-        let parsed = try previewBackup(data)
+        let parsed = try decodeBackupEntries(data)
         let synced = parsed.filter { !Self.nonSyncedKeys.contains($0.key) }
         guard !synced.isEmpty else { throw BackupError.invalid }
         let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
@@ -794,7 +801,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
         case "alef.studyStats.v1":
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }
-        case "alef.theme.v1", "alef.dayTheme.v1":
+        case Self.themeKey, Self.dayThemeKey:
             let theme = try decoder.decode(StudyTheme.self, from: data)
             guard theme != .system, theme != .white else { throw BackupError.invalid }
         case Self.appearanceKey:

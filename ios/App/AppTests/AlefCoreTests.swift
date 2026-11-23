@@ -597,6 +597,52 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(reading.inlineGlosses(in: assisted).count, 1)
     }
 
+    func testManualThemeSurvivesLegacySystemOverrideAndLaterProgressSync() throws {
+        let system = try JSONEncoder().encode("system")
+        let oldCloud = [StudyProgress.appearanceKey: system]
+        progress.applySyncedEntries(oldCloud, updatedAt: 100)
+        XCTAssertEqual(progress.theme, .system)
+
+        progress.theme = .rose
+        let selectedAt = progress.localUpdatedAt
+        XCTAssertEqual(StudyProgress(defaults: defaults).theme, .rose)
+
+        let cloudWithNewerProgress = oldCloud.merging([
+            "alef.favoriteWords.v1": try JSONEncoder().encode(["shalom"])
+        ]) { _, incoming in incoming }
+        let merged = StudySyncMerger.merge(local: progress.syncSnapshot(), remote: cloudWithNewerProgress,
+                                           localUpdatedAt: selectedAt, remoteUpdatedAt: selectedAt + 1_000)
+        progress.applySyncedEntries(merged, updatedAt: selectedAt + 1_000)
+        XCTAssertEqual(progress.theme, .rose)
+        XCTAssertEqual(progress.favorites, ["shalom"])
+
+        let roseSnapshot = progress.syncSnapshot()
+        progress.theme = .system
+        let afterSystem = StudySyncMerger.merge(local: progress.syncSnapshot(), remote: roseSnapshot,
+                                                localUpdatedAt: progress.localUpdatedAt, remoteUpdatedAt: selectedAt)
+        progress.applySyncedEntries(afterSystem, updatedAt: progress.localUpdatedAt)
+        XCTAssertEqual(progress.theme, .system)
+    }
+
+    func testOlderManualThemeMergesAsOneSelectionAndStillRestoresFromBackup() throws {
+        let manual = [StudyProgress.themeKey: try JSONEncoder().encode(StudyTheme.violet)]
+        let cloud = [StudyProgress.appearanceKey: try JSONEncoder().encode("system")]
+        progress.applySyncedEntries(cloud, updatedAt: 10)
+
+        let document = try progress.encodeSyncDocument(entries: manual, updatedAt: 20)
+        let parsed = try progress.parseSyncDocument(document)
+        XCTAssertNil(parsed.entries[StudyProgress.appearanceKey])
+        let merged = StudySyncMerger.merge(local: parsed.entries, remote: cloud,
+                                           localUpdatedAt: parsed.updatedAt, remoteUpdatedAt: 10)
+        XCTAssertNil(merged[StudyProgress.appearanceKey])
+        XCTAssertEqual(merged[StudyProgress.themeKey], manual[StudyProgress.themeKey])
+
+        progress.applyBackup(try progress.previewBackup(document))
+        XCTAssertEqual(progress.theme, .violet)
+        progress.undoBackup()
+        XCTAssertEqual(progress.theme, .system)
+    }
+
     @MainActor
     func testFolderSyncBidirectionalAndConflictMerge() async throws {
         let tempDir = FileManager.default.temporaryDirectory
