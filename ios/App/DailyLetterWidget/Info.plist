@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>Alef 每日字母</string>
+    <string>Alef 学习组件</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>

@@ -327,7 +327,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private(set) var restorePoint: BackupUndo?
     private(set) var syncRevision: Int = 0
     private(set) var localUpdatedAt: Int64 = 0
-    var dailyLetterRequest: String?
+    var widgetRequest: StudyWidgetRoute?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

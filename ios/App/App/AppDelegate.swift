@@ -52,7 +52,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let content = try StudyContent.load()
             let progress = StudyProgress()
             self.progress = progress
-            progress.dailyLetterRequest = connectionOptions.urlContexts.lazy.compactMap { DailyLetter.id(from: $0.url) }.first
+            progress.widgetRequest = connectionOptions.urlContexts.lazy
+                .compactMap { StudyWidgetRoute(url: $0.url) }.first
             let audio = StudyAudio(recordings: content.audio)
             self.audio = audio
             let reminders = StudyReminderManager()
@@ -83,8 +84,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
-        if let id = contexts.lazy.compactMap({ DailyLetter.id(from: $0.url) }).first {
-            progress?.dailyLetterRequest = id
+        if let route = contexts.lazy.compactMap({ StudyWidgetRoute(url: $0.url) }).first {
+            progress?.widgetRequest = route
         }
     }
 

@@ -30,6 +30,9 @@ await Promise.all([
 ].map(([name, duration, start, end, sweep, volume, triangle]) =>
   writeFile(new URL(`audio/${name}.wav`, assets), feedbackWave(duration, start, end, sweep, volume, triangle))));
 await writeFile(new URL('content.json', assets), JSON.stringify(content));
+const widgetWords = content.words.map(({ id, hebrew, transliteration, meaningZh }) =>
+  ({ id, hebrew, transliteration, meaningZh }));
+await writeFile(new URL('widget-words.json', assets), JSON.stringify(widgetWords));
 console.log(
   `Prepared ${summary.letters} letters, ${summary.words} words, ${summary.phrases} phrases, ` +
     `${summary.readings} readings and ${summary.recordings} recordings for iOS.`,

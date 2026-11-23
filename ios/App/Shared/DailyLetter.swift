@@ -32,13 +32,17 @@ struct DailyLetter {
     ]
 
     static func on(_ date: Date, calendar: Calendar = Calendar(identifier: .gregorian)) -> DailyLetter {
+        alphabet[rotationIndex(on: date, count: alphabet.count, calendar: calendar)]
+    }
+
+    static func rotationIndex(on date: Date, count: Int, calendar: Calendar) -> Int {
         // Index by the local calendar date so daylight-saving changes do not change the day's letter.
         let localDay = calendar.dateComponents([.era, .year, .month, .day], from: date)
         var indexingCalendar = calendar
         indexingCalendar.timeZone = .gmt
         let day = indexingCalendar.date(from: localDay)
             .flatMap { indexingCalendar.ordinality(of: .day, in: .era, for: $0) } ?? 1
-        return alphabet[(max(1, day) - 1) % alphabet.count]
+        return (max(1, day) - 1) % count
     }
 
     var url: URL? {
@@ -175,5 +179,49 @@ struct DailyLetterBackground: View {
                 }
                 .accessibilityHidden(true)
             }
+    }
+}
+
+enum StudyWidgetRoute: Equatable {
+    enum Tab: String {
+        case alphabet = "grid"
+        case words
+        case practice = "flashcards"
+        case rules
+    }
+
+    case letter(String)
+    case word(String)
+    case tab(Tab)
+
+    var url: URL? {
+        switch self {
+        case .letter(let id):
+            return DailyLetter.alphabet.first { $0.id == id }?.url
+        case .word(let id):
+            var components = URLComponents()
+            components.scheme = "alef"
+            components.host = "daily-word"
+            components.queryItems = [URLQueryItem(name: "id", value: id)]
+            return components.url
+        case .tab(let tab):
+            return URL(string: "alef://study-tab/\(tab.rawValue)")
+        }
+    }
+
+    init?(url: URL) {
+        guard url.scheme == "alef" else { return nil }
+        if let id = DailyLetter.id(from: url) {
+            self = .letter(id)
+        } else if url.host == "daily-word", url.path.isEmpty,
+                  let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "id" })?.value, !id.isEmpty {
+            self = .word(id)
+        } else if url.host == "study-tab", url.pathComponents.count == 2,
+                  let tab = Tab(rawValue: url.lastPathComponent) {
+            self = .tab(tab)
+        } else {
+            return nil
+        }
     }
 }

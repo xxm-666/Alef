@@ -31,6 +31,7 @@
 		A1EF2000000000000000001E /* LearningPathView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000001D /* LearningPathView.swift */; };
 		A1EF20000000000000000020 /* StudyFolderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000001F /* StudyFolderSync.swift */; };
 		A1EF40000000000000000001 /* AlefCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF40000000000000000002 /* AlefCoreTests.swift */; };
+		A1EF10000000000000000011 /* widget-words.json in Resources */ = {isa = PBXBuildFile; fileRef = A1EF10000000000000000010 /* widget-words.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,6 +93,7 @@
 		A1EF2000000000000000001F /* StudyFolderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyFolderSync.swift; sourceTree = "<group>"; };
 		A1EF40000000000000000002 /* AlefCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlefCoreTests.swift; sourceTree = "<group>"; };
 		A1EF40000000000000000003 /* AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1EF10000000000000000010 /* widget-words.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = App/StudyAssets/widget-words.json; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -172,6 +174,7 @@
 			isa = PBXGroup;
 			children = (
 				A1EF10000000000000000005 /* DailyLetterWidget.swift */,
+				A1EF10000000000000000010 /* widget-words.json */,
 				A1EF10000000000000000006 /* Info.plist */,
 			);
 			path = DailyLetterWidget;
@@ -204,6 +207,7 @@
 			buildConfigurationList = A1EF1000000000000000000E /* Build configuration list for PBXNativeTarget "DailyLetterWidget" */;
 			buildPhases = (
 				A1EF1000000000000000000A /* Sources */,
+				A1EF10000000000000000012 /* Resources */,
 			);
 			buildRules = ();
 			dependencies = ();
@@ -276,6 +280,14 @@
 				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
 				A1EF20000000000000000016 /* StudyAssets in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1EF10000000000000000012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1EF10000000000000000011 /* widget-words.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

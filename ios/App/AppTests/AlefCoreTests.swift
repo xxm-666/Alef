@@ -306,6 +306,20 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertThrowsError(try target.previewBackup(Data(invalidReminderBackup.utf8)))
     }
 
+    func testWidgetRoutesRoundTripAndRejectInvalidDestinations() throws {
+        let routes: [StudyWidgetRoute] = [
+            .letter("alef"), .word("word & form/1"), .tab(.alphabet),
+            .tab(.words), .tab(.practice), .tab(.rules)
+        ]
+        for route in routes {
+            XCTAssertEqual(StudyWidgetRoute(url: try XCTUnwrap(route.url)), route)
+        }
+        for url in ["alef://daily-letter/unknown", "alef://daily-word",
+                    "alef://study-tab/settings", "https://study-tab/words"] {
+            XCTAssertNil(StudyWidgetRoute(url: try XCTUnwrap(URL(string: url))))
+        }
+    }
+
     func testDailyLetterRotationAndDeepLink() {
         XCTAssertEqual(DailyLetter.alphabet.count, 22)
         XCTAssertTrue(DailyLetter.alphabet.allSatisfy { !$0.nameZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })

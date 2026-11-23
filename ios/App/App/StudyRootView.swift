@@ -18,11 +18,13 @@ struct StudyRootView: View {
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
     let content: StudyContent
-    @State private var dailyLetterPath = NavigationPath()
+    @State private var letterPath = NavigationPath()
+    @State private var wordPath = NavigationPath()
+    @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
 
     var body: some View {
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
-            NavigationStack(path: $dailyLetterPath) {
+            NavigationStack(path: $letterPath) {
                 AlphabetView(content: content)
                     .navigationDestination(for: String.self) { id in
                         if let letter = content.letters.first(where: { $0.id == id }) {
@@ -31,15 +33,26 @@ struct StudyRootView: View {
                     }
             }
             .tabItem { Label("字母", systemImage: "book") }
+            .id(widgetTabIDs[.alphabet]?.uuidString ?? "grid")
             .tag("grid")
-            NavigationStack { WordsView(content: content) }
-                .tabItem { Label("词库", systemImage: "square.stack.3d.up") }
-                .tag("words")
+            NavigationStack(path: $wordPath) {
+                WordsView(content: content)
+                    .navigationDestination(for: String.self) { id in
+                        if let word = content.words.first(where: { $0.id == id }) {
+                            WordDetailView(word: word, content: content)
+                        }
+                    }
+            }
+            .tabItem { Label("词库", systemImage: "square.stack.3d.up") }
+            .id(widgetTabIDs[.words]?.uuidString ?? "words")
+            .tag("words")
             NavigationStack { PracticeCenterView(content: content) }
                 .tabItem { Label("练习", systemImage: "pencil") }
+                .id(widgetTabIDs[.practice]?.uuidString ?? "flashcards")
                 .tag("flashcards")
             NavigationStack { StudyRulesView(content: content) }
                 .tabItem { Label("规则", systemImage: "list.bullet.rectangle") }
+                .id(widgetTabIDs[.rules]?.uuidString ?? "rules")
                 .tag("rules")
             NavigationStack { StudySettingsView(content: content) }
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
@@ -52,11 +65,10 @@ struct StudyRootView: View {
         .onChange(of: progress.prefersRecordings, initial: true) { _, enabled in audio.prefersRecordings = enabled }
         .onChange(of: progress.hapticsEnabled, initial: true) { _, enabled in audio.hapticsEnabled = enabled }
         .onChange(of: selectedTab) { _, _ in audio.stop() }
-        .onChange(of: progress.dailyLetterRequest, initial: true) { _, id in
-            guard let id, content.letters.contains(where: { $0.id == id }) else { return }
-            progress.dailyLetterRequest = nil
-            progress.write("grid", for: "alef.activeView.v1")
-            dailyLetterPath = NavigationPath([id])
+        .onChange(of: progress.widgetRequest, initial: true) { _, route in
+            guard let route else { return }
+            progress.widgetRequest = nil
+            openWidgetRoute(route)
         }
         .onAppear { handlePendingReminderTab() }
         .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openTabNotification)) { _ in
@@ -104,6 +116,28 @@ struct StudyRootView: View {
             streakDays: progress.statistics.streakDays,
             todayReviews: progress.statistics.reviewsToday
         )
+    }
+
+    private func openWidgetRoute(_ route: StudyWidgetRoute) {
+        switch route {
+        case .letter(let id):
+            guard content.letters.contains(where: { $0.id == id }) else { return }
+            letterPath = NavigationPath([id])
+            progress.write(StudyWidgetRoute.Tab.alphabet.rawValue, for: "alef.activeView.v1")
+        case .word(let id):
+            guard content.words.contains(where: { $0.id == id }) else { return }
+            wordPath = NavigationPath([id])
+            progress.write(StudyWidgetRoute.Tab.words.rawValue, for: "alef.activeView.v1")
+        case .tab(let tab):
+            switch tab {
+            case .alphabet: letterPath = NavigationPath()
+            case .words: wordPath = NavigationPath()
+            case .practice, .rules: break
+            }
+            // Recreate the stack so a shortcut also dismisses view-based navigation destinations.
+            widgetTabIDs[tab] = UUID()
+            progress.write(tab.rawValue, for: "alef.activeView.v1")
+        }
     }
 
     private func handlePendingReminderTab() {
