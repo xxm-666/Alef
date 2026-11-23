@@ -16,11 +16,16 @@ struct StudyContent: Decodable {
     let vowels: [StudyVowel]
     let defaultDisplay: [String: Bool]
     let displayPresets: [StudyDisplayPreset]
+    let grammarAffixes: [StudyGrammarAffix]
+    let grammarBinyanim: [StudyGrammarBinyan]
+    let minimalPairs: [StudyMinimalPair]
+    let learningPath: [StudyPathStage]
     private let ambiguousSpellings: Set<String>
 
     enum CodingKeys: CodingKey {
         case letters, words, wordCategories, phrases, phraseCategories, readings, readingCategories
         case niqqud, confusables, inflections, audio, consonants, vowels, defaultDisplay, displayPresets
+        case grammarAffixes, grammarBinyanim, minimalPairs, learningPath
     }
 
     init(from decoder: Decoder) throws {
@@ -44,6 +49,10 @@ struct StudyContent: Decodable {
         vowels = try container.decode([StudyVowel].self, forKey: .vowels)
         defaultDisplay = try container.decode([String: Bool].self, forKey: .defaultDisplay)
         displayPresets = try container.decode([StudyDisplayPreset].self, forKey: .displayPresets)
+        grammarAffixes = try container.decode([StudyGrammarAffix].self, forKey: .grammarAffixes)
+        grammarBinyanim = try container.decode([StudyGrammarBinyan].self, forKey: .grammarBinyanim)
+        minimalPairs = try container.decode([StudyMinimalPair].self, forKey: .minimalPairs)
+        learningPath = try container.decode([StudyPathStage].self, forKey: .learningPath)
     }
 
     var introductoryDisplay: [String: Bool] {
@@ -87,6 +96,21 @@ struct StudyContent: Decodable {
                 && meanings.insert(candidate.meaningZh).inserted
         }
         return Array(candidates.prefix(3))
+    }
+
+    func words(withRoot root: String) -> [StudyWord] {
+        words.filter { $0.root == root }
+    }
+
+    func rootFamilies() -> [(root: String, words: [StudyWord])] {
+        let grouped = Dictionary(grouping: words.filter { $0.root?.isEmpty == false }) { $0.root ?? "" }
+        return grouped
+            .filter { !$0.key.isEmpty && $0.value.count >= 2 }
+            .map { (root: $0.key, words: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.words.count != rhs.words.count { return lhs.words.count > rhs.words.count }
+                return lhs.root < rhs.root
+            }
     }
 
     static func load() throws -> Self {
@@ -265,6 +289,20 @@ struct StudyPhrase: Decodable, Identifiable {
     let note: String?
 }
 
+enum ReadingNiqqudMode: String, CaseIterable, Identifiable {
+    case full, assisted, unpointed
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .full: "全带点"
+        case .assisted: "过渡"
+        case .unpointed: "无点"
+        }
+    }
+}
+
 struct StudyReading: Decodable, Identifiable {
     struct Gloss {
         let range: Range<String.Index>
@@ -293,6 +331,31 @@ struct StudyReading: Decodable, Identifiable {
     let question: Question
 
     private static let hebrewWords = try? NSRegularExpression(pattern: #"(?:[א-ת]\p{M}*)+"#)
+
+    func displayText(for sentence: Sentence, mode: ReadingNiqqudMode) -> String {
+        switch mode {
+        case .full:
+            return sentence.hebrew
+        case .unpointed:
+            return sentence.unpointed
+        case .assisted:
+            let text = sentence.hebrew
+            let matches = Self.hebrewWords?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? []
+            guard !matches.isEmpty else { return sentence.unpointed }
+            var output = ""
+            var next = text.startIndex
+            for match in matches {
+                guard let range = Range(match.range, in: text) else { continue }
+                output += text[next..<range.lowerBound]
+                let token = String(text[range])
+                let unpointed = withoutHebrewMarks(token)
+                output += glosses[unpointed] != nil ? token : unpointed
+                next = range.upperBound
+            }
+            output += text[next...]
+            return output
+        }
+    }
 
     func inlineGlosses(in text: String) -> [Gloss] {
         let matches = Self.hebrewWords?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? []
@@ -345,4 +408,52 @@ struct StudyVowel: Decodable, Identifiable {
     let vowelRoman: String
     let vowelIpa: String
     let tip: String
+}
+
+struct StudyGrammarAffix: Decodable, Identifiable {
+    struct Example: Decodable {
+        let hebrew: String
+        let transliteration: String
+        let meaning: String
+        let wordId: String?
+    }
+
+    let id: String
+    let kind: String
+    let hebrew: String
+    let transliteration: String
+    let meaning: String
+    let rule: String
+    let examples: [Example]
+}
+
+struct StudyGrammarBinyan: Decodable, Identifiable {
+    let id: String
+    let nameHebrew: String
+    let nameEnglish: String
+    let role: String
+    let pattern: String
+    let presentPrefix: String
+    let tip: String
+    let exampleWordIds: [String]
+}
+
+struct StudyMinimalPair: Decodable, Identifiable {
+    let id: String
+    let contrast: String
+    let tip: String
+    let firstWordId: String
+    let secondWordId: String
+}
+
+struct StudyPathStage: Decodable, Identifiable {
+    let id: String
+    let stage: Int
+    let title: String
+    let subtitle: String
+    let goal: String
+    let letterIds: [String]
+    let ruleTopic: String
+    let wordIds: [String]
+    let readingId: String?
 }

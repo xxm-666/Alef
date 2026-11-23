@@ -192,3 +192,51 @@ export interface StudyStats {
   todayReviews: number;
   totalReviews: number;
 }
+
+export interface GrammarExample {
+  hebrew: string;
+  transliteration: string;
+  meaning: string;
+  wordId?: string;
+}
+
+export interface GrammarAffixItem {
+  id: string;
+  kind: 'prefix' | 'suffix';
+  hebrew: string;
+  transliteration: string;
+  meaning: string;
+  rule: string;
+  examples: GrammarExample[];
+}
+
+export interface GrammarBinyanItem {
+  id: string;
+  nameHebrew: string;
+  nameEnglish: string;
+  role: string;
+  pattern: string;
+  presentPrefix: string;
+  tip: string;
+  exampleWordIds: string[];
+}
+
+export interface MinimalPairItem {
+  id: string;
+  contrast: string;
+  tip: string;
+  firstWordId: string;
+  secondWordId: string;
+}
+
+export interface LearningPathStage {
+  id: string;
+  stage: number;
+  title: string;
+  subtitle: string;
+  goal: string;
+  letterIds: string[];
+  ruleTopic: string;
+  wordIds: string[];
+  readingId?: string;
+}

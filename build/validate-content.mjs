@@ -17,6 +17,9 @@ export async function loadStudyContent(rootUrl = new URL('../', import.meta.url)
         export { CONSONANT_OPTIONS as consonants, VOWEL_PATTERNS as vowels } from './src/data/syllables';
         export { DEFAULT_DISPLAY_CONFIG as defaultDisplay, DISPLAY_PRESETS as displayPresets } from './src/data/letterDisplay';
         export { AUDIO_FILE_MAP as audio } from './src/data/audioManifest';
+        export { GRAMMAR_AFFIXES as grammarAffixes, GRAMMAR_BINYANIM as grammarBinyanim } from './src/data/hebrewGrammar';
+        export { MINIMAL_PAIRS as minimalPairs } from './src/data/minimalPairs';
+        export { LEARNING_PATH as learningPath } from './src/data/learningPath';
       `,
     },
     bundle: true,
@@ -67,6 +70,10 @@ export async function validateStudyContent(
   const readingCategories = content?.readingCategories ?? {};
   const inflections = content?.inflections ?? {};
   const audioMap = content?.audio ?? {};
+  const grammarAffixes = Array.isArray(content?.grammarAffixes) ? content.grammarAffixes : [];
+  const grammarBinyanim = Array.isArray(content?.grammarBinyanim) ? content.grammarBinyanim : [];
+  const minimalPairs = Array.isArray(content?.minimalPairs) ? content.minimalPairs : [];
+  const learningPath = Array.isArray(content?.learningPath) ? content.learningPath : [];
 
   // Build NFC-normalized lookup of audio recordings
   const audioNfc = new Set();
@@ -134,6 +141,7 @@ export async function validateStudyContent(
     errors.push('Expected at least 1 word in content.words');
   }
   const wordIds = new Set();
+  const wordById = new Map();
   for (const word of words) {
     if (!isNonEmptyString(word?.id)) {
       errors.push('Encountered a word with an empty id');
@@ -143,6 +151,7 @@ export async function validateStudyContent(
       errors.push(`Duplicate word id: ${word.id}`);
     }
     wordIds.add(word.id);
+    wordById.set(word.id, word);
 
     for (const field of ['hebrew', 'hebrewUnpointed', 'transliteration', 'meaningZh']) {
       if (!isNonEmptyString(word[field])) {
@@ -219,6 +228,121 @@ export async function validateStudyContent(
     if (!wordIds.has(wordId)) {
       errors.push(`Inflection entry "${wordId}" does not reference a known word id`);
     }
+  }
+
+  // Validate grammar affixes & binyanim
+  if (grammarAffixes.length === 0) {
+    errors.push('Expected at least 1 grammar affix item');
+  }
+  const affixIds = new Set();
+  for (const affix of grammarAffixes) {
+    if (!isNonEmptyString(affix?.id)) {
+      errors.push('Encountered a grammar affix with an empty id');
+      continue;
+    }
+    if (affixIds.has(affix.id)) {
+      errors.push(`Duplicate grammar affix id: ${affix.id}`);
+    }
+    affixIds.add(affix.id);
+    for (const example of affix.examples ?? []) {
+      if (example.wordId && !wordIds.has(example.wordId)) {
+        errors.push(`Grammar affix "${affix.id}" references unknown wordId "${example.wordId}"`);
+      }
+    }
+  }
+
+  if (grammarBinyanim.length === 0) {
+    errors.push('Expected at least 1 grammar binyan item');
+  }
+  const binyanIds = new Set();
+  for (const binyan of grammarBinyanim) {
+    if (!isNonEmptyString(binyan?.id)) {
+      errors.push('Encountered a grammar binyan with an empty id');
+      continue;
+    }
+    if (binyanIds.has(binyan.id)) {
+      errors.push(`Duplicate grammar binyan id: ${binyan.id}`);
+    }
+    binyanIds.add(binyan.id);
+    for (const wordId of binyan.exampleWordIds ?? []) {
+      if (!wordIds.has(wordId)) {
+        errors.push(`Grammar binyan "${binyan.id}" references unknown wordId "${wordId}"`);
+      }
+    }
+  }
+
+  // Validate minimal pairs
+  if (minimalPairs.length === 0) {
+    errors.push('Expected at least 1 minimal pair item');
+  }
+  const minimalPairIds = new Set();
+  for (const pair of minimalPairs) {
+    if (!isNonEmptyString(pair?.id)) {
+      errors.push('Encountered a minimal pair with an empty id');
+      continue;
+    }
+    if (minimalPairIds.has(pair.id)) {
+      errors.push(`Duplicate minimal pair id: ${pair.id}`);
+    }
+    minimalPairIds.add(pair.id);
+    if (pair.firstWordId === pair.secondWordId) {
+      errors.push(`Minimal pair "${pair.id}" uses identical wordId "${pair.firstWordId}"`);
+    }
+    const w1 = wordById.get(pair.firstWordId);
+    const w2 = wordById.get(pair.secondWordId);
+    if (!w1) errors.push(`Minimal pair "${pair.id}" references unknown firstWordId "${pair.firstWordId}"`);
+    if (!w2) errors.push(`Minimal pair "${pair.id}" references unknown secondWordId "${pair.secondWordId}"`);
+    if (w1 && w2) {
+      if (w1.ipa === w2.ipa) {
+        errors.push(`Minimal pair "${pair.id}" (${w1.id} / ${w2.id}) shares identical IPA "${w1.ipa}"`);
+      }
+      if (!audioNfc.has(w1.hebrew.normalize('NFC'))) {
+        errors.push(`Minimal pair "${pair.id}" firstWord "${w1.id}" is missing audio`);
+      }
+      if (!audioNfc.has(w2.hebrew.normalize('NFC'))) {
+        errors.push(`Minimal pair "${pair.id}" secondWord "${w2.id}" is missing audio`);
+      }
+    }
+  }
+
+  // Validate learning path
+  if (learningPath.length === 0) {
+    errors.push('Expected at least 1 learning path stage');
+  }
+  const pathIds = new Set();
+  const coveredLetters = new Set();
+  let lastStageNumber = 0;
+  for (const stage of learningPath) {
+    if (!isNonEmptyString(stage?.id)) {
+      errors.push('Encountered a learning path stage with an empty id');
+      continue;
+    }
+    if (pathIds.has(stage.id)) {
+      errors.push(`Duplicate learning path stage id: ${stage.id}`);
+    }
+    pathIds.add(stage.id);
+    if (!Number.isInteger(stage.stage) || stage.stage <= lastStageNumber) {
+      errors.push(`Learning path stage "${stage.id}" has non-increasing stage number ${stage.stage}`);
+    }
+    lastStageNumber = stage.stage;
+    for (const lid of stage.letterIds ?? []) {
+      if (!letterIds.has(lid)) {
+        errors.push(`Learning path stage "${stage.id}" references unknown letterId "${lid}"`);
+      }
+      coveredLetters.add(lid);
+    }
+    for (const wid of stage.wordIds ?? []) {
+      if (!wordIds.has(wid)) {
+        errors.push(`Learning path stage "${stage.id}" references unknown wordId "${wid}"`);
+      }
+    }
+    if (stage.readingId && !readingIds.has(stage.readingId)) {
+      errors.push(`Learning path stage "${stage.id}" references unknown readingId "${stage.readingId}"`);
+    }
+  }
+  if (coveredLetters.size !== letterIds.size) {
+    const missingLetters = [...letterIds].filter((id) => !coveredLetters.has(id));
+    errors.push(`Learning path does not cover all 22 letters (missing: ${missingLetters.join(', ')})`);
   }
 
   // Validate referenced recording files and static assets on disk

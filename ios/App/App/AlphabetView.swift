@@ -16,6 +16,7 @@ struct AlphabetView: View {
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
             StudyHeading(section: "从字母开始", title: "认识希伯来字母")
             learningProgress
+            LearningPathEntry(content: content)
             if let next = continueLetter {
                 NavigationLink {
                     LetterStudyView(letter: next, content: content)

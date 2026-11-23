@@ -423,6 +423,54 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(mock.addedRequests.count, 1)
     }
 
+    func testP1ContentDecodingAndRootFamilies() throws {
+        let content = try StudyContent.load()
+        XCTAssertEqual(content.readings.count, 12)
+        XCTAssertEqual(content.grammarAffixes.count, 10)
+        XCTAssertEqual(content.grammarBinyanim.count, 6)
+        XCTAssertEqual(content.minimalPairs.count, 26)
+        XCTAssertEqual(content.learningPath.count, 8)
+
+        let families = content.rootFamilies()
+        XCTAssertGreaterThan(families.count, 50)
+        XCTAssertTrue(families.allSatisfy { $0.words.count >= 2 })
+
+        let wordIds = Set(content.words.map(\.id))
+        for pair in content.minimalPairs {
+            XCTAssertNotEqual(pair.firstWordId, pair.secondWordId)
+            XCTAssertTrue(wordIds.contains(pair.firstWordId))
+            XCTAssertTrue(wordIds.contains(pair.secondWordId))
+        }
+
+        let coveredLetters = Set(content.learningPath.flatMap(\.letterIds))
+        XCTAssertEqual(coveredLetters.count, 22)
+    }
+
+    func testReadingNiqqudTransitionModes() {
+        let sentence = StudyReading.Sentence(
+            hebrew: "שָׁלוֹם, מַה שְׁלוֹמְךָ?",
+            unpointed: "שלום, מה שלומך?",
+            transliteration: "Shalom, ma shlomkha?",
+            chinese: "你好，你最近怎么样？"
+        )
+        let reading = StudyReading(
+            id: "test-reading",
+            title: "测试阅读",
+            category: "modern",
+            source: nil,
+            sentences: [sentence],
+            glosses: ["שלומך": "你的近况"],
+            question: StudyReading.Question(prompt: "问候", choices: ["A", "B"], correctIndex: 0)
+        )
+
+        XCTAssertEqual(reading.displayText(for: sentence, mode: .full), sentence.hebrew)
+        XCTAssertEqual(reading.displayText(for: sentence, mode: .unpointed), sentence.unpointed)
+
+        let assisted = reading.displayText(for: sentence, mode: .assisted)
+        XCTAssertEqual(assisted, "שלום, מה שְׁלוֹמְךָ?")
+        XCTAssertEqual(reading.inlineGlosses(in: assisted).count, 1)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 12, minute: Int = 0) -> Date {
         gregorianUtc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }

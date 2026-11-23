@@ -18,7 +18,7 @@ test('repository study content passes validation and matches DailyLetter.swift',
   assert.equal(summary.letters, 22);
   assert.ok(summary.words > 1000);
   assert.ok(summary.phrases > 0);
-  assert.ok(summary.readings > 0);
+  assert.equal(summary.readings, 12);
   assert.ok(summary.recordings > 0);
 });
 
@@ -78,4 +78,40 @@ test('rejects mismatch with DailyLetter.swift alphabet IDs', async () => {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test('rejects minimal pair with identical word IDs or identical IPA', async () => {
+  const sameId = cloneContent();
+  sameId.minimalPairs[0] = { ...sameId.minimalPairs[0], secondWordId: sameId.minimalPairs[0].firstWordId };
+  await assert.rejects(
+    validateStudyContent(sameId, { rootUrl }),
+    /uses identical wordId/,
+  );
+
+  const sameIpa = cloneContent();
+  sameIpa.words = sameIpa.words.map((word) =>
+    word.id === sameIpa.minimalPairs[0].secondWordId
+      ? { ...word, ipa: sameIpa.words.find((w) => w.id === sameIpa.minimalPairs[0].firstWordId).ipa }
+      : word,
+  );
+  await assert.rejects(
+    validateStudyContent(sameIpa, { rootUrl }),
+    /shares identical IPA/,
+  );
+});
+
+test('rejects learning path missing a letter or referencing unknown word', async () => {
+  const missingLetter = cloneContent();
+  missingLetter.learningPath[0] = { ...missingLetter.learningPath[0], letterIds: [] };
+  await assert.rejects(
+    validateStudyContent(missingLetter, { rootUrl }),
+    /does not cover all 22 letters/,
+  );
+
+  const badWord = cloneContent();
+  badWord.learningPath[0] = { ...badWord.learningPath[0], wordIds: ['missing-word-id'] };
+  await assert.rejects(
+    validateStudyContent(badWord, { rootUrl }),
+    /references unknown wordId "missing-word-id"/,
+  );
 });

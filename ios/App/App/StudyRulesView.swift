@@ -11,17 +11,22 @@ struct StudyRulesView: View {
         self.topic = topic
     }
 
-    private let categories = [
-        ("sofit", "词尾变形", "textformat.abc", "Sofit", "5 组"),
-        ("begadkefat", "达盖什", "ellipsis", "Begadkefat", "6 组"),
-        ("confusable", "易混字母", "arrow.left.arrow.right", "对照辨析", ""),
-        ("guttural", "喉音字母", "headphones", "发音规则", ""),
-        ("niqqud", "元音点", "character.cursor.ibeam", "Niqqud", "名称与读音")
-    ]
+    private var categories: [(key: String, title: String, symbol: String, subtitle: String, value: String)] {
+        [
+            ("sofit", "词尾变形", "textformat.abc", "Sofit", "5 组"),
+            ("begadkefat", "达盖什", "ellipsis", "Begadkefat", "6 组"),
+            ("confusable", "易混字母", "arrow.left.arrow.right", "对照辨析", ""),
+            ("guttural", "喉音字母", "headphones", "发音规则", ""),
+            ("niqqud", "元音点", "character.cursor.ibeam", "Niqqud", "名称与读音"),
+            ("prefixes", "前缀与后缀", "plus.square.on.square", "定冠词、介词与所有格", "\(content.grammarAffixes.count) 组"),
+            ("binyanim", "动词词干", "wand.and.stars", "Binyanim 构词规律", "\(content.grammarBinyanim.count) 组"),
+            ("roots", "词根家族", "point.3.connected.trianglepath.dotted", "Shoresh 同根词串联", "\(content.rootFamilies().count) 组")
+        ]
+    }
 
     var body: some View {
-        if let topic, let category = categories.first(where: { $0.0 == topic }) {
-            ruleDetails(topic, title: category.1)
+        if let topic, let category = categories.first(where: { $0.key == topic }) {
+            ruleDetails(topic, title: category.title)
         } else {
             overview
         }
@@ -80,6 +85,15 @@ struct StudyRulesView: View {
     @ViewBuilder private func ruleDetails(_ category: String, title: String) -> some View {
         if category == "sofit" {
             StudySofitView(content: content)
+                .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
+        } else if category == "prefixes" {
+            GrammarAffixesView(content: content)
+                .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
+        } else if category == "binyanim" {
+            GrammarBinyanimView(content: content)
+                .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
+        } else if category == "roots" {
+            RootDirectoryView(content: content)
                 .onAppear { progress.write(category, for: "alef.rulesTab.v1") }
         } else {
             StudyPage {
@@ -212,6 +226,216 @@ struct StudyRulesView: View {
             StudyRow(title: "查看\(letter.nameChinese)", symbol: "book", subtitle: letter.studyName)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct GrammarAffixesView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+    @State private var kind = "prefix"
+
+    var body: some View {
+        let items = content.grammarAffixes.filter { $0.kind == kind }
+        StudyPage {
+            StudySegments(title: "词缀类型", options: [("prefix", "高频前缀"), ("suffix", "后缀与结构")], selection: $kind)
+            StudyNotice(title: kind == "prefix" ? "希伯来语单字母前缀直接贴在词首" : "人称所有格、复数与构造态是阅读高频结构",
+                        symbol: "info.circle")
+            ForEach(items) { item in
+                affixCard(item)
+            }
+        }
+        .studyDetail("前缀与后缀")
+    }
+
+    private func affixCard(_ item: StudyGrammarAffix) -> some View {
+        StudyCard {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                HebrewText(text: item.hebrew, size: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.meaning).font(.headline).foregroundStyle(progress.theme.ink)
+                    Text(item.transliteration).font(.caption.weight(.medium)).foregroundStyle(progress.theme.mutedInk)
+                }
+            }
+            Text(item.rule).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+            Divider()
+            ForEach(Array(item.examples.enumerated()), id: \.offset) { _, example in
+                affixExampleRow(example)
+            }
+        }
+    }
+
+    private func affixExampleRow(_ example: StudyGrammarAffix.Example) -> some View {
+        let linkedWord = example.wordId.flatMap { id in content.words.first { $0.id == id } }
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                HebrewText(text: example.hebrew, size: 24)
+                Text("\(example.transliteration) · \(example.meaning)")
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            Spacer(minLength: 0)
+            if let linkedWord {
+                NavigationLink {
+                    WordDetailView(word: linkedWord, content: content)
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(progress.theme.accent)
+                .accessibilityLabel("查看基础词 \(linkedWord.meaningZh)")
+            }
+            PronunciationButton(hebrew: example.hebrew, iconOnly: true, title: "朗读 \(example.meaning)")
+        }
+    }
+}
+
+private struct GrammarBinyanimView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+
+    var body: some View {
+        StudyPage {
+            StudyNotice(title: "Binyanim（动词词干系统）", symbol: "wand.and.stars",
+                        note: "希伯来语动词把 3 个辅音词根填进不同“词干模具”，就能系统表达主动、强化、使动、反身或被动含义。")
+            ForEach(content.grammarBinyanim) { binyan in
+                binyanCard(binyan)
+            }
+        }
+        .studyDetail("动词词干")
+    }
+
+    private func binyanCard(_ binyan: StudyGrammarBinyan) -> some View {
+        let examples = binyan.exampleWordIds.compactMap { id in content.words.first { $0.id == id } }
+        return StudyCard {
+            HStack(alignment: .firstTextBaseline) {
+                HebrewText(text: binyan.nameHebrew, size: 28)
+                Spacer(minLength: 8)
+                Text("\(binyan.nameEnglish) · \(binyan.role)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(progress.theme.accent)
+            }
+            LabeledContent("骨架模板", value: binyan.pattern).font(.subheadline)
+            LabeledContent("现在时标志", value: binyan.presentPrefix).font(.subheadline)
+            StudyNotice(title: binyan.tip, symbol: "lightbulb")
+            if !examples.isEmpty {
+                Divider()
+                ForEach(examples) { word in
+                    HStack {
+                        NavigationLink {
+                            WordDetailView(word: word, content: content)
+                        } label: {
+                            StudyRow(title: word.hebrew, symbol: "book", subtitle: "\(word.transliteration) · \(word.meaningZh)")
+                        }
+                        .buttonStyle(.plain)
+                        PronunciationButton(hebrew: word.hebrew, iconOnly: true)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RootDirectoryView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+    @State private var query = ""
+
+    var body: some View {
+        let families = filteredFamilies
+        StudyPage {
+            StudyNotice(title: "Shoresh（三辅音词根）", symbol: "point.3.connected.trianglepath.dotted",
+                        note: "同一组词根辅音会衍生出大量相关名词与动词。记住词根，能成串扩展词汇。")
+            if families.isEmpty {
+                ContentUnavailableView("没有匹配的词根", systemImage: "magnifyingglass")
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(families, id: \.root) { family in
+                        NavigationLink {
+                            RootFamilyView(root: family.root, content: content)
+                        } label: {
+                            StudyCard(padding: 10) {
+                                StudyRow(
+                                    title: family.root,
+                                    symbol: "point.3.connected.trianglepath.dotted",
+                                    subtitle: family.words.prefix(3).map(\.meaningZh).joined(separator: "、"),
+                                    value: "\(family.words.count) 词"
+                                )
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .studyDetail("词根家族")
+        .searchable(text: $query, prompt: "搜索词根或关联词义")
+    }
+
+    private var filteredFamilies: [(root: String, words: [StudyWord])] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let all = content.rootFamilies()
+        guard !trimmed.isEmpty else { return all }
+        return all.filter { family in
+            family.root.localizedCaseInsensitiveContains(trimmed)
+                || family.words.contains {
+                    $0.meaningZh.localizedCaseInsensitiveContains(trimmed)
+                        || $0.hebrewUnpointed.contains(trimmed)
+                        || $0.transliteration.localizedCaseInsensitiveContains(trimmed)
+                }
+        }
+    }
+}
+
+struct RootFamilyView: View {
+    @Environment(StudyProgress.self) private var progress
+    let root: String
+    let content: StudyContent
+
+    var body: some View {
+        let familyWords = content.words(withRoot: root)
+        StudyPage {
+            StudyCard(highlighted: true) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("三辅音词根").font(.caption.weight(.semibold)).foregroundStyle(progress.theme.accent)
+                        HebrewText(text: root, size: 38)
+                    }
+                    Spacer(minLength: 0)
+                    Text("共 \(familyWords.count) 个关联词")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+                Text("观察这些词如何共享相同的核心辅音骨架，通过改变元音和前缀表达不同词性与含义。")
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            ForEach(familyWords) { word in
+                StudyCard(padding: 10) {
+                    HStack(spacing: 8) {
+                        NavigationLink {
+                            WordDetailView(word: word, content: content)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    HebrewText(text: word.hebrew, size: 28)
+                                    Text(word.transliteration).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                                }
+                                Text("\(word.meaningZh) · \(word.partOfSpeech)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(progress.theme.ink)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        PronunciationButton(hebrew: word.hebrew, iconOnly: true)
+                    }
+                }
+            }
+        }
+        .studyDetail("词根 · \(root)")
     }
 }
 

@@ -10,6 +10,7 @@ struct PracticeCenterView: View {
         let dueLetters = content.dueLetters(in: progress)
         StudyPage {
             StudyHeading(section: "练习", title: "把学过的，记牢")
+            LearningPathEntry(content: content)
             DailyVocabularyEntry(content: content)
             dueWordsCard(due)
             if !dueLetters.isEmpty {
@@ -57,6 +58,18 @@ struct PracticeCenterView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            StudySectionTitle("听力辨音")
+            NavigationLink {
+                MinimalPairQuizView(content: content)
+            } label: {
+                StudyCard(padding: 10) {
+                    StudyRow(title: "易混音辨析（最小对立对）", symbol: "ear",
+                             subtitle: "对比 ח/ה、ב/פ、ס/שׁ、ק/ג 等高频混音",
+                             value: "\(content.minimalPairs.count) 组")
+                }
+            }
+            .buttonStyle(.plain)
         }
         .studyHome()
     }
@@ -766,4 +779,208 @@ private struct FlashQuizView: View {
     }
 
     private func soundLabel(_ letter: StudyLetter) -> String { "\(letter.nameEnglish) · \(letter.modernIpa)" }
+}
+
+private struct MinimalPairQuizView: View {
+    @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
+    @Environment(\.dismiss) private var dismiss
+    let content: StudyContent
+
+    private struct Question {
+        let pair: StudyMinimalPair
+        let target: StudyWord
+        let other: StudyWord
+        let choices: [StudyWord]
+    }
+
+    @State private var question: Question?
+    @State private var selectedId: String?
+    @State private var submittedId: String?
+    @State private var correct = 0
+    @State private var total = 0
+    @State private var streak = 0
+    @State private var showsSummary = false
+
+    private var wordsById: [String: StudyWord] {
+        Dictionary(uniqueKeysWithValues: content.words.map { ($0.id, $0) })
+    }
+
+    var body: some View {
+        ScrollViewReader { scroll in
+            StudyPage {
+                if showsSummary {
+                    StudyQuizSummary(title: "完成辨音练习", correct: correct, answered: total)
+                } else if let question {
+                    headerStatus
+                    promptCard(question).id("mp-question")
+                    ForEach(Array(question.choices.enumerated()), id: \.element.id) { index, choice in
+                        StudyAnswerButton(
+                            title: "\(choice.hebrew) · \(choice.meaningZh)",
+                            submitted: submittedId != nil,
+                            selected: selectedId == choice.id,
+                            correct: choice.id == question.target.id,
+                            optionLabel: studyOptionLabel(index)
+                        ) {
+                            selectedId = choice.id
+                        }
+                    }
+                    if let submittedId {
+                        feedbackSection(question, submittedId: submittedId).id("mp-result")
+                    }
+                } else {
+                    ContentUnavailableView("暂无可用辨音词对", systemImage: "ear")
+                }
+            }
+            .onChange(of: submittedId) { _, value in
+                scroll.scrollTo(value == nil ? "mp-question" : "mp-result", anchor: value == nil ? .top : .bottom)
+            }
+        }
+        .studyDetail("易混音辨析")
+        .toolbar {
+            if total > 0 && !showsSummary {
+                ToolbarItem(placement: .topBarTrailing) { Button("结束") { showsSummary = true } }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomBar
+        }
+        .task {
+            if question == nil { next(play: false) }
+        }
+        .onDisappear { audio.stop() }
+    }
+
+    private var headerStatus: some View {
+        HStack {
+            Label("得分 \(correct) / \(total)", systemImage: "star")
+            Spacer()
+            Label("连对 \(streak)", systemImage: "flame")
+                .foregroundStyle(progress.theme.reminder)
+            if submittedId == nil {
+                Button { next(play: true) } label: {
+                    Image(systemName: "arrow.clockwise").frame(minWidth: 24)
+                }
+                .buttonStyle(StudyButtonStyle())
+                .accessibilityLabel("换一组")
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(progress.theme.mutedInk)
+        .monospacedDigit()
+    }
+
+    private func promptCard(_ question: Question) -> some View {
+        StudyCard(highlighted: true) {
+            HStack {
+                StudySectionTitle("听读音，选出听到的是哪一个词")
+                Spacer(minLength: 4)
+                Text(question.pair.contrast)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(progress.theme.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(progress.theme.cardSurface, in: Capsule())
+            }
+            PronunciationButton(hebrew: question.target.hebrew, title: "播放题目发音", prominent: true, bundledOnly: true)
+        }
+    }
+
+    private func feedbackSection(_ question: Question, submittedId: String) -> some View {
+        let success = submittedId == question.target.id
+        let chosen = question.choices.first { $0.id == submittedId }
+        return VStack(alignment: .leading, spacing: 8) {
+            StudyQuizFeedback(
+                correct: success,
+                solution: "\(question.target.hebrew) · \(question.target.meaningZh)（\(question.target.ipa)）",
+                response: chosen.map { "\($0.hebrew) · \($0.meaningZh)" },
+                explanation: question.pair.tip
+            )
+            StudyCard(padding: 10) {
+                StudySectionTitle("对比试听")
+                comparisonRow(question.target, isTarget: true)
+                Divider()
+                comparisonRow(question.other, isTarget: false)
+            }
+        }
+    }
+
+    private func comparisonRow(_ word: StudyWord, isTarget: Bool) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    HebrewText(text: word.hebrew, size: 24)
+                    Text(word.ipa).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                    if isTarget {
+                        Text("本题读音")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                    }
+                }
+                Text("\(word.transliteration) · \(word.meaningZh)")
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            Spacer(minLength: 0)
+            PronunciationButton(hebrew: word.hebrew, iconOnly: true, bundledOnly: true)
+        }
+    }
+
+    @ViewBuilder private var bottomBar: some View {
+        if showsSummary {
+            StudyActionBar {
+                Button { dismiss() } label: { Text("完成").frame(maxWidth: .infinity) }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+            }
+        } else if let question {
+            StudyActionBar {
+                if submittedId != nil {
+                    Button { next(play: true) } label: {
+                        Label("下一组", systemImage: "arrow.right").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                } else {
+                    Button { confirm(question) } label: {
+                        Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .disabled(selectedId == nil)
+                }
+            }
+        }
+    }
+
+    private func confirm(_ question: Question) {
+        guard submittedId == nil, let selectedId else { return }
+        submittedId = selectedId
+        total += 1
+        let success = selectedId == question.target.id
+        if success { correct += 1 }
+        streak = success ? streak + 1 : 0
+        progress.recordStudy()
+        audio.playFeedback(success ? .correct : .wrong)
+    }
+
+    private func next(play: Bool) {
+        let lookup = wordsById
+        let validPairs = content.minimalPairs.filter {
+            lookup[$0.firstWordId] != nil && lookup[$0.secondWordId] != nil
+        }
+        let candidates = validPairs.filter { $0.id != question?.pair.id }
+        guard let pair = (candidates.isEmpty ? validPairs : candidates).randomElement(),
+              let first = lookup[pair.firstWordId],
+              let second = lookup[pair.secondWordId] else {
+            question = nil
+            return
+        }
+        let targetFirst = Bool.random()
+        let target = targetFirst ? first : second
+        let other = targetFirst ? second : first
+        question = Question(pair: pair, target: target, other: other, choices: [target, other].shuffled())
+        selectedId = nil
+        submittedId = nil
+        if play {
+            audio.speak(target.hebrew, rate: progress.speechRate, bundledOnly: true)
+        }
+    }
 }

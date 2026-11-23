@@ -45,6 +45,7 @@ struct WordsView: View {
     @State private var showsFilters = false
     @State private var phraseCategory = "all"
     @State private var hidePhraseTranslation = false
+    @State private var shadowingPhraseId: String?
 
     var body: some View {
         StudyPage {
@@ -412,6 +413,15 @@ struct WordsView: View {
                 PronunciationButton(hebrew: phrase.hebrew,
                                     title: "正常 \(progress.speechRate.formatted(.number.precision(.fractionLength(2))))×", prominent: true)
                 PronunciationButton(hebrew: phrase.hebrew, rate: 0.68, title: "慢速 0.68×")
+                Button {
+                    shadowingPhraseId = shadowingPhraseId == phrase.id ? nil : phrase.id
+                } label: {
+                    Label("跟读", systemImage: "mic")
+                }
+                .buttonStyle(StudyButtonStyle(selected: shadowingPhraseId == phrase.id))
+            }
+            if shadowingPhraseId == phrase.id {
+                ShadowingPracticeCard(hebrew: phrase.hebrew, title: "跟读短句")
             }
         }
     }
@@ -530,13 +540,20 @@ private struct StudyReadingLibrary: View {
     }
 }
 
-private struct WordDetailView: View {
+struct WordDetailView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     let word: StudyWord
     let content: StudyContent
     @State var showNiqqud: Bool
     @State var showCursive: Bool
+
+    init(word: StudyWord, content: StudyContent, showNiqqud: Bool = true, showCursive: Bool = false) {
+        self.word = word
+        self.content = content
+        _showNiqqud = State(initialValue: showNiqqud)
+        _showCursive = State(initialValue: showCursive)
+    }
 
     private var displayedWord: String { showNiqqud ? word.hebrew : word.hebrewUnpointed }
 
@@ -579,8 +596,28 @@ private struct WordDetailView: View {
                                    showNiqqud: showNiqqud, cursive: showCursive)
                 }
             }
-            StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
-                        symbol: "info.circle", note: word.root.map { "词根 · \($0)" })
+            if let root = word.root, !root.isEmpty {
+                let familyCount = content.words(withRoot: root).count
+                NavigationLink {
+                    RootFamilyView(root: root, content: content)
+                } label: {
+                    StudyCard(padding: 10) {
+                        StudyRow(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                                 symbol: "point.3.connected.trianglepath.dotted",
+                                 subtitle: "词根 · \(root)（查看全部 \(familyCount) 个同根词）")
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                            symbol: "info.circle")
+            }
+            StudyCard {
+                DisclosureGroup("跟读录音对比") {
+                    ShadowingPracticeCard(hebrew: word.hebrew)
+                        .padding(.top, 6)
+                }
+            }
             if !word.note.isEmpty {
                 StudyCard { DisclosureGroup("用法") { Text(word.note).padding(.top, 6) } }
             }
@@ -690,13 +727,22 @@ private struct WordDetailView: View {
     }
 }
 
-private struct StudyReadingView: View {
+struct StudyReadingView: View {
     @Environment(StudyProgress.self) private var progress
     let reading: StudyReading
-    @Binding var showNiqqud: Bool
+    private var showNiqqudBinding: Binding<Bool>?
+    @State private var niqqudMode: ReadingNiqqudMode
     @State private var showTranslation = false
     @State private var answer: Int?
     @State private var selectedGloss: GlossSelection?
+    @State private var revealedPointed: Set<Int> = []
+    @State private var shadowingSentence: Int?
+
+    init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil) {
+        self.reading = reading
+        self.showNiqqudBinding = showNiqqud
+        _niqqudMode = State(initialValue: (showNiqqud?.wrappedValue ?? true) ? .full : .unpointed)
+    }
 
     private struct GlossSelection: Equatable {
         let sentence: Int
@@ -709,8 +755,13 @@ private struct StudyReadingView: View {
                 Text(source).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
             }
             StudySegments(title: "阅读方式", options: [(false, "原文"), (true, "中希对照")], selection: $showTranslation)
+            StudySegments(title: "元音点过渡", options: ReadingNiqqudMode.allCases.map { (value: $0, title: $0.title) }, selection: $niqqudMode)
+            if niqqudMode == .assisted {
+                StudyNotice(title: "过渡模式：仅重点生词保留元音点", symbol: "eye",
+                            note: "其余高频词已隐藏元音点，点按下方“对照带点原文”可随时核对。")
+            }
             StudySectionTitle("原文与朗读")
-            StudyNotice(title: "点按标记的词查看释义", symbol: "hand.tap")
+            StudyNotice(title: "点按带下划线的词查看释义", symbol: "hand.tap")
             ForEach(Array(reading.sentences.enumerated()), id: \.offset) { index, sentence in
                 StudyCard { sentenceRow(sentence, at: index) }
             }
@@ -731,22 +782,18 @@ private struct StudyReadingView: View {
             }
         }
         .studyDetail(reading.title)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Toggle("显示元音点", isOn: $showNiqqud)
-                } label: {
-                    Label("阅读选项", systemImage: "slider.horizontal.3")
-                }
-            }
+        .onChange(of: niqqudMode) { _, mode in
+            selectedGloss = nil
+            revealedPointed.removeAll()
+            showNiqqudBinding?.wrappedValue = (mode != .unpointed)
         }
-        .onChange(of: showNiqqud) { _, _ in selectedGloss = nil }
     }
 
     private func sentenceRow(_ sentence: StudyReading.Sentence, at index: Int) -> some View {
-        let text = showNiqqud ? sentence.hebrew : sentence.unpointed
+        let text = reading.displayText(for: sentence, mode: niqqudMode)
         let glosses = reading.inlineGlosses(in: text)
         let selectedTerm = selectedGloss.flatMap { $0.sentence == index ? $0.term : nil }
+        let showingPointed = niqqudMode != .full && revealedPointed.contains(index)
         return VStack(alignment: .leading, spacing: 8) {
             Text(attributedSentence(text, glosses: glosses, selectedTerm: selectedTerm))
                 .font(.title2)
@@ -759,6 +806,13 @@ private struct StudyReadingView: View {
                     selectedGloss = selectedGloss == selection ? nil : selection
                     return .handled
                 })
+            if showingPointed {
+                HebrewText(text: sentence.hebrew, size: 22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .environment(\.layoutDirection, .rightToLeft)
+                    .padding(8)
+                    .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 8))
+            }
             if let selectedTerm, glosses.indices.contains(selectedTerm) {
                 let gloss = glosses[selectedTerm]
                 Text("\(String(text[gloss.range])) · \(gloss.definition)")
@@ -772,8 +826,33 @@ private struct StudyReadingView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            PronunciationButton(hebrew: sentence.hebrew,
-                                title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
+            let controls = Group {
+                PronunciationButton(hebrew: sentence.hebrew,
+                                    title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
+                Button {
+                    shadowingSentence = shadowingSentence == index ? nil : index
+                } label: {
+                    Label("跟读", systemImage: "mic")
+                }
+                .buttonStyle(StudyButtonStyle(selected: shadowingSentence == index))
+                if niqqudMode != .full {
+                    Button {
+                        if revealedPointed.contains(index) { revealedPointed.remove(index) }
+                        else { revealedPointed.insert(index) }
+                    } label: {
+                        Label(showingPointed ? "隐藏带点" : "带点对照",
+                              systemImage: showingPointed ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: showingPointed))
+                }
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { controls }.fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 6) { controls }
+            }
+            if shadowingSentence == index {
+                ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句")
+            }
         }
     }
 
