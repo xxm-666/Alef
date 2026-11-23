@@ -575,10 +575,12 @@ struct ShadowingPracticeCard: View {
         let recording: URL
         let expected: String
         let provider: StudyAIProvider
+        let openRouterModel: StudyOpenRouterModel
         let gateway: String
     }
 
     @AppStorage(StudyAIKeychain.enabledKey) private var aiEnabled = false
+    @AppStorage(StudyOpenRouterModel.preferenceKey) private var openRouterModel = StudyOpenRouterModel.whisper
     @AppStorage(StudyAIKeychain.gatewayKey) private var aiGateway = ""
     @AppStorage(StudyAIKeychain.revisionKey) private var aiSettingsRevision = 0
     @Environment(StudyProgress.self) private var progress
@@ -682,7 +684,7 @@ struct ShadowingPracticeCard: View {
             do {
                 let result = try await StudyAITranscription.analyze(
                     recording: request.recording, expected: request.expected,
-                    provider: request.provider, gateway: request.gateway
+                    provider: request.provider, openRouterModel: request.openRouterModel, gateway: request.gateway
                 )
                 guard !Task.isCancelled, aiRequest == request else { return }
                 aiResults[request.provider] = .success(result)
@@ -696,6 +698,10 @@ struct ShadowingPracticeCard: View {
         .onChange(of: recorder.completedRecordingURL) { _, _ in resetAIComparison() }
         .onChange(of: aiEnabled, initial: true) { _, _ in reloadAIConfiguration() }
         .onChange(of: aiSettingsRevision) { _, _ in reloadAIConfiguration() }
+        .onChange(of: openRouterModel) { _, _ in
+            if aiRequest?.provider == .openRouter { aiRequest = nil }
+            aiResults.removeValue(forKey: .openRouter)
+        }
         .onChange(of: hebrew) { _, _ in
             resetAIComparison()
             recorder.cleanup()
@@ -794,9 +800,11 @@ struct ShadowingPracticeCard: View {
             ForEach(configuredProviders) { provider in
                 Button {
                     aiResults.removeValue(forKey: provider)
-                    aiRequest = AIRequest(recording: recording, expected: hebrew, provider: provider, gateway: aiGateway)
+                    aiRequest = AIRequest(recording: recording, expected: hebrew, provider: provider,
+                                          openRouterModel: openRouterModel, gateway: aiGateway)
                 } label: {
-                    Label("用\(provider.title)识别", systemImage: "waveform")
+                    let title = provider == .openRouter ? openRouterModel.title : provider.title
+                    Label("用\(title)识别", systemImage: "waveform")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(StudyButtonStyle())

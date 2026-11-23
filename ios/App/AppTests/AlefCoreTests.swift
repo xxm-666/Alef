@@ -313,13 +313,17 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertThrowsError(try StudyAIProvider.aliyun.endpoint(gateway: "http://example.com/transcribe"))
         XCTAssertThrowsError(try StudyAIProvider.aliyun.endpoint(gateway: "https://user@example.com/transcribe"))
         XCTAssertEqual(try StudyAIProvider.aliyun.endpoint(gateway: "https://example.com/transcribe").path, "/transcribe")
-        let model = try XCTUnwrap(openRouter.model)
-        let body = StudyAITranscription.multipart(audio: Data([0xAA, 0xBB]), model: model, boundary: "alef-test")
-        let payload = String(decoding: body, as: UTF8.self)
-        XCTAssertTrue(payload.contains("openai/whisper-large-v3"))
-        XCTAssertTrue(payload.contains("name=\"language\"\r\n\r\nhe"))
-        XCTAssertTrue(payload.hasSuffix("--alef-test--\r\n"))
-        XCTAssertNotNil(body.range(of: Data([0xAA, 0xBB])))
+        let expectedModels = ["openai/whisper-large-v3", "microsoft/mai-transcribe-2", "elevenlabs/scribe-v2", "deepgram/nova-3"]
+        XCTAssertEqual(StudyOpenRouterModel.allCases.map(\.rawValue), expectedModels)
+        for choice in StudyOpenRouterModel.allCases {
+            let model = try XCTUnwrap(openRouter.model(openRouter: choice))
+            let body = StudyAITranscription.multipart(audio: Data([0xAA, 0xBB]), model: model, boundary: "alef-test")
+            let payload = String(decoding: body, as: UTF8.self)
+            XCTAssertTrue(payload.contains("name=\"model\"\r\n\r\n\(choice.rawValue)\r\n"))
+            XCTAssertTrue(payload.contains("name=\"language\"\r\n\r\nhe"))
+            XCTAssertTrue(payload.hasSuffix("--alef-test--\r\n"))
+            XCTAssertNotNil(body.range(of: Data([0xAA, 0xBB])))
+        }
     }
 
     func testAITranscriptComparisonIgnoresHebrewMarksAndFindsWordDifferences() throws {

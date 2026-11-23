@@ -1,6 +1,26 @@
 import Foundation
 import Security
 
+enum StudyOpenRouterModel: String, CaseIterable, Identifiable {
+    static let preferenceKey = "alef.device.aiOpenRouterModel"
+
+    case whisper = "openai/whisper-large-v3"
+    case microsoft = "microsoft/mai-transcribe-2"
+    case elevenLabs = "elevenlabs/scribe-v2"
+    case deepgram = "deepgram/nova-3"
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .whisper: "Whisper Large V3"
+        case .microsoft: "Microsoft MAI-Transcribe 2"
+        case .elevenLabs: "ElevenLabs Scribe v2"
+        case .deepgram: "Deepgram Nova-3"
+        }
+    }
+}
+
 enum StudyAIProvider: String, CaseIterable, Identifiable {
     case openAI = "OpenAI"
     case openRouter = "OpenRouter"
@@ -11,15 +31,15 @@ enum StudyAIProvider: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .openAI: "OpenAI"
-        case .openRouter: "OpenRouter · Whisper"
+        case .openRouter: "OpenRouter"
         case .aliyun: "阿里云 · 希伯来语"
         }
     }
 
-    var model: String? {
+    func model(openRouter: StudyOpenRouterModel) -> String? {
         switch self {
         case .openAI: "gpt-4o-mini-transcribe"
-        case .openRouter: "openai/whisper-large-v3"
+        case .openRouter: openRouter.rawValue
         case .aliyun: nil
         }
     }
@@ -156,7 +176,8 @@ enum StudyAITranscription {
         }
     }
 
-    static func analyze(recording: URL, expected: String, provider: StudyAIProvider, gateway: String) async throws -> StudyAITranscript {
+    static func analyze(recording: URL, expected: String, provider: StudyAIProvider,
+                        openRouterModel: StudyOpenRouterModel, gateway: String) async throws -> StudyAITranscript {
         let endpoint = try provider.endpoint(gateway: gateway)
         guard let key = try StudyAIKeychain.read(for: provider) else { throw StudyAIError.noKey }
         guard let size = try? recording.resourceValues(forKeys: [.fileSizeKey]).fileSize,
@@ -168,7 +189,7 @@ enum StudyAITranscription {
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         let body: Data
-        if let model = provider.model {
+        if let model = provider.model(openRouter: openRouterModel) {
             let boundary = UUID().uuidString
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
             body = multipart(audio: data, model: model, boundary: boundary)

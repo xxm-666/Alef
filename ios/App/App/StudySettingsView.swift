@@ -982,6 +982,7 @@ private struct StudyAISettingsView: View {
     @Environment(StudyProgress.self) private var progress
     @AppStorage(StudyAIKeychain.enabledKey) private var enabled = false
     @AppStorage(StudyAIKeychain.providerKey) private var provider = StudyAIProvider.openAI
+    @AppStorage(StudyOpenRouterModel.preferenceKey) private var openRouterModel = StudyOpenRouterModel.whisper
     @AppStorage(StudyAIKeychain.gatewayKey) private var gateway = ""
     @AppStorage(StudyAIKeychain.revisionKey) private var revision = 0
     @State private var gatewayDraft = ""
@@ -1003,20 +1004,28 @@ private struct StudyAISettingsView: View {
                         Text(service.title).tag(service)
                     }
                 }
+                if provider == .openRouter {
+                    Picker("转写模型", selection: $openRouterModel) {
+                        ForEach(StudyOpenRouterModel.allCases) { model in
+                            Text(model.title).tag(model)
+                        }
+                    }
+                    Text("切换模型会立即生效，继续使用同一把 OpenRouter API 密钥。")
+                        .font(.footnote)
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
                 if provider == .aliyun {
+                    aliyunKeyInstructions
                     TextField("HTTPS 测试网关完整地址", text: $gatewayDraft)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Text("输入网关的测试密钥。阿里云 AccessKey 和希伯来语项目 AppKey 在网关服务端配置。")
-                        .font(.footnote)
-                        .foregroundStyle(progress.theme.mutedInk)
                 }
                 if hasKey {
                     Label("密钥已保存在本机钥匙串", systemImage: "lock.fill")
                         .foregroundStyle(progress.theme.success)
                 }
-                SecureField(hasKey ? "输入新密钥以替换" : "粘贴密钥", text: $draft)
+                SecureField(hasKey ? "输入新密钥以替换" : (provider == .aliyun ? "粘贴网关测试密钥" : "粘贴 API 密钥"), text: $draft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .privacySensitive()
@@ -1045,6 +1054,20 @@ private struct StudyAISettingsView: View {
                 hasKey = false
                 message = error.localizedDescription
             }
+        }
+    }
+
+    private var aliyunKeyInstructions: some View {
+        DisclosureGroup("如何获取阿里云密钥？") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("网关测试密钥由网关管理员生成。自己部署时，可运行 openssl rand -hex 24，把同一个值写入服务端 ALEF_GATEWAY_KEY，再粘贴到下方。已有网关时，向管理员获取 HTTPS 地址和测试密钥。")
+                Text("项目 AppKey 在阿里云智能语音交互控制台的「全部项目」获取。创建录音文件识别项目，选择「通用-希伯来语（16 kHz）」，将 AppKey 填入服务端 ALEF_NLS_APP_KEY。阿里云 RAM AccessKey 也只配置在服务端。")
+                Link("打开阿里云智能语音交互控制台", destination: URL(string: "https://nls-portal.console.aliyun.com/")!)
+                Link("查看阿里云模型配置说明", destination: URL(string: "https://help.aliyun.com/zh/isi/user-guide/api-reference-2")!)
+            }
+            .font(.footnote)
+            .foregroundStyle(progress.theme.mutedInk)
+            .padding(.top, 8)
         }
     }
 
