@@ -294,7 +294,7 @@ private struct DailyVocabularyView: View {
         Button(action: action) {
             Label(title, systemImage: symbol).frame(maxWidth: .infinity)
         }
-        .buttonStyle(StudyButtonStyle(prominent: true))
+        .buttonStyle(StudyButtonStyle(learningAction: true))
     }
 
     private func currentWord(_ group: DailyVocabularyGroup) -> StudyWord? {

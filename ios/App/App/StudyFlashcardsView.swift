@@ -86,10 +86,10 @@ struct PracticeCenterView: View {
                     Label(due.isEmpty ? "查看队列" : "开始复习", systemImage: due.isEmpty ? "chevron.right" : "play.fill")
                         .font(.subheadline.weight(.semibold))
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(due.isEmpty ? progress.theme.accent : Color.white)
                         .padding(.horizontal, 10)
                         .frame(minHeight: 44)
-                        .background(progress.theme.primaryButton, in: Capsule())
+                        .background(due.isEmpty ? progress.theme.insetSurface : progress.theme.learningAction, in: Capsule())
                 }
             }
         }
@@ -111,7 +111,7 @@ struct PracticeCenterView: View {
                         .foregroundStyle(Color.white)
                         .padding(.horizontal, 10)
                         .frame(minHeight: 44)
-                        .background(progress.theme.primaryButton, in: Capsule())
+                        .background(progress.theme.learningAction, in: Capsule())
                 }
             }
         }
@@ -651,14 +651,14 @@ private struct FlashQuizView: View {
                     } label: {
                         Label(finishing ? "查看复习结果" : "下一题", systemImage: "arrow.right").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
                 } else {
                     Button {
                         if let selection { grade(selection, solution: question.solution) }
                     } label: {
                         Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
                     .disabled(selection == nil)
                 }
             }
@@ -938,12 +938,12 @@ private struct MinimalPairQuizView: View {
                     Button { next(play: true) } label: {
                         Label("下一组", systemImage: "arrow.right").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
                 } else {
                     Button { confirm(question) } label: {
                         Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
                     .disabled(selectedId == nil)
                 }
             }

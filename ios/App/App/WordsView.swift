@@ -1097,7 +1097,7 @@ struct WordQuizView: View {
             primaryButton("返回", symbol: "chevron.backward") { dismiss() }
         } else if result != nil {
             let finishing = reviewing && reviewIndex + 1 >= queue.count
-            primaryButton(finishing ? "查看复习结果" : "下一题", symbol: "arrow.right") {
+            primaryButton(finishing ? "查看复习结果" : "下一题", symbol: "arrow.right", learningAction: true) {
                 if finishing { showsSummary = true }
                 else {
                     if reviewing { reviewIndex += 1 }
@@ -1105,7 +1105,7 @@ struct WordQuizView: View {
                 }
             }
         } else {
-            primaryButton("确认答案", symbol: "checkmark", action: confirm)
+            primaryButton("确认答案", symbol: "checkmark", learningAction: true, action: confirm)
                 .disabled(kind == .spelling ? spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : selectedOption == nil)
         }
     }
@@ -1116,11 +1116,11 @@ struct WordQuizView: View {
                                 message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
     }
 
-    private func primaryButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    private func primaryButton(_ title: String, symbol: String, learningAction: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: symbol).frame(maxWidth: .infinity)
         }
-        .buttonStyle(StudyButtonStyle(prominent: true))
+        .buttonStyle(StudyButtonStyle(prominent: !learningAction, learningAction: learningAction))
     }
 
     private func confirm() {

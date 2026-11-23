@@ -16,18 +16,16 @@ struct AlphabetView: View {
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
             StudyHeading(section: "从字母开始", title: "认识希伯来字母")
             learningProgress
-            LearningPathEntry(content: content)
             if let next = continueLetter {
                 NavigationLink {
                     LetterStudyView(letter: next, content: content)
                 } label: {
-                    StudyCard(highlighted: true, padding: 10) {
-                        StudyRow(title: "继续学习 \(next.nameEnglish)", symbol: "book",
-                                 subtitle: "学习字形、发音与写法")
-                    }
+                    StudyRow(title: "继续学习 \(next.nameEnglish)", symbol: "book",
+                             subtitle: "学习字形、发音与写法", emphasized: true)
                 }
                 .buttonStyle(.plain)
             }
+            LearningPathEntry(content: content)
             controls
             if letters.isEmpty {
                 ContentUnavailableView("没有需复习的字母", systemImage: "checkmark.circle",

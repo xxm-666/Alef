@@ -170,6 +170,7 @@ extension StudyTheme {
     }
     var outline: Color { palette(light: 0xDCE5E4, dark: 0x38535C) }
     var primaryButton: Color { palette(light: dayAccent, dark: 0x166369) }
+    var learningAction: Color { palette(light: 0x2452A3, dark: 0x3B6BBB) }
     var success: Color { palette(light: 0x246457, dark: 0xA9E4D0) }
     var successSurface: Color { palette(light: 0xE3F0E9, dark: 0x24443C) }
     var error: Color { palette(light: 0x993D45, dark: 0xFFB2B8) }
@@ -275,32 +276,36 @@ struct StudyRow: View {
     var subtitle: String? = nil
     var value: String? = nil
     var chevron = true
+    var emphasized = false
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.body.weight(.medium))
-                .foregroundStyle(progress.theme.accent)
+                .foregroundStyle(emphasized ? Color.white : progress.theme.accent)
                 .frame(minWidth: 27)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(emphasized ? Color.white : progress.theme.ink)
                 if let subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                    Text(subtitle).font(.caption).foregroundStyle(emphasized ? Color.white : progress.theme.mutedInk)
                 }
             }
             Spacer(minLength: 0)
             if let value {
-                Text(value).font(.caption).foregroundStyle(progress.theme.mutedInk)
+                Text(value).font(.caption).foregroundStyle(emphasized ? Color.white : progress.theme.mutedInk)
             }
             if chevron {
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(progress.theme.mutedInk)
+                    .foregroundStyle(emphasized ? Color.white : progress.theme.mutedInk)
                     .accessibilityHidden(true)
             }
         }
         .frame(minHeight: 44)
+        .padding(emphasized ? 12 : 0)
+        .background(emphasized ? progress.theme.learningAction : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 16))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -326,15 +331,18 @@ struct StudyButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     var prominent = false
     var selected = false
+    var learningAction = false
 
     func makeBody(configuration: Configuration) -> some View {
+        let filled = prominent || selected || (learningAction && enabled)
+        let fill = learningAction && enabled ? progress.theme.learningAction : progress.theme.primaryButton
         configuration.label
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(prominent || selected ? Color.white : progress.theme.accent)
+            .foregroundStyle(filled ? Color.white : progress.theme.accent)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .frame(minHeight: 44)
-            .background(prominent || selected ? progress.theme.primaryButton : progress.theme.insetSurface, in: Capsule())
+            .background(filled ? fill : progress.theme.insetSurface, in: Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.78 : 1) : 0.58)
             .contentShape(Capsule())
     }

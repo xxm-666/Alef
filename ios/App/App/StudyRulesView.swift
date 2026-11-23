@@ -490,7 +490,7 @@ private struct StudySyllablesView: View {
                             Label(answer == nil ? "确认答案" : "下一题", systemImage: answer == nil ? "checkmark" : "arrow.right")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(StudyButtonStyle(prominent: true))
+                        .buttonStyle(StudyButtonStyle(learningAction: true))
                         .disabled(answer == nil && selection == nil)
                     }
                 } else {
