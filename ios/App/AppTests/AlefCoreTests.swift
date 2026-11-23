@@ -306,6 +306,37 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertThrowsError(try target.previewBackup(Data(invalidReminderBackup.utf8)))
     }
 
+    func testAIProviderEndpointsAndOpenRouterRequestBody() throws {
+        let openRouter = StudyAIProvider.openRouter
+        XCTAssertEqual(try openRouter.endpoint(gateway: "https://example.com").host, "openrouter.ai")
+        XCTAssertEqual(try openRouter.endpoint(gateway: "").path, "/api/v1/audio/transcriptions")
+        XCTAssertThrowsError(try StudyAIProvider.aliyun.endpoint(gateway: "http://example.com/transcribe"))
+        XCTAssertThrowsError(try StudyAIProvider.aliyun.endpoint(gateway: "https://user@example.com/transcribe"))
+        XCTAssertEqual(try StudyAIProvider.aliyun.endpoint(gateway: "https://example.com/transcribe").path, "/transcribe")
+        let model = try XCTUnwrap(openRouter.model)
+        let body = StudyAITranscription.multipart(audio: Data([0xAA, 0xBB]), model: model, boundary: "alef-test")
+        let payload = String(decoding: body, as: UTF8.self)
+        XCTAssertTrue(payload.contains("openai/whisper-large-v3"))
+        XCTAssertTrue(payload.contains("name=\"language\"\r\n\r\nhe"))
+        XCTAssertTrue(payload.hasSuffix("--alef-test--\r\n"))
+        XCTAssertNotNil(body.range(of: Data([0xAA, 0xBB])))
+    }
+
+    func testAITranscriptComparisonIgnoresHebrewMarksAndFindsWordDifferences() throws {
+        let matching = try StudyAITranscript(text: "שלום, חבר!", expected: "שָׁלוֹם חָבֵר")
+        XCTAssertTrue(matching.missingWords.isEmpty)
+        XCTAssertTrue(matching.extraWords.isEmpty)
+
+        let missing = try StudyAITranscript(text: "אני כאן", expected: "אני גר כאן")
+        XCTAssertEqual(missing.missingWords, ["גר"])
+        XCTAssertTrue(missing.extraWords.isEmpty)
+
+        let repeated = try StudyAITranscript(text: "שלום שלום חבר", expected: "שלום חבר")
+        XCTAssertEqual(repeated.extraWords, ["שלום"])
+        XCTAssertTrue(repeated.missingWords.isEmpty)
+        XCTAssertThrowsError(try StudyAITranscript(text: " ", expected: "שלום"))
+    }
+
     func testShadowingRhythmTrimsSilenceAndDetectsTimingDifferences() throws {
         let speech = Array(repeating: Float(0.15), count: 20)
         let silence = Array(repeating: Float(0), count: 10)
@@ -337,7 +368,7 @@ final class AlefCoreTests: XCTestCase {
             + Array(repeating: ending, count: 10)
         let reference = try XCTUnwrap(StudySpeechRhythm(levels: levels, spectra: spectra))
         let unchanged = try XCTUnwrap(reference.compare(to: reference).acoustic)
-        XCTAssertEqual(unchanged.segments, [100, 100, 100])
+        XCTAssertEqual(unchanged.segments.map(\.score), [100, 100, 100])
 
         let changedSpectra = Array(repeating: opening, count: 20) + Array(repeating: ending, count: 10)
         let attempt = try XCTUnwrap(StudySpeechRhythm(levels: levels, spectra: changedSpectra))
@@ -346,8 +377,41 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(comparison.pauseScore, 100)
         let acoustic = try XCTUnwrap(comparison.acoustic)
         XCTAssertLessThan(acoustic.score, unchanged.score)
-        XCTAssertLessThan(acoustic.segments[1], acoustic.segments[0])
-        XCTAssertLessThan(acoustic.segments[1], acoustic.segments[2])
+        XCTAssertLessThan(acoustic.segments[1].score, acoustic.segments[0].score)
+        XCTAssertLessThan(acoustic.segments[1].score, acoustic.segments[2].score)
+    }
+
+    func testShadowingQualityRejectsLikelyCutoffRepeatNoiseAndClipping() throws {
+        let speech = Array(repeating: Float(0.15), count: 35)
+        let silence = Array(repeating: Float.zero, count: 25)
+        let reference = try XCTUnwrap(StudySpeechRhythm(levels: speech + silence))
+        let regular = try XCTUnwrap(StudySpeechRhythm(levels: silence + speech + silence))
+        XCTAssertNil(regular.qualityIssue(comparedTo: reference))
+
+        let cutoff = try XCTUnwrap(StudySpeechRhythm(levels: Array(speech.prefix(10))))
+        XCTAssertEqual(cutoff.qualityIssue(comparedTo: reference), .possiblyCutOff)
+        let capped = try XCTUnwrap(StudySpeechRhythm(levels: Array(repeating: 0, count: 465) + speech))
+        XCTAssertEqual(capped.qualityIssue(comparedTo: reference), .possiblyCutOff)
+        let repeated = try XCTUnwrap(StudySpeechRhythm(levels: speech + silence + speech))
+        XCTAssertEqual(repeated.qualityIssue(comparedTo: reference), .possibleRepeat)
+        let noisy = try XCTUnwrap(StudySpeechRhythm(levels: Array(repeating: 0.09, count: 25) + speech))
+        XCTAssertEqual(noisy.qualityIssue(comparedTo: reference), .noisy)
+        let clipped = try XCTUnwrap(StudySpeechRhythm(levels: speech, clippingRatio: 0.05))
+        XCTAssertEqual(clipped.qualityIssue(comparedTo: reference), .clipped)
+    }
+
+    func testShadowingPlaybackRangesKeepOffsetsFromOriginalAudio() throws {
+        let speech = Array(repeating: Float(0.15), count: 30)
+        let silence = Array(repeating: Float.zero, count: 15)
+        let spectra = Array(repeating: [Float(1), 0], count: speech.count)
+        let padding = Array(repeating: [Float](), count: silence.count)
+        let reference = try XCTUnwrap(StudySpeechRhythm(levels: speech, spectra: spectra))
+        let padded = try XCTUnwrap(StudySpeechRhythm(levels: silence + speech, spectra: padding + spectra))
+        let result = try XCTUnwrap(padded.compare(to: reference).acoustic)
+        XCTAssertEqual(result.segments[0].referenceRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(result.segments[0].recordingRange.lowerBound, 0.30, accuracy: 0.001)
+        XCTAssertEqual(result.segments[1].recordingRange.lowerBound, 0.50, accuracy: 0.001)
+        XCTAssertEqual(result.segments[2].recordingRange.upperBound, 0.90, accuracy: 0.001)
     }
 
     func testWidgetRoutesRoundTripAndRejectInvalidDestinations() throws {

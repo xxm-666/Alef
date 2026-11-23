@@ -21,6 +21,8 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
 
     private var recorder: AVAudioRecorder?
     private var player: AVAudioPlayer?
+    private var segmentPlayback: Task<Void, Never>?
+    private(set) var playingSegment: Int?
     private var recordingURL: URL?
 
     var hasRecording: Bool {
@@ -129,12 +131,52 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     }
 
     func stopPlayback() {
+        segmentPlayback?.cancel()
+        segmentPlayback = nil
+        playingSegment = nil
         player?.stop()
         player = nil
         if state == .playing {
             state = hasRecording ? .recorded : .idle
             releaseSession()
         }
+    }
+
+    func toggleSegment(_ index: Int, segment: StudySoundSegment, referenceURL: URL) {
+        let wasPlaying = playingSegment == index
+        stopPlayback()
+        guard !wasPlaying, let recording = completedRecordingURL else { return }
+        playingSegment = index
+        state = .playing
+        errorMessage = nil
+        segmentPlayback = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+                try session.setActive(true)
+                try await playClip(referenceURL, range: segment.referenceRange)
+                try await Task.sleep(for: .milliseconds(250))
+                try await playClip(recording, range: segment.recordingRange)
+            } catch {
+                if !Task.isCancelled { errorMessage = "无法播放该段音频。" }
+            }
+            if !Task.isCancelled { stopPlayback() }
+        }
+    }
+
+    private func playClip(_ url: URL, range: Range<Double>) async throws {
+        try Task.checkCancellation()
+        let clip = try AVAudioPlayer(contentsOf: url)
+        let start = max(0, range.lowerBound)
+        let end = min(clip.duration, range.upperBound)
+        guard start < end else { throw CocoaError(.fileReadCorruptFile) }
+        // This player is timed by segmentPlayback. Whole-recording playback uses the delegate.
+        player = clip
+        clip.currentTime = start
+        guard clip.play() else { throw CocoaError(.fileReadUnknown) }
+        try await Task.sleep(for: .seconds(end - start))
+        clip.stop()
     }
 
     func pauseForReferencePlayback() {
@@ -146,13 +188,10 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     }
 
     func cleanup() {
-        recorder?.stop()
-        recorder = nil
-        player?.stop()
-        player = nil
+        if state == .recording { stopRecording() }
+        stopPlayback()
         deleteRecordingFile()
         state = .idle
-        releaseSession()
     }
 
     private func deleteRecordingFile() {
@@ -205,6 +244,11 @@ struct StudySpeechRhythm {
 
     private let windows: [Bool]
     private let spectra: [[Float]]
+    private let spectrumFrames: [Int]
+    private let sourceFrameCount: Int
+    private let lastSpeechFrame: Int
+    private let noiseRatio: Float
+    private let clippingRatio: Double
 
     private var speechDuration: Double {
         Double(windows.filter { $0 }.count) * Self.windowDuration
@@ -214,7 +258,7 @@ struct StudySpeechRhythm {
 
     var duration: Double { Double(windows.count) * Self.windowDuration }
 
-    init?(levels: [Float], spectra: [[Float]] = []) {
+    init?(levels: [Float], spectra: [[Float]] = [], clippingRatio: Double = 0) {
         let orderedLevels = levels.sorted()
         guard orderedLevels.count >= Self.minimumSpeechWindows else { return nil }
         // Use a sustained loud level so long silence or a single click cannot set the threshold.
@@ -233,13 +277,16 @@ struct StudySpeechRhythm {
             for index in pause { normalized[index] = false }
         }
         windows = normalized
-        if spectra.count == levels.count {
-            self.spectra = (first.lowerBound..<last.upperBound).compactMap { index in
-                active[index] && !spectra[index].isEmpty ? spectra[index] : nil
-            }
-        } else {
-            self.spectra = []
-        }
+        sourceFrameCount = levels.count
+        lastSpeechFrame = last.upperBound
+        self.clippingRatio = clippingRatio
+        // The quieter fifth of the clip is a noise proxy, only used when enough quiet frames exist.
+        noiseRatio = orderedLevels[orderedLevels.count / 5] / loudLevel
+        let frames = spectra.count == levels.count
+            ? (first.lowerBound..<last.upperBound).filter { active[$0] && !spectra[$0].isEmpty }
+            : []
+        spectrumFrames = frames
+        self.spectra = frames.map { spectra[$0] }
     }
 
     static func read(_ url: URL) throws -> Self? {
@@ -266,6 +313,8 @@ struct StudySpeechRhythm {
         var tapered = Array(repeating: Float.zero, count: windowLength)
         var levels: [Float] = []
         var spectra: [[Float]] = []
+        var clippedSamples = 0
+        var speechSamples = 0
         while file.framePosition < fileLength {
             try Task.checkCancellation()
             try file.read(into: buffer)
@@ -273,18 +322,25 @@ struct StudySpeechRhythm {
             let channels = Int(format.channelCount)
             guard frames > 0, channels > 0, let samples = buffer.floatChannelData else { break }
             var energy: Float = 0
+            var clippedFrames = 0
             for frame in 0..<frames {
                 var mono: Float = 0
                 for channel in 0..<channels { mono += samples[channel][frame] }
                 mono /= Float(channels)
                 energy += mono * mono
+                if abs(mono) >= 0.995 { clippedFrames += 1 }
                 tapered[frame] = mono * taper[frame]
             }
             let rms = sqrt(energy / Float(frames))
             levels.append(rms)
+            if rms >= 0.004 {
+                clippedSamples += clippedFrames
+                speechSamples += frames
+            }
             spectra.append(rms >= 0.002 ? bandProfile(tapered.prefix(frames), coefficients: coefficients) : [])
         }
-        return Self(levels: levels, spectra: spectra)
+        return Self(levels: levels, spectra: spectra,
+                    clippingRatio: Double(clippedSamples) / Double(max(1, speechSamples)))
     }
 
     private static func bandProfile(_ samples: ArraySlice<Float>, coefficients: [[Float]]) -> [Float] {
@@ -304,6 +360,27 @@ struct StudySpeechRhythm {
         let total = bands.reduce(0, +)
         guard total > 0, total.isFinite else { return [] }
         return bands.map { sqrt($0 / total) }
+    }
+
+    func qualityIssue(comparedTo reference: Self) -> StudyRecordingIssue? {
+        if clippingRatio >= 0.015 { return .clipped }
+        if sourceFrameCount >= 490 && sourceFrameCount - lastSpeechFrame <= 4 { return .possiblyCutOff }
+        if duration >= 0.8 && noiseRatio >= 0.55 && noiseRatio > reference.noiseRatio + 0.30 {
+            return .noisy
+        }
+        if speechDuration < reference.speechDuration * 0.55 && reference.speechDuration - speechDuration >= 0.22 {
+            return .possiblyCutOff
+        }
+        let pauseMinimum = max(0.35, reference.duration * 0.3)
+        let hasTwoAttempts = Self.runs(in: windows, matching: false).contains { pause in
+            guard Double(pause.count) * Self.windowDuration >= pauseMinimum else { return false }
+            let before = Double(windows[..<pause.lowerBound].filter { $0 }.count) * Self.windowDuration
+            let after = Double(windows[pause.upperBound...].filter { $0 }.count) * Self.windowDuration
+            let expected = reference.speechDuration
+            return (0.75...1.35).contains(before / expected) && (0.75...1.35).contains(after / expected)
+        }
+        if hasTwoAttempts { return .possibleRepeat }
+        return nil
     }
 
     func compare(to reference: Self) -> StudyRhythmComparison {
@@ -370,11 +447,17 @@ struct StudySpeechRhythm {
         var column = count
         var segmentTotals = Array(repeating: 0.0, count: 3)
         var segmentCounts = Array(repeating: 0, count: 3)
+        var attemptBounds = Array(repeating: (start: count, end: 0), count: 3)
+        var referenceBounds = attemptBounds
         var pathSteps = 0
         while row > 0 && column > 0 {
             let segment = (column - 1) * 3 / count
             segmentTotals[segment] += soundDistance(row - 1, column - 1, count: count, reference: reference)
             segmentCounts[segment] += 1
+            attemptBounds[segment].start = min(attemptBounds[segment].start, row - 1)
+            attemptBounds[segment].end = max(attemptBounds[segment].end, row)
+            referenceBounds[segment].start = min(referenceBounds[segment].start, column - 1)
+            referenceBounds[segment].end = max(referenceBounds[segment].end, column)
             pathSteps += 1
             switch direction[row * columns + column] {
             case 1: row -= 1
@@ -384,11 +467,21 @@ struct StudySpeechRhythm {
                 column -= 1
             }
         }
-        let segments = zip(segmentTotals, segmentCounts).map { total, samples in
-            Self.similarity(for: total / Double(samples))
+        let segments = segmentCounts.indices.map { index in
+            StudySoundSegment(
+                score: Self.similarity(for: segmentTotals[index] / Double(segmentCounts[index])),
+                referenceRange: reference.clipRange(for: referenceBounds[index], count: count),
+                recordingRange: clipRange(for: attemptBounds[index], count: count)
+            )
         }
         let score = Self.similarity(for: alignment[alignment.count - 1] / Double(pathSteps))
         return StudySoundComparison(score: score, segments: segments)
+    }
+
+    private func clipRange(for bounds: (start: Int, end: Int), count: Int) -> Range<Double> {
+        let first = spectrumFrames[bounds.start * spectra.count / count]
+        let last = spectrumFrames[min(spectra.count - 1, (bounds.end * spectra.count - 1) / count)]
+        return (Double(first) * Self.windowDuration)..<(Double(last + 1) * Self.windowDuration)
     }
 
     private func soundDistance(_ row: Int, _ column: Int, count: Int, reference: Self) -> Double {
@@ -418,9 +511,31 @@ struct StudySpeechRhythm {
     }
 }
 
+struct StudySoundSegment: Sendable {
+    let score: Int
+    let referenceRange: Range<Double>
+    let recordingRange: Range<Double>
+}
+
 struct StudySoundComparison: Sendable {
     let score: Int
-    let segments: [Int]
+    let segments: [StudySoundSegment]
+}
+
+enum StudyRecordingIssue: Error, Equatable, Sendable {
+    case noReference, unreadable, tooQuiet, clipped, noisy, possiblyCutOff, possibleRepeat
+
+    var message: String {
+        switch self {
+        case .noReference: "此内容缺少可用的内置原音，仍可回放录音。"
+        case .unreadable: "无法读取这次录音，请重录后再试。"
+        case .tooQuiet: "有效声音太少。请靠近麦克风，把内容完整读一遍。"
+        case .clipped: "声音过响，录音可能失真。请离麦克风远一点再录。"
+        case .noisy: "这段录音可能有持续背景声。请换到安静一点的地方再试。"
+        case .possiblyCutOff: "这次跟读可能没有录完整。请完整读一遍，读完再停止录音。"
+        case .possibleRepeat: "录音里可能有两遍跟读。重录时请只读一遍。"
+        }
+    }
 }
 
 struct StudyRhythmComparison: Sendable {
@@ -434,15 +549,20 @@ struct StudyRhythmComparison: Sendable {
     let feedback: String
     let acoustic: StudySoundComparison?
 
-    static func analyze(recording: URL, reference: URL?) async -> Self? {
-        guard let reference else { return nil }
-        let worker = Task.detached(priority: .userInitiated) { () throws -> StudyRhythmComparison? in
-            guard let original = try StudySpeechRhythm.read(reference),
-                  let attempt = try StudySpeechRhythm.read(recording) else { return nil }
-            return attempt.compare(to: original)
+    static func analyze(recording: URL, reference: URL?) async -> Result<Self, StudyRecordingIssue> {
+        guard let reference else { return .failure(.noReference) }
+        let worker = Task.detached(priority: .userInitiated) { () -> Result<StudyRhythmComparison, StudyRecordingIssue> in
+            guard let original = try? StudySpeechRhythm.read(reference) else { return .failure(.noReference) }
+            do {
+                guard let attempt = try StudySpeechRhythm.read(recording) else { return .failure(.tooQuiet) }
+                if let issue = attempt.qualityIssue(comparedTo: original) { return .failure(issue) }
+                return .success(attempt.compare(to: original))
+            } catch {
+                return .failure(.unreadable)
+            }
         }
         return await withTaskCancellationHandler {
-            try? await worker.value
+            await worker.value
         } onCancel: {
             worker.cancel()
         }
@@ -450,6 +570,17 @@ struct StudyRhythmComparison: Sendable {
 }
 
 struct ShadowingPracticeCard: View {
+    private struct AIRequest: Equatable {
+        let id = UUID()
+        let recording: URL
+        let expected: String
+        let provider: StudyAIProvider
+        let gateway: String
+    }
+
+    @AppStorage(StudyAIKeychain.enabledKey) private var aiEnabled = false
+    @AppStorage(StudyAIKeychain.gatewayKey) private var aiGateway = ""
+    @AppStorage(StudyAIKeychain.revisionKey) private var aiSettingsRevision = 0
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -457,7 +588,11 @@ struct ShadowingPracticeCard: View {
     let hebrew: String
     var title = "跟读对比"
     @State private var recorder = StudyVoiceRecorder()
-    @State private var comparison: (recording: URL, result: StudyRhythmComparison?)?
+    @State private var comparison: (recording: URL, result: Result<StudyRhythmComparison, StudyRecordingIssue>)?
+
+    @State private var aiRequest: AIRequest?
+    @State private var aiResults: [StudyAIProvider: Result<StudyAITranscript, StudyAIError>] = [:]
+    @State private var configuredProviders: [StudyAIProvider] = []
 
     private var referenceURL: URL? { audio.referenceRecordingURL(for: hebrew) }
 
@@ -490,13 +625,14 @@ struct ShadowingPracticeCard: View {
 
                 Button {
                     audio.stop()
+                    if recorder.playingSegment != nil { recorder.stopPlayback() }
                     recorder.togglePlayback()
                 } label: {
-                    Label(recorder.state == .playing ? "停止回放" : "我的录音",
-                          systemImage: recorder.state == .playing ? "stop.circle" : "play.circle")
+                    Label(recorder.state == .playing && recorder.playingSegment == nil ? "停止回放" : "我的录音",
+                          systemImage: recorder.state == .playing && recorder.playingSegment == nil ? "stop.circle" : "play.circle")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(StudyButtonStyle(selected: recorder.state == .playing))
+                .buttonStyle(StudyButtonStyle(selected: recorder.state == .playing && recorder.playingSegment == nil))
                 .disabled(!recorder.hasRecording || recorder.state == .recording)
             }
 
@@ -513,6 +649,7 @@ struct ShadowingPracticeCard: View {
 
             if let recording = recorder.completedRecordingURL {
                 comparisonView(for: recording)
+                if aiEnabled { aiComparisonView(recording: recording) }
             }
 
             if recorder.permissionDenied {
@@ -540,15 +677,40 @@ struct ShadowingPracticeCard: View {
             guard !Task.isCancelled, recorder.completedRecordingURL == recording else { return }
             comparison = (recording, result)
         }
-        .onChange(of: hebrew) { _, _ in recorder.cleanup() }
-        .onDisappear { recorder.cleanup() }
+        .task(id: aiRequest) {
+            guard aiEnabled, let request = aiRequest, recorder.completedRecordingURL == request.recording else { return }
+            do {
+                let result = try await StudyAITranscription.analyze(
+                    recording: request.recording, expected: request.expected,
+                    provider: request.provider, gateway: request.gateway
+                )
+                guard !Task.isCancelled, aiRequest == request else { return }
+                aiResults[request.provider] = .success(result)
+                aiRequest = nil
+            } catch {
+                guard !Task.isCancelled, aiRequest == request else { return }
+                aiResults[request.provider] = .failure(error as? StudyAIError ?? .requestFailed)
+                aiRequest = nil
+            }
+        }
+        .onChange(of: recorder.completedRecordingURL) { _, _ in resetAIComparison() }
+        .onChange(of: aiEnabled, initial: true) { _, _ in reloadAIConfiguration() }
+        .onChange(of: aiSettingsRevision) { _, _ in reloadAIConfiguration() }
+        .onChange(of: hebrew) { _, _ in
+            resetAIComparison()
+            recorder.cleanup()
+        }
+        .onDisappear {
+            resetAIComparison()
+            recorder.cleanup()
+        }
     }
 
     @ViewBuilder private func comparisonView(for recording: URL) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             if comparison?.recording != recording {
                 ProgressView("正在对比读音…")
-            } else if let result = comparison?.result {
+            } else if case .success(let result)? = comparison?.result {
                 Text("节奏相似度 \(result.score) / 100")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(progress.theme.ink)
@@ -560,10 +722,9 @@ struct ShadowingPracticeCard: View {
                 } else {
                     Text("有效声音片段太短，只显示节奏分。")
                 }
-            } else if referenceURL == nil {
-                Text("此内容缺少内置原音，可手动回放对比。")
-            } else {
-                Text("无法估算节奏。请靠近麦克风，清楚地跟读后再试。")
+            } else if case .failure(let issue)? = comparison?.result {
+                Text("这次暂不评分").font(.subheadline.weight(.semibold))
+                Text(issue.message)
             }
         }
         .font(.caption)
@@ -579,19 +740,104 @@ struct ShadowingPracticeCard: View {
             Text("声音相似度 \(result.score) / 100")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(progress.theme.ink)
+            Text("点按一段，先听原音，再听你的录音。")
             ForEach(result.segments.indices, id: \.self) { index in
-                ProgressView(value: Double(result.segments[index]), total: 100) {
-                    Text(names[index])
-                } currentValueLabel: {
-                    Text("\(result.segments[index]) / 100")
+                let segment = result.segments[index]
+                let playing = recorder.playingSegment == index
+                Button {
+                    guard let referenceURL else { return }
+                    audio.stop()
+                    recorder.toggleSegment(index, segment: segment, referenceURL: referenceURL)
+                } label: {
+                    HStack(spacing: 8) {
+                        ProgressView(value: Double(segment.score), total: 100) {
+                            Text(names[index])
+                        } currentValueLabel: {
+                            Text("\(segment.score) / 100")
+                        }
+                        Image(systemName: playing ? "stop.circle" : "play.circle")
+                            .font(.title3)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .tint(progress.theme.learningAction)
+                .accessibilityLabel("\(playing ? "停止" : "重听")\(names[index])，\(segment.score) 分")
             }
-            if let weakest = result.segments.indices.min(by: { result.segments[$0] < result.segments[$1] }),
-               let highest = result.segments.max(), highest - result.segments[weakest] >= 12 {
+            if let weakest = result.segments.indices.min(by: { result.segments[$0].score < result.segments[$1].score }),
+               let highest = result.segments.map(\.score).max(), highest - result.segments[weakest].score >= 12 {
                 Text("可以先重听\(names[weakest])，这里和原音的差异最明显。")
             }
             Text("声音相似度也会受嗓音、麦克风和环境噪声影响，仅供跟读参考。")
+        }
+    }
+
+    private func reloadAIConfiguration() {
+        resetAIComparison()
+        configuredProviders = aiEnabled ? StudyAIProvider.allCases.filter { provider in
+            (try? provider.endpoint(gateway: aiGateway)) != nil &&
+                (try? StudyAIKeychain.read(for: provider)) != nil
+        } : []
+    }
+
+    private func resetAIComparison() {
+        aiRequest = nil
+        aiResults = [:]
+    }
+
+    private func aiComparisonView(recording: URL) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if configuredProviders.isEmpty {
+                Text("请在「我的 → AI 功能」保存识别服务的配置。")
+            }
+            ForEach(configuredProviders) { provider in
+                Button {
+                    aiResults.removeValue(forKey: provider)
+                    aiRequest = AIRequest(recording: recording, expected: hebrew, provider: provider, gateway: aiGateway)
+                } label: {
+                    Label("用\(provider.title)识别", systemImage: "waveform")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle())
+                .disabled(aiRequest != nil)
+
+                if aiRequest?.provider == provider {
+                    ProgressView("正在识别录音…")
+                } else if let result = aiResults[provider] {
+                    aiTranscriptView(result)
+                }
+            }
+            if !configuredProviders.isEmpty {
+                Text("点按后将本次录音发送至所选服务。")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(progress.theme.mutedInk)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder private func aiTranscriptView(_ result: Result<StudyAITranscript, StudyAIError>) -> some View {
+        switch result {
+        case .success(let transcript):
+            Text("原句").fontWeight(.semibold)
+            Text(hebrew).textSelection(.enabled)
+            Text("识别结果").fontWeight(.semibold)
+            Text(transcript.text).textSelection(.enabled)
+            if transcript.missingWords.isEmpty && transcript.extraWords.isEmpty {
+                Text("识别结果与原句一致。")
+            }
+            if !transcript.missingWords.isEmpty {
+                Text("疑似漏读或替换：\(transcript.missingWords.joined(separator: " · "))")
+            }
+            if !transcript.extraWords.isEmpty {
+                Text("疑似多读或替换：\(transcript.extraWords.joined(separator: " · "))")
+            }
+            Text("识别可能有误，请结合原音和回放判断。")
+        case .failure(let error):
+            Text(error.localizedDescription).foregroundStyle(progress.theme.error)
         }
     }
 
@@ -600,7 +846,7 @@ struct ShadowingPracticeCard: View {
         case .idle: "最长 10 秒，仅本机暂存"
         case .recording: "正在录音…"
         case .recorded: "已录制，可回放对比"
-        case .playing: "正在播放你的录音"
+        case .playing: recorder.playingSegment == nil ? "正在播放你的录音" : "正在播放分段对比"
         }
     }
 }

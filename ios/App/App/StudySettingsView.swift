@@ -29,6 +29,16 @@ struct StudySettingsView: View {
             }
 
             NavigationLink {
+                StudyAISettingsView()
+            } label: {
+                StudyCard(padding: 9) {
+                    StudyRow(title: "AI 功能", symbol: "waveform.badge.magnifyingglass",
+                             subtitle: "跟读文字对照与识别服务密钥")
+                }
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
                 StudyBackupView()
             } label: {
                 StudyCard(padding: 9) {
@@ -965,5 +975,104 @@ private struct StudyBackupDocument: FileDocument {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: data)
+    }
+}
+
+private struct StudyAISettingsView: View {
+    @Environment(StudyProgress.self) private var progress
+    @AppStorage(StudyAIKeychain.enabledKey) private var enabled = false
+    @AppStorage(StudyAIKeychain.providerKey) private var provider = StudyAIProvider.openAI
+    @AppStorage(StudyAIKeychain.gatewayKey) private var gateway = ""
+    @AppStorage(StudyAIKeychain.revisionKey) private var revision = 0
+    @State private var gatewayDraft = ""
+    @State private var draft = ""
+    @State private var hasKey = false
+    @State private var message: String?
+
+    var body: some View {
+        StudyPage {
+            StudyCard {
+                Toggle("启用 AI 功能", isOn: $enabled)
+                Text("录完后选择识别服务，才会发送本次录音。网络和用量费用由所选服务决定。")
+                    .font(.footnote)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            StudyCard {
+                Picker("配置服务", selection: $provider) {
+                    ForEach(StudyAIProvider.allCases) { service in
+                        Text(service.title).tag(service)
+                    }
+                }
+                if provider == .aliyun {
+                    TextField("HTTPS 测试网关完整地址", text: $gatewayDraft)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Text("输入网关的测试密钥。阿里云 AccessKey 和希伯来语项目 AppKey 在网关服务端配置。")
+                        .font(.footnote)
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+                if hasKey {
+                    Label("密钥已保存在本机钥匙串", systemImage: "lock.fill")
+                        .foregroundStyle(progress.theme.success)
+                }
+                SecureField(hasKey ? "输入新密钥以替换" : "粘贴密钥", text: $draft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .privacySensitive()
+                Button("保存配置") { saveConfiguration() }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                              !(provider == .aliyun && hasKey && gatewayDraft != gateway))
+                if hasKey {
+                    Button("移除密钥", role: .destructive) { removeKey() }
+                }
+                Text("各服务单独保存密钥，不随 iCloud 同步或学习备份迁移。")
+                    .font(.footnote)
+                    .foregroundStyle(progress.theme.mutedInk)
+                if let message {
+                    Text(message).font(.footnote).foregroundStyle(progress.theme.error)
+                }
+            }
+        }
+        .studyDetail("AI 功能")
+        .onChange(of: provider, initial: true) { _, _ in
+            draft = ""
+            gatewayDraft = gateway
+            message = nil
+            do { hasKey = try StudyAIKeychain.read(for: provider) != nil }
+            catch {
+                hasKey = false
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    private func saveConfiguration() {
+        do {
+            if provider == .aliyun { _ = try provider.endpoint(gateway: gatewayDraft) }
+            if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try StudyAIKeychain.save(draft, for: provider)
+                hasKey = true
+            }
+            if provider == .aliyun { gateway = gatewayDraft }
+            revision += 1
+            draft = ""
+            message = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func removeKey() {
+        do {
+            try StudyAIKeychain.remove(for: provider)
+            hasKey = false
+            revision += 1
+            draft = ""
+            message = nil
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }
