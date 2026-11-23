@@ -93,9 +93,15 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     }
 
     func stopRecording() {
-        guard state == .recording else { return }
-        recorder?.stop()
-        recorder = nil
+        guard state == .recording, let recorder else { return }
+        // Capture currentTime before stop() resets the recorder.
+        let duration = recorder.currentTime
+        recorder.stop()
+        self.recorder = nil
+        if duration < StudySpeechRhythm.minimumCaptureDuration {
+            deleteRecordingFile()
+            errorMessage = StudyRecordingIssue.tooShort.message
+        }
         state = hasRecording ? .recorded : .idle
         releaseSession()
     }
@@ -239,7 +245,9 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
 
 struct StudySpeechRhythm {
     private static let windowDuration = 0.02
+    static let minimumCaptureDuration: TimeInterval = 0.35
     private static let minimumSpeechWindows = 6
+    private static let minimumRecordedSpeechWindows = 8
     private static let minimumPauseWindows = 7
 
     private let windows: [Bool]
@@ -258,19 +266,24 @@ struct StudySpeechRhythm {
 
     var duration: Double { Double(windows.count) * Self.windowDuration }
 
-    init?(levels: [Float], spectra: [[Float]] = [], clippingRatio: Double = 0) {
+    init?(levels: [Float], spectra: [[Float]] = [], clippingRatio: Double = 0, isRecording: Bool = false) {
+        let minimumWindows = isRecording ? Self.minimumRecordedSpeechWindows : Self.minimumSpeechWindows
         let orderedLevels = levels.sorted()
-        guard orderedLevels.count >= Self.minimumSpeechWindows else { return nil }
+        guard orderedLevels.count >= minimumWindows else { return nil }
         // Use a sustained loud level so long silence or a single click cannot set the threshold.
-        let loudLevel = orderedLevels[orderedLevels.count - Self.minimumSpeechWindows]
+        let loudLevel = orderedLevels[orderedLevels.count - minimumWindows]
         guard loudLevel >= 0.004 else { return nil }
-        let threshold = max(0.002, loudLevel * 0.10)
+        let noiseFloor = orderedLevels[orderedLevels.count / 5]
+        var threshold = max(0.002, loudLevel * 0.10)
+        if isRecording {
+            threshold = max(threshold, max(0.008, noiseFloor * 2.2))
+        }
         let active = levels.map { $0 >= threshold }
 
         // Trim leading and trailing silence. Ignore isolated transients when finding the boundaries.
         let speech = Self.runs(in: active, matching: true).filter { $0.count >= 3 }
         guard let first = speech.first, let last = speech.last,
-              speech.reduce(0, { $0 + $1.count }) >= Self.minimumSpeechWindows else { return nil }
+              speech.reduce(0, { $0 + $1.count }) >= minimumWindows else { return nil }
         let trimmed = Array(active[first.lowerBound..<last.upperBound])
         var normalized = Array(repeating: true, count: trimmed.count)
         for pause in Self.runs(in: trimmed, matching: false) where pause.count >= Self.minimumPauseWindows {
@@ -281,7 +294,7 @@ struct StudySpeechRhythm {
         lastSpeechFrame = last.upperBound
         self.clippingRatio = clippingRatio
         // The quieter fifth of the clip is a noise proxy, only used when enough quiet frames exist.
-        noiseRatio = orderedLevels[orderedLevels.count / 5] / loudLevel
+        noiseRatio = noiseFloor / loudLevel
         let frames = spectra.count == levels.count
             ? (first.lowerBound..<last.upperBound).filter { active[$0] && !spectra[$0].isEmpty }
             : []
@@ -289,12 +302,15 @@ struct StudySpeechRhythm {
         self.spectra = frames.map { spectra[$0] }
     }
 
-    static func read(_ url: URL) throws -> Self? {
+    static func read(_ url: URL, isRecording: Bool = false) throws -> Self? {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
         let format = file.processingFormat
         let sampleRate = format.sampleRate
         let fileLength = file.length
-        guard sampleRate >= 8_000, fileLength > 0, Double(fileLength) / sampleRate <= 60,
+        guard sampleRate >= 8_000, fileLength >= 0 else { return nil }
+        let captureDuration = Double(fileLength) / sampleRate
+        if isRecording && captureDuration < minimumCaptureDuration { throw StudyRecordingIssue.tooShort }
+        guard captureDuration > 0, captureDuration <= 60,
               let buffer = AVAudioPCMBuffer(pcmFormat: format,
                                             frameCapacity: AVAudioFrameCount((sampleRate * windowDuration).rounded())) else {
             return nil
@@ -340,7 +356,8 @@ struct StudySpeechRhythm {
             spectra.append(rms >= 0.002 ? bandProfile(tapered.prefix(frames), coefficients: coefficients) : [])
         }
         return Self(levels: levels, spectra: spectra,
-                    clippingRatio: Double(clippedSamples) / Double(max(1, speechSamples)))
+                    clippingRatio: Double(clippedSamples) / Double(max(1, speechSamples)),
+                    isRecording: isRecording)
     }
 
     private static func bandProfile(_ samples: ArraySlice<Float>, coefficients: [[Float]]) -> [Float] {
@@ -523,13 +540,14 @@ struct StudySoundComparison: Sendable {
 }
 
 enum StudyRecordingIssue: Error, Equatable, Sendable {
-    case noReference, unreadable, tooQuiet, clipped, noisy, possiblyCutOff, possibleRepeat
+    case noReference, unreadable, tooShort, tooQuiet, clipped, noisy, possiblyCutOff, possibleRepeat
 
     var message: String {
         switch self {
         case .noReference: "此内容缺少可用的内置原音，仍可回放录音。"
         case .unreadable: "无法读取这次录音，请重录后再试。"
-        case .tooQuiet: "有效声音太少。请靠近麦克风，把内容完整读一遍。"
+        case .tooShort: "录音太短，未评分。请读完后再停止录音。"
+        case .tooQuiet: "未检测到足够的发声，未评分。请靠近麦克风重录。"
         case .clipped: "声音过响，录音可能失真。请离麦克风远一点再录。"
         case .noisy: "这段录音可能有持续背景声。请换到安静一点的地方再试。"
         case .possiblyCutOff: "这次跟读可能没有录完整。请完整读一遍，读完再停止录音。"
@@ -550,13 +568,16 @@ struct StudyRhythmComparison: Sendable {
     let acoustic: StudySoundComparison?
 
     static func analyze(recording: URL, reference: URL?) async -> Result<Self, StudyRecordingIssue> {
-        guard let reference else { return .failure(.noReference) }
         let worker = Task.detached(priority: .userInitiated) { () -> Result<StudyRhythmComparison, StudyRecordingIssue> in
-            guard let original = try? StudySpeechRhythm.read(reference) else { return .failure(.noReference) }
             do {
-                guard let attempt = try StudySpeechRhythm.read(recording) else { return .failure(.tooQuiet) }
+                guard let attempt = try StudySpeechRhythm.read(recording, isRecording: true) else { return .failure(.tooQuiet) }
+                guard let reference, let original = try? StudySpeechRhythm.read(reference) else {
+                    return .failure(.noReference)
+                }
                 if let issue = attempt.qualityIssue(comparedTo: original) { return .failure(issue) }
                 return .success(attempt.compare(to: original))
+            } catch let issue as StudyRecordingIssue {
+                return .failure(issue)
             } catch {
                 return .failure(.unreadable)
             }
@@ -592,6 +613,7 @@ struct ShadowingPracticeCard: View {
     @State private var recorder = StudyVoiceRecorder()
     @State private var comparison: (recording: URL, result: Result<StudyRhythmComparison, StudyRecordingIssue>)?
 
+    @State private var showsAIProviders = false
     @State private var aiRequest: AIRequest?
     @State private var aiResults: [StudyAIProvider: Result<StudyAITranscript, StudyAIError>] = [:]
     @State private var configuredProviders: [StudyAIProvider] = []
@@ -640,7 +662,6 @@ struct ShadowingPracticeCard: View {
 
             Button {
                 audio.stop()
-                audio.playStrokeHaptic()
                 Task { await recorder.toggleRecording() }
             } label: {
                 Label(recorder.state == .recording ? "停止录音" : (recorder.hasRecording ? "重录" : "录音"),
@@ -651,7 +672,7 @@ struct ShadowingPracticeCard: View {
 
             if let recording = recorder.completedRecordingURL {
                 comparisonView(for: recording)
-                if aiEnabled { aiComparisonView(recording: recording) }
+                if aiEnabled && canRecognize(recording) { aiComparisonView(recording: recording) }
             }
 
             if recorder.permissionDenied {
@@ -788,36 +809,63 @@ struct ShadowingPracticeCard: View {
     }
 
     private func resetAIComparison() {
+        showsAIProviders = false
         aiRequest = nil
         aiResults = [:]
     }
 
+    private func canRecognize(_ recording: URL) -> Bool {
+        guard let comparison, comparison.recording == recording else { return false }
+        switch comparison.result {
+        case .failure(.tooShort), .failure(.tooQuiet), .failure(.unreadable): return false
+        default: return true
+        }
+    }
+
+    private func startAIComparison(recording: URL, provider: StudyAIProvider) {
+        guard aiEnabled, recorder.completedRecordingURL == recording, canRecognize(recording),
+              configuredProviders.contains(provider), aiRequest == nil else { return }
+        aiResults.removeValue(forKey: provider)
+        aiRequest = AIRequest(recording: recording, expected: hebrew, provider: provider,
+                              openRouterModel: openRouterModel, gateway: aiGateway)
+    }
+
     private func aiComparisonView(recording: URL) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if configuredProviders.isEmpty {
-                Text("请在「我的 → AI 功能」保存识别服务的配置。")
-            }
-            ForEach(configuredProviders) { provider in
+            if let provider = configuredProviders.first {
                 Button {
-                    aiResults.removeValue(forKey: provider)
-                    aiRequest = AIRequest(recording: recording, expected: hebrew, provider: provider,
-                                          openRouterModel: openRouterModel, gateway: aiGateway)
+                    if configuredProviders.count == 1 {
+                        startAIComparison(recording: recording, provider: provider)
+                    } else {
+                        showsAIProviders = true
+                    }
                 } label: {
-                    let title = provider == .openRouter ? openRouterModel.title : provider.title
-                    Label("用\(title)识别", systemImage: "waveform")
+                    Label("用AI识别", systemImage: "waveform")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(StudyButtonStyle())
                 .disabled(aiRequest != nil)
+                .confirmationDialog("选择识别服务", isPresented: $showsAIProviders, titleVisibility: .visible) {
+                    ForEach(configuredProviders) { provider in
+                        Button(provider.title) { startAIComparison(recording: recording, provider: provider) }
+                    }
+                } message: {
+                    Text("选择后将本次录音发送至该服务。")
+                }
+                Text("录音将发送至所选识别服务。")
+            } else {
+                Text("请在「我的 → AI 功能」保存识别服务的配置。")
+            }
 
+            ForEach(configuredProviders) { provider in
                 if aiRequest?.provider == provider {
                     ProgressView("正在识别录音…")
                 } else if let result = aiResults[provider] {
+                    if configuredProviders.count > 1 {
+                        Text(provider.title).fontWeight(.semibold)
+                    }
                     aiTranscriptView(result)
                 }
-            }
-            if !configuredProviders.isEmpty {
-                Text("点按后将本次录音发送至所选服务。")
             }
         }
         .font(.caption)

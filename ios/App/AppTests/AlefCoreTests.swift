@@ -1,3 +1,4 @@
+import AVFAudio
 import Foundation
 import UserNotifications
 import XCTest
@@ -339,6 +340,38 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(repeated.extraWords, ["שלום"])
         XCTAssertTrue(repeated.missingWords.isEmpty)
         XCTAssertThrowsError(try StudyAITranscript(text: " ", expected: "שלום"))
+    }
+
+    func testShadowingRejectsSilenceSteadyNoiseAndShortTransients() {
+        let silence = Array(repeating: Float.zero, count: 35)
+        let fanNoise = Array(repeating: Float(0.012), count: 35)
+        let tap = Array(repeating: Float(0.4), count: 6)
+        let voice = Array(repeating: Float(0.06), count: 12)
+
+        XCTAssertNil(StudySpeechRhythm(levels: silence, isRecording: true))
+        XCTAssertNil(StudySpeechRhythm(levels: fanNoise, isRecording: true))
+        XCTAssertNil(StudySpeechRhythm(levels: silence + tap + silence, isRecording: true))
+        XCTAssertNotNil(StudySpeechRhythm(levels: fanNoise + voice + fanNoise, isRecording: true))
+    }
+
+    func testShadowingRejectsVeryShortFilesBeforeComparing() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_800))
+        buffer.frameLength = 4_800
+        let samples = try XCTUnwrap(buffer.floatChannelData)
+        for index in 0..<Int(buffer.frameLength) {
+            samples[0][index] = index.isMultiple(of: 2) ? 0.2 : -0.2
+        }
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            try file.write(from: buffer)
+        }
+
+        let result = await StudyRhythmComparison.analyze(recording: url, reference: url)
+        guard case .failure(let issue) = result else { return XCTFail("An immediate stop must not produce a score") }
+        XCTAssertEqual(issue, .tooShort)
     }
 
     func testShadowingRhythmTrimsSilenceAndDetectsTimingDifferences() throws {
