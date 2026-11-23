@@ -29,6 +29,7 @@
 		A1EF2000000000000000001A /* StudyReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000019 /* StudyReminders.swift */; };
 		A1EF2000000000000000001C /* StudyRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000001B /* StudyRecorder.swift */; };
 		A1EF2000000000000000001E /* LearningPathView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000001D /* LearningPathView.swift */; };
+		A1EF20000000000000000020 /* StudyFolderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000001F /* StudyFolderSync.swift */; };
 		A1EF40000000000000000001 /* AlefCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF40000000000000000002 /* AlefCoreTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -88,6 +89,7 @@
 		A1EF20000000000000000019 /* StudyReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyReminders.swift; sourceTree = "<group>"; };
 		A1EF2000000000000000001B /* StudyRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyRecorder.swift; sourceTree = "<group>"; };
 		A1EF2000000000000000001D /* LearningPathView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningPathView.swift; sourceTree = "<group>"; };
+		A1EF2000000000000000001F /* StudyFolderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyFolderSync.swift; sourceTree = "<group>"; };
 		A1EF40000000000000000002 /* AlefCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlefCoreTests.swift; sourceTree = "<group>"; };
 		A1EF40000000000000000003 /* AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -142,6 +144,7 @@
 				A1EF20000000000000000019 /* StudyReminders.swift */,
 				A1EF2000000000000000001B /* StudyRecorder.swift */,
 				A1EF2000000000000000001D /* LearningPathView.swift */,
+				A1EF2000000000000000001F /* StudyFolderSync.swift */,
 				A1EF2000000000000000000F /* StudyRulesView.swift */,
 				A1EF2000000000000000000D /* StudyRootView.swift */,
 				A1EF2000000000000000000B /* StudyProgress.swift */,
@@ -290,6 +293,7 @@
 				A1EF2000000000000000001A /* StudyReminders.swift in Sources */,
 				A1EF2000000000000000001C /* StudyRecorder.swift in Sources */,
 				A1EF2000000000000000001E /* LearningPathView.swift in Sources */,
+				A1EF20000000000000000020 /* StudyFolderSync.swift in Sources */,
 				A1EF20000000000000000010 /* StudyRulesView.swift in Sources */,
 				A1EF2000000000000000000E /* StudyRootView.swift in Sources */,
 				A1EF30000000000000000001 /* DailyLetter.swift in Sources */,

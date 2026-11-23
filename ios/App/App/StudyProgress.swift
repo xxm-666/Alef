@@ -313,8 +313,10 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private static let storageKey = "alef.native.progress.v1"
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
+    private static let localUpdatedAtKey = "alef.sync.localUpdatedAt.v1"
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
+    static let nonSyncedKeys: Set<String> = [lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1"]
     private static let appearanceKey = "alef.native.appearance.v1"
     private enum AppearanceOverride: String, Codable {
         case manual, system, white
@@ -323,12 +325,15 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private let defaults: UserDefaults
     private var entries: [String: Data]
     private(set) var restorePoint: BackupUndo?
+    private(set) var syncRevision: Int = 0
+    private(set) var localUpdatedAt: Int64 = 0
     var dailyLetterRequest: String?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         entries = defaults.dictionary(forKey: Self.storageKey) as? [String: Data] ?? [:]
         restorePoint = defaults.data(forKey: Self.restoreKey).flatMap { try? JSONDecoder().decode(BackupUndo.self, from: $0) }
+        localUpdatedAt = (defaults.object(forKey: Self.localUpdatedAtKey) as? NSNumber)?.int64Value ?? 0
     }
 
     var letterMastery: [String: Mastery] { read("alef.mastery.v1", default: [:]) }
@@ -342,6 +347,11 @@ struct DailyVocabularyPlan: Codable, Equatable {
         return plan.isValid ? plan : DailyVocabularyPlan()
     }
     var needsLegacyMigration: Bool { !defaults.bool(forKey: Self.migrationKey) }
+
+    var hasMeaningfulData: Bool {
+        !wordMastery.isEmpty || !letterMastery.isEmpty || !schedule.isEmpty
+            || !letterSchedule.isEmpty || !favorites.isEmpty || statistics.totalReviews > 0
+    }
 
     var lastBackupAt: Int64? {
         entries[Self.lastBackupAtKey].flatMap { try? JSONDecoder().decode(Int64.self, from: $0) }
@@ -588,12 +598,16 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     func completeLegacyMigration(_ raw: [String: String]) {
-        for (key, value) in raw where entries[key] == nil && key.hasPrefix("alef.") {
+        var migrated = entries
+        for (key, value) in raw where migrated[key] == nil && key.hasPrefix("alef.") {
             let data = Data(value.utf8)
             guard (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil,
                   (try? validateBackupEntry(key, data: data)) != nil else { continue }
-            entries[key] = data
+            migrated[key] = data
         }
+        let changed = hasSyncableDifference(from: entries, to: migrated)
+        entries = migrated
+        if changed { bumpSyncTimestamp() }
         save()
         defaults.set(true, forKey: Self.migrationKey)
     }
@@ -653,17 +667,81 @@ struct DailyVocabularyPlan: Codable, Equatable {
         guard let backupData = try? JSONEncoder().encode(undo) else { return }
         restorePoint = undo
         defaults.set(backupData, forKey: Self.restoreKey)
-        entries.merge(restored) { _, incoming in incoming }
+        let merged = entries.merging(restored) { _, incoming in incoming }
+        let changed = hasSyncableDifference(from: entries, to: merged)
+        entries = merged
+        if changed { bumpSyncTimestamp() }
         save()
     }
 
     func undoBackup() {
         guard let restorePoint else { return }
-        entries.merge(restorePoint.previous) { _, incoming in incoming }
-        for key in restorePoint.absent { entries.removeValue(forKey: key) }
+        var restored = entries.merging(restorePoint.previous) { _, incoming in incoming }
+        for key in restorePoint.absent { restored.removeValue(forKey: key) }
+        let changed = hasSyncableDifference(from: entries, to: restored)
+        entries = restored
+        if changed { bumpSyncTimestamp() }
         save()
         self.restorePoint = nil
         defaults.removeObject(forKey: Self.restoreKey)
+    }
+
+    func syncSnapshot() -> [String: Data] {
+        entries.filter { !Self.nonSyncedKeys.contains($0.key) }
+    }
+
+    func applySyncedEntries(_ synced: [String: Data], updatedAt: Int64, syncDate: Date = .now) {
+        var nextEntries = entries.filter { Self.nonSyncedKeys.contains($0.key) }
+        for (key, value) in synced where !Self.nonSyncedKeys.contains(key) {
+            nextEntries[key] = value
+        }
+        if let encodedBackup = try? JSONEncoder().encode(Int64(syncDate.timeIntervalSince1970 * 1_000)) {
+            nextEntries[Self.lastBackupAtKey] = encodedBackup
+        }
+        entries = nextEntries
+        localUpdatedAt = updatedAt
+        defaults.set(NSNumber(value: updatedAt), forKey: Self.localUpdatedAtKey)
+        save()
+    }
+
+    func encodeSyncDocument(entries source: [String: Data], updatedAt: Int64) throws -> Data {
+        var document: [String: Any] = [:]
+        for (key, data) in source where !Self.nonSyncedKeys.contains(key) {
+            document[key] = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
+        }
+        let date = Date(timeIntervalSince1970: Double(updatedAt) / 1_000)
+        return try JSONSerialization.data(withJSONObject: [
+            "app": "Alef",
+            "version": 1,
+            "exportedAt": ISO8601DateFormatter().string(from: date),
+            "updatedAt": updatedAt,
+            "data": document
+        ], options: [.prettyPrinted, .sortedKeys])
+    }
+
+    func parseSyncDocument(_ data: Data) throws -> (entries: [String: Data], updatedAt: Int64) {
+        let parsed = try previewBackup(data)
+        let synced = parsed.filter { !Self.nonSyncedKeys.contains($0.key) }
+        guard !synced.isEmpty else { throw BackupError.invalid }
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let updatedAt: Int64
+        if let number = root?["updatedAt"] as? NSNumber {
+            updatedAt = max(0, number.int64Value)
+        } else if let exportedAt = root?["exportedAt"] as? String,
+                  let parsedDate = Self.parseIsoDate(exportedAt) {
+            updatedAt = max(0, Int64(parsedDate.timeIntervalSince1970 * 1_000))
+        } else {
+            updatedAt = 0
+        }
+        return (synced, updatedAt)
+    }
+
+    private static func parseIsoDate(_ raw: String) -> Date? {
+        let standard = ISO8601DateFormatter()
+        if let date = standard.date(from: raw) { return date }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: raw)
     }
 
     private func save() {
@@ -673,8 +751,28 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private func update(_ apply: (inout [String: Data], JSONEncoder) throws -> Void) {
         var updated = entries
         guard (try? apply(&updated, JSONEncoder())) != nil else { return }
+        let changed = hasSyncableDifference(from: entries, to: updated)
         entries = updated
+        if changed { bumpSyncTimestamp() }
         save()
+    }
+
+    private func hasSyncableDifference(from old: [String: Data], to new: [String: Data]) -> Bool {
+        let keys = Set(old.keys).union(new.keys).subtracting(Self.nonSyncedKeys)
+        return keys.contains { key in
+            switch (old[key], new[key]) {
+            case let (a?, b?): return canonicalJSON(a) != canonicalJSON(b)
+            case (nil, nil): return false
+            default: return true
+            }
+        }
+    }
+
+    private func bumpSyncTimestamp(on date: Date = .now) {
+        let timestamp = Int64(date.timeIntervalSince1970 * 1_000)
+        localUpdatedAt = timestamp
+        defaults.set(NSNumber(value: timestamp), forKey: Self.localUpdatedAtKey)
+        syncRevision += 1
     }
 
     private func validateBackupEntry(_ key: String, data: Data) throws {

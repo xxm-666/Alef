@@ -40,6 +40,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var audio: StudyAudio?
     private var progress: StudyProgress?
     private var reminders: StudyReminderManager?
+    private var folderSync: StudyFolderSyncManager?
     private var legacyImport: LegacyStudyImport?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
@@ -56,9 +57,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self.audio = audio
             let reminders = StudyReminderManager()
             self.reminders = reminders
+            let folderSync = StudyFolderSyncManager()
+            self.folderSync = folderSync
             window.rootViewController = UIHostingController(rootView: StudyRootView(content: content)
                 .environment(progress)
                 .environment(reminders)
+                .environment(folderSync)
                 .environmentObject(audio))
             if progress.needsLegacyMigration {
                 let migration = LegacyStudyImport(progress: progress)

@@ -13,6 +13,7 @@ struct StudyRootView: View {
 
     @Environment(StudyProgress.self) private var progress
     @Environment(StudyReminderManager.self) private var reminders
+    @Environment(StudyFolderSyncManager.self) private var folderSync
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
     let content: StudyContent
@@ -70,6 +71,19 @@ struct StudyRootView: View {
                 streakDays: progress.statistics.streakDays,
                 todayReviews: progress.statistics.reviewsToday
             )
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard (phase == .active || phase == .background) && folderSync.isConfigured else { return }
+            Task { await folderSync.sync(progress: progress) }
+        }
+        .task(id: progress.syncRevision) {
+            guard progress.syncRevision > 0 && folderSync.isConfigured else { return }
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                return
+            }
+            await folderSync.sync(progress: progress)
         }
         .alert("发音", isPresented: Binding(get: { audio.playbackError != nil }, set: { visible in
             if !visible { audio.dismissError() }

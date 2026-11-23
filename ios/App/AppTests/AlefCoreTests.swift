@@ -471,6 +471,85 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(reading.inlineGlosses(in: assisted).count, 1)
     }
 
+    @MainActor
+    func testFolderSyncBidirectionalAndConflictMerge() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alef-sync-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let syncFile = tempDir.appendingPathComponent(StudyFolderSyncManager.syncFileName)
+        let suiteSyncA = "com.xxm666.alef.tests.syncA.\(UUID().uuidString)"
+        let suiteSyncB = "com.xxm666.alef.tests.syncB.\(UUID().uuidString)"
+        let suiteProgB = "com.xxm666.alef.tests.progB.\(UUID().uuidString)"
+        let defaultsSyncA = UserDefaults(suiteName: suiteSyncA)!
+        let defaultsSyncB = UserDefaults(suiteName: suiteSyncB)!
+        let defaultsProgB = UserDefaults(suiteName: suiteProgB)!
+        defer {
+            defaultsSyncA.removePersistentDomain(forName: suiteSyncA)
+            defaultsSyncB.removePersistentDomain(forName: suiteSyncB)
+            defaultsProgB.removePersistentDomain(forName: suiteProgB)
+        }
+
+        // Device A writes initial progress and configures folder
+        let day1 = makeDate(year: 2026, month: 11, day: 10, hour: 10)
+        progress.completeReview("shalom", grade: .good, date: day1)
+        progress.toggleFavorite("shalom")
+        let syncA = StudyFolderSyncManager(defaults: defaultsSyncA)
+        await syncA.configureFolder(url: tempDir, progress: progress)
+
+        XCTAssertTrue(syncA.isConfigured)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: syncFile.path))
+        XCTAssertNotNil(progress.lastBackupAt)
+        let initialData = try Data(contentsOf: syncFile)
+        _ = try progress.parseSyncDocument(initialData)
+
+        // Device B starts empty, connects to same folder, and automatically restores without bumping syncRevision
+        let progressB = StudyProgress(defaults: defaultsProgB)
+        let syncB = StudyFolderSyncManager(defaults: defaultsSyncB)
+        await syncB.configureFolder(url: tempDir, progress: progressB)
+
+        XCTAssertEqual(progressB.wordMastery["shalom"], .mastered)
+        XCTAssertEqual(progressB.favorites, ["shalom"])
+        XCTAssertEqual(progressB.statistics.totalReviews, 1)
+        XCTAssertEqual(progressB.syncRevision, 0)
+
+        // Offline divergence on both devices
+        let day2 = makeDate(year: 2026, month: 11, day: 11, hour: 9)
+        progress.completeReview("todah", grade: .easy, date: day2)
+        progress.toggleFavorite("todah")
+        let revABeforeSync = progress.syncRevision
+
+        progressB.completeReview("bayit", grade: .good, date: day2)
+        progressB.completeLetterReview("bet", grade: .good, date: day2)
+        progressB.toggleFavorite("bayit")
+        let revBBeforeSync = progressB.syncRevision
+
+        await syncA.sync(progress: progress, now: day2)
+        await syncB.sync(progress: progressB, now: day2)
+        await syncA.sync(progress: progress, now: day2)
+
+        // Both devices converge with combined reviews, favorites, and no extra syncRevision loop
+        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
+        XCTAssertEqual(progress.letterMastery["bet"], .mastered)
+        XCTAssertEqual(progressB.wordMastery["todah"], .mastered)
+        XCTAssertEqual(Set(progress.favorites), Set(["shalom", "todah", "bayit"]))
+        XCTAssertEqual(Set(progressB.favorites), Set(["shalom", "todah", "bayit"]))
+        XCTAssertEqual(progress.syncRevision, revABeforeSync)
+        XCTAssertEqual(progressB.syncRevision, revBBeforeSync)
+
+        // Corrupt remote file fails gracefully and preserves local data
+        try Data("{corrupt-json".utf8).write(to: syncFile, options: .atomic)
+        await syncA.sync(progress: progress, now: day2)
+        if case .failed = syncA.state {
+            // Expected failure state
+        } else {
+            XCTFail("Expected .failed state on corrupt sync document, got \(syncA.state)")
+        }
+        XCTAssertEqual(progress.wordMastery["shalom"], .mastered)
+        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 12, minute: Int = 0) -> Date {
         gregorianUtc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }

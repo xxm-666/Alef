@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(StudyFolderSyncManager.self) private var folderSync
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var showsDisplay = false
@@ -32,7 +33,7 @@ struct StudySettingsView: View {
             } label: {
                 StudyCard(padding: 9) {
                     StudyRow(title: "数据备份与恢复", symbol: "externaldrive",
-                             subtitle: progress.backupReminderMessage())
+                             subtitle: backupSubtitle)
                 }
             }
             .buttonStyle(.plain)
@@ -126,6 +127,19 @@ struct StudySettingsView: View {
     private var reminderSummary: String {
         let pref = progress.reminderPreferences
         return pref.enabled ? "\(pref.timeText)\(pref.onlyWhenDue ? " · 到期时" : "")" : "已关闭"
+    }
+
+    private var backupSubtitle: String? {
+        switch folderSync.state {
+        case .failed:
+            return "同步出错，点按查看详情"
+        case .syncing:
+            return "正在同步 · \(folderSync.folderName ?? "iCloud Drive")"
+        case .synced, .idle:
+            return "自动同步 · \(folderSync.folderName ?? "iCloud Drive")"
+        case .unconfigured:
+            return progress.backupReminderMessage()
+        }
     }
 }
 
@@ -575,13 +589,14 @@ private struct StudyBackupView: View {
 
     var body: some View {
         StudyPage {
+            StudyFolderSyncSection()
             if let reminder = progress.backupReminderMessage() {
                 StudyNotice(title: "建议保存新备份", symbol: "exclamationmark.shield", note: reminder, reminder: true)
             } else if let lastDate = progress.lastBackupDate {
                 StudyNotice(title: "最近备份 · \(lastDate.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))",
                             symbol: "checkmark.shield")
             }
-            StudySectionTitle("保存备份")
+            StudySectionTitle("手动备份与导出")
             backupAction("导出 JSON", note: "保存学习记录与偏好到文件", symbol: "square.and.arrow.up", action: export)
             backupAction("复制备份", note: "复制 JSON 到剪贴板", symbol: "doc.on.doc", action: copyBackup)
             if status == .copied { StudyNotice(title: "已复制备份", symbol: "checkmark.circle") }
@@ -798,6 +813,141 @@ private struct StudyBackupView: View {
             exporting = true
         } catch {
             message = error.localizedDescription
+        }
+    }
+}
+
+private struct StudyFolderSyncSection: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(StudyFolderSyncManager.self) private var folderSync
+    @State private var pickingFolder = false
+    @State private var disconnecting = false
+    @State private var pickerError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            StudySectionTitle("iCloud Drive 文件夹自动同步")
+            if folderSync.isConfigured {
+                configuredCard
+            } else {
+                unconfiguredCard
+            }
+            if let pickerError {
+                StudyNotice(title: "无法读取所选文件夹", symbol: "exclamationmark.triangle",
+                            note: pickerError, reminder: true)
+            }
+        }
+        .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { outcome in
+            switch outcome {
+            case let .success(url):
+                pickerError = nil
+                Task { await folderSync.configureFolder(url: url, progress: progress) }
+            case let .failure(error):
+                pickerError = error.localizedDescription
+            }
+        }
+        .confirmationDialog("断开文件夹同步？", isPresented: $disconnecting, titleVisibility: .visible) {
+            Button("断开同步", role: .destructive) { folderSync.disconnect() }
+        } message: {
+            Text("仅移除同步关联，不会删除文件夹中已保存的 \(StudyFolderSyncManager.syncFileName)。")
+        }
+    }
+
+    private var unconfiguredCard: some View {
+        StudyCard(highlighted: true) {
+            StudyRow(title: "免付费账号自动云同步", symbol: "icloud",
+                     subtitle: "授权「iCloud Drive」中你自建的文件夹后，会自动把 \(StudyFolderSyncManager.syncFileName) 同步到云端。",
+                     chevron: false)
+            StudyNotice(title: "请勿选在「我的 iPhone → Alef」目录中", symbol: "info.circle",
+                        note: "请选在 iCloud Drive 下自建文件夹（如 iCloud Drive/Alef），卸载或重装后重新选该文件夹即可自动恢复。")
+            Button {
+                pickingFolder = true
+            } label: {
+                Label("选择 iCloud Drive 文件夹", systemImage: "folder.badge.plus").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(StudyButtonStyle(prominent: true))
+        }
+    }
+
+    private var configuredCard: some View {
+        StudyCard(highlighted: true) {
+            HStack(spacing: 10) {
+                Image(systemName: statusSymbol)
+                    .font(.title3)
+                    .foregroundStyle(isFailed ? progress.theme.error : progress.theme.accent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(folderSync.folderName ?? "同步文件夹")
+                        .font(.headline)
+                        .foregroundStyle(progress.theme.ink)
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(isFailed ? progress.theme.error : progress.theme.mutedInk)
+                    if let summary = folderSync.lastSummary, !isFailed {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                }
+                Spacer(minLength: 0)
+                if folderSync.state == .syncing {
+                    ProgressView()
+                }
+            }
+
+            HStack(spacing: 6) {
+                Button {
+                    Task { await folderSync.sync(progress: progress, force: true) }
+                } label: {
+                    Label("立即同步", systemImage: "arrow.triangle.2.circlepath").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle(prominent: true))
+                .disabled(folderSync.state == .syncing)
+
+                Button {
+                    pickingFolder = true
+                } label: {
+                    Text("更换文件夹")
+                }
+                .buttonStyle(StudyButtonStyle())
+            }
+
+            Button(role: .destructive) {
+                disconnecting = true
+            } label: {
+                Label("断开同步", systemImage: "xmark.circle")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(StudyButtonStyle())
+        }
+    }
+
+    private var isFailed: Bool {
+        if case .failed = folderSync.state { return true }
+        return false
+    }
+
+    private var statusSymbol: String {
+        switch folderSync.state {
+        case .failed: "exclamationmark.icloud"
+        case .syncing: "icloud.and.arrow.up"
+        default: "checkmark.icloud"
+        }
+    }
+
+    private var statusText: String {
+        switch folderSync.state {
+        case .unconfigured:
+            return "未配置"
+        case .idle:
+            return "已连接 · 等待首次同步"
+        case .syncing:
+            return "正在同步 \(StudyFolderSyncManager.syncFileName)…"
+        case let .synced(date):
+            return "上次同步 · \(date.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))"
+        case let .failed(message):
+            return message
         }
     }
 }
