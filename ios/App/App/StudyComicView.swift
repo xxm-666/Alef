@@ -1,10 +1,37 @@
 import SwiftUI
 
+private enum CafeComicAction: String, CaseIterable {
+    case menu = "p-dine-1"
+    case water = "p-dine-3"
+    case bill = "p-dine-7"
+
+    var illustration: String {
+        switch self {
+        case .menu: "CafeResolution"
+        case .water: "CafeWater"
+        case .bill: "CafeBill"
+        }
+    }
+
+    var outcome: String {
+        switch self {
+        case .menu: "店员微笑着递来一份菜单。"
+        case .water: "店员端来一杯冷水。"
+        case .bill: "店员把账单递给你。"
+        }
+    }
+
+    var motionVariant: Float {
+        switch self {
+        case .menu: 0
+        case .water: 1
+        case .bill: 2
+        }
+    }
+}
+
 struct StudyCafeComicView: View {
-    private static let menuRequestID = "p-dine-1"
-    private static let waterRequestID = "p-dine-3"
-    private static let billRequestID = "p-dine-7"
-    private static let phraseIDs = [menuRequestID, waterRequestID, billRequestID]
+    private static let phraseIDs = CafeComicAction.allCases.map(\.rawValue)
     private static let openingID = "cafe-comic-opening"
     private static let reactionID = "cafe-comic-reaction"
     private static let resolutionID = "cafe-comic-resolution"
@@ -25,7 +52,7 @@ struct StudyCafeComicView: View {
         ScrollViewReader { reader in
             StudyPage {
                 if choices.count == Self.phraseIDs.count,
-                   let solution = choices.first(where: { $0.id == Self.menuRequestID }) {
+                   let solution = choices.first(where: { $0.id == CafeComicAction.menu.rawValue }) {
                     panel("CafeArrival", description: "你刚坐下，咖啡馆的店员走过来。")
                         .id(Self.openingID)
                     Text("你刚坐下，想先要一份菜单。")
@@ -86,9 +113,9 @@ struct StudyCafeComicView: View {
 
     private func dialogueChoices(_ choices: [StudyPhrase]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let wrongChoice {
+            if let wrongChoice, let action = CafeComicAction(rawValue: wrongChoice.id) {
                 VStack {
-                    reaction(wrongChoice)
+                    reaction(wrongChoice, action: action)
                         .id(wrongChoice.id)
                         .transition(.offset(y: 12).combined(with: .opacity))
                 }
@@ -105,18 +132,10 @@ struct StudyCafeComicView: View {
         .modifier(StudyComicMotion(value: wrongChoice?.id))
     }
 
-    private func reaction(_ phrase: StudyPhrase) -> some View {
-        let askedForWater = phrase.id == Self.waterRequestID
-        let outcome = askedForWater ? "店员端来一杯冷水。" : "店员把账单递给你。"
-        return VStack(alignment: .leading, spacing: 8) {
-            panel(askedForWater ? "CafeWater" : "CafeBill", description: outcome)
-                .accessibilityHidden(true)
+    private func reaction(_ phrase: StudyPhrase, action: CafeComicAction) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CafeComicActionPanel(action: action, phrase: phrase)
             StudyCard {
-                StudySectionTitle(outcome)
-                HStack(spacing: 8) {
-                    PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "重听刚才的台词", bundledOnly: true)
-                    HebrewText(text: phrase.hebrew, size: 22).frame(maxWidth: .infinity, alignment: .trailing)
-                }
                 Text("你刚才说的是「\(phrase.meaningZh)」。想要菜单的话，再选一句。")
                     .font(.footnote)
                     .foregroundStyle(progress.theme.ink)
@@ -158,13 +177,8 @@ struct StudyCafeComicView: View {
 
     private func resolution(_ phrase: StudyPhrase) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            panel("CafeResolution", description: "店员微笑着递来一份菜单。")
+            CafeComicActionPanel(action: .menu, phrase: phrase)
             StudyCard {
-                HStack(spacing: 8) {
-                    PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "重听正确台词", bundledOnly: true)
-                    HebrewText(text: phrase.hebrew, size: 24)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
                 Text(phrase.meaningZh)
                     .font(.footnote)
                     .foregroundStyle(progress.theme.mutedInk)
@@ -186,13 +200,79 @@ struct StudyCafeComicView: View {
     private func choose(_ phrase: StudyPhrase) {
         guard !completed, !skippedChoices.contains(phrase.id) else { return }
         audio.stop()
-        if phrase.id == Self.menuRequestID {
+        if phrase.id == CafeComicAction.menu.rawValue {
             completed = true
             audio.playFeedback(.correct)
         } else {
             wrongChoice = phrase
             skippedChoices.insert(phrase.id)
             audio.playFeedback(.wrong)
+        }
+    }
+}
+
+private struct CafeComicActionPanel: View {
+    private struct Pose {
+        var motion: CGFloat = 1
+        var speech: CGFloat = 1
+    }
+
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var play = 0
+    let action: CafeComicAction
+    let phrase: StudyPhrase
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                scene(Pose())
+            } else {
+                KeyframeAnimator(initialValue: Pose(), trigger: play) { pose in
+                    scene(pose)
+                } keyframes: { _ in
+                    KeyframeTrack(\.motion) {
+                        MoveKeyframe(0)
+                        LinearKeyframe(0, duration: 0.22)
+                        LinearKeyframe(1, duration: 0.85)
+                    }
+                    KeyframeTrack(\.speech) {
+                        MoveKeyframe(0)
+                        LinearKeyframe(0, duration: 0.53)
+                        CubicKeyframe(1, duration: 0.28)
+                    }
+                }
+            }
+        }
+        .task {
+            if !reduceMotion, play == 0 { play = 1 }
+        }
+    }
+
+    private func scene(_ pose: Pose) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Image(action.illustration)
+                .resizable()
+                .aspectRatio(3, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .layerEffect(
+                    ShaderLibrary.cafeBranchMotion(.boundingRect, .float(action.motionVariant), .float(Float(pose.motion))),
+                    maxSampleOffset: CGSize(width: 42, height: 30),
+                    isEnabled: pose.motion < 1
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .accessibilityLabel(action.outcome)
+            HStack(spacing: 8) {
+                PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "重听这句台词", bundledOnly: true)
+                HebrewText(text: phrase.hebrew, size: 22)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(.horizontal, 8)
+            .background(progress.theme.cardSurface,
+                        in: UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14,
+                                                   bottomTrailingRadius: 14, topTrailingRadius: 4))
+            .offset(y: -6 * (1 - pose.speech))
+            .opacity(0.35 + 0.65 * pose.speech)
         }
     }
 }
