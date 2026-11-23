@@ -34,6 +34,7 @@
 		A1EF10000000000000000011 /* widget-words.json in Resources */ = {isa = PBXBuildFile; fileRef = A1EF10000000000000000010 /* widget-words.json */; };
 		A1EF20000000000000000021 /* StudyAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000022 /* StudyAI.swift */; };
 		A1EF20000000000000000023 /* StudyGamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000024 /* StudyGamesView.swift */; };
+		A1EF20000000000000000025 /* StudyComicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000026 /* StudyComicView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,6 +99,7 @@
 		A1EF10000000000000000010 /* widget-words.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = App/StudyAssets/widget-words.json; sourceTree = SOURCE_ROOT; };
 		A1EF20000000000000000022 /* StudyAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyAI.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000024 /* StudyGamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyGamesView.swift; sourceTree = "<group>"; };
+		A1EF20000000000000000026 /* StudyComicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyComicView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +159,7 @@
 				A1EF2000000000000000000B /* StudyProgress.swift */,
 				A1EF20000000000000000009 /* StudyFlashcardsView.swift */,
 				A1EF20000000000000000024 /* StudyGamesView.swift */,
+				A1EF20000000000000000026 /* StudyComicView.swift */,
 				A1EF20000000000000000007 /* StudyContent.swift */,
 				A1EF20000000000000000005 /* StudyAudio.swift */,
 				A1EF20000000000000000003 /* LegacyStudyImport.swift */,
@@ -319,6 +322,7 @@
 				A1EF2000000000000000000C /* StudyProgress.swift in Sources */,
 				A1EF2000000000000000000A /* StudyFlashcardsView.swift in Sources */,
 				A1EF20000000000000000023 /* StudyGamesView.swift in Sources */,
+				A1EF20000000000000000025 /* StudyComicView.swift in Sources */,
 				A1EF20000000000000000008 /* StudyContent.swift in Sources */,
 				A1EF20000000000000000006 /* StudyAudio.swift in Sources */,
 				A1EF20000000000000000004 /* LegacyStudyImport.swift in Sources */,

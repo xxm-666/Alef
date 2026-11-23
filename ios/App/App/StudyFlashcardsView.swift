@@ -33,6 +33,16 @@ struct PracticeCenterView: View {
                 .buttonStyle(.plain)
             }
 
+            NavigationLink {
+                StudyCafeComicView(content: content)
+            } label: {
+                StudyCard(padding: 10) {
+                    StudyRow(title: "漫画 · 咖啡馆点单", symbol: "book",
+                             subtitle: "看漫画、听原音，替主角选一句台词。")
+                }
+            }
+            .buttonStyle(.plain)
+
             StudySectionTitle("字母练习")
             NavigationLink {
                 StudyFlashcardsView(content: content)
