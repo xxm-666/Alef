@@ -20,14 +20,6 @@ private enum CafeComicAction: String, CaseIterable {
         case .bill: "店员把账单递给你。"
         }
     }
-
-    var motionVariant: Float {
-        switch self {
-        case .menu: 0
-        case .water: 1
-        case .bill: 2
-        }
-    }
 }
 
 struct StudyCafeComicView: View {
@@ -74,7 +66,6 @@ struct StudyCafeComicView: View {
                     if completed {
                         resolution(solution)
                             .id(Self.resolutionID)
-                            .transition(.offset(y: 12).combined(with: .opacity))
                     } else {
                         dialogueChoices(choices)
                     }
@@ -83,7 +74,6 @@ struct StudyCafeComicView: View {
                                            description: Text("这一篇需要的台词资料不完整。"))
                 }
             }
-            .modifier(StudyComicMotion(value: completed))
             .onChange(of: wrongChoice?.id) { _, choiceID in
                 guard choiceID != nil else { return }
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
@@ -92,9 +82,8 @@ struct StudyCafeComicView: View {
             }
             .onChange(of: completed) { _, isComplete in
                 let target = isComplete ? Self.resolutionID : Self.openingID
-                let anchor: UnitPoint = isComplete ? .bottom : .top
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
-                    reader.scrollTo(target, anchor: anchor)
+                    reader.scrollTo(target, anchor: .top)
                 }
             }
         }
@@ -117,7 +106,6 @@ struct StudyCafeComicView: View {
                 VStack {
                     reaction(wrongChoice, action: action)
                         .id(wrongChoice.id)
-                        .transition(.offset(y: 12).combined(with: .opacity))
                 }
                 .id(Self.reactionID)
             }
@@ -129,7 +117,6 @@ struct StudyCafeComicView: View {
                 .font(.subheadline)
                 .tint(progress.theme.primaryButton)
         }
-        .modifier(StudyComicMotion(value: wrongChoice?.id))
     }
 
     private func reaction(_ phrase: StudyPhrase, action: CafeComicAction) -> some View {
@@ -212,54 +199,26 @@ struct StudyCafeComicView: View {
 }
 
 private struct CafeComicActionPanel: View {
-    private struct Pose {
-        var motion: CGFloat = 1
-        var speech: CGFloat = 1
+    private enum Frame: String {
+        case approach = "Approach"
+        case transfer = "Transfer"
+        case outcome = ""
     }
 
     @Environment(StudyProgress.self) private var progress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var play = 0
+    @State private var frame = Frame.approach
     let action: CafeComicAction
     let phrase: StudyPhrase
 
     var body: some View {
-        Group {
-            if reduceMotion {
-                scene(Pose())
-            } else {
-                KeyframeAnimator(initialValue: Pose(), trigger: play) { pose in
-                    scene(pose)
-                } keyframes: { _ in
-                    KeyframeTrack(\.motion) {
-                        MoveKeyframe(0)
-                        LinearKeyframe(0, duration: 0.22)
-                        LinearKeyframe(1, duration: 0.85)
-                    }
-                    KeyframeTrack(\.speech) {
-                        MoveKeyframe(0)
-                        LinearKeyframe(0, duration: 0.53)
-                        CubicKeyframe(1, duration: 0.28)
-                    }
-                }
-            }
-        }
-        .task {
-            if !reduceMotion, play == 0 { play = 1 }
-        }
-    }
-
-    private func scene(_ pose: Pose) -> some View {
+        let visibleFrame = reduceMotion ? Frame.outcome : frame
+        let showsOutcome = visibleFrame == .outcome
         VStack(alignment: .trailing, spacing: 6) {
-            Image(action.illustration)
+            Image(action.illustration + visibleFrame.rawValue)
                 .resizable()
                 .aspectRatio(3, contentMode: .fit)
                 .frame(maxWidth: .infinity)
-                .layerEffect(
-                    ShaderLibrary.cafeBranchMotion(.boundingRect, .float(action.motionVariant), .float(Float(pose.motion))),
-                    maxSampleOffset: CGSize(width: 42, height: 30),
-                    isEnabled: pose.motion < 1
-                )
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel(action.outcome)
             HStack(spacing: 8) {
@@ -271,8 +230,29 @@ private struct CafeComicActionPanel: View {
             .background(progress.theme.cardSurface,
                         in: UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 14,
                                                    bottomTrailingRadius: 14, topTrailingRadius: 4))
-            .offset(y: -6 * (1 - pose.speech))
-            .opacity(0.35 + 0.65 * pose.speech)
+            .opacity(showsOutcome ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: showsOutcome)
+            .allowsHitTesting(showsOutcome)
+            .accessibilityHidden(!showsOutcome)
+        }
+        .task(id: reduceMotion) {
+            if reduceMotion {
+                frame = .outcome
+                return
+            }
+            do {
+                // Leave the approach pose visible while the new panel scrolls into view.
+                if frame == .approach {
+                    try await Task.sleep(for: .milliseconds(350))
+                    frame = .transfer
+                }
+                if frame == .transfer {
+                    try await Task.sleep(for: .milliseconds(135))
+                    frame = .outcome
+                }
+            } catch {
+                return
+            }
         }
     }
 }
