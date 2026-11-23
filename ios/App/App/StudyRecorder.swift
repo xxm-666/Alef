@@ -610,6 +610,7 @@ struct ShadowingPracticeCard: View {
     @Environment(\.openURL) private var openURL
     let hebrew: String
     var title = "跟读对比"
+    var recordingState: Binding<Bool>? = nil
     @State private var recorder = StudyVoiceRecorder()
     @State private var comparison: (recording: URL, result: Result<StudyRhythmComparison, StudyRecordingIssue>)?
     @State private var showsComparisonDetails = false
@@ -621,78 +622,44 @@ struct ShadowingPracticeCard: View {
 
     private var referenceURL: URL? { audio.referenceRecordingURL(for: hebrew) }
 
+    private var currentComparison: Result<StudyRhythmComparison, StudyRecordingIssue>? {
+        guard let recording = recorder.completedRecordingURL, comparison?.recording == recording else { return nil }
+        return comparison?.result
+    }
+
+    private var shouldRetake: Bool {
+        if case .failure(let issue)? = currentComparison { return issue != .noReference }
+        return !recorder.hasRecording && recorder.errorMessage != nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(title, systemImage: "mic")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(progress.theme.ink)
-                Spacer(minLength: 0)
+            Label(title, systemImage: "mic")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(progress.theme.ink)
+            if let statusText {
                 Text(statusText)
                     .font(.caption)
                     .foregroundStyle(recorder.state == .recording ? progress.theme.error : progress.theme.mutedInk)
             }
 
-            let layout = typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(spacing: 6))
-                : AnyLayout(HStackLayout(spacing: 6))
-            layout {
-                Button {
-                    recorder.pauseForReferencePlayback()
-                    audio.speak(hebrew, rate: referenceURL == nil ? progress.speechRate : 1,
-                                bundledOnly: referenceURL != nil)
-                } label: {
-                    Label("原音", systemImage: "speaker.wave.2")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(StudyButtonStyle())
-                .disabled(recorder.state == .recording)
-
-                if recorder.hasRecording {
-                    Button {
-                        audio.stop()
-                        if recorder.playingSegment != nil { recorder.stopPlayback() }
-                        recorder.togglePlayback()
-                    } label: {
-                        Label(recorder.state == .playing && recorder.playingSegment == nil ? "停止回放" : "我的录音",
-                              systemImage: recorder.state == .playing && recorder.playingSegment == nil ? "stop.circle" : "play.circle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(StudyButtonStyle(selected: recorder.state == .playing && recorder.playingSegment == nil))
-                    .disabled(recorder.state == .recording)
-                }
-            }
-
-            Button {
-                audio.stop()
-                Task { await recorder.toggleRecording() }
-            } label: {
-                Label(recorder.state == .recording ? "停止录音" : (recorder.hasRecording ? "重录" : "录音"),
-                      systemImage: recorder.state == .recording ? "stop.fill" : "mic.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(StudyButtonStyle(selected: recorder.state == .recording, learningAction: !recorder.hasRecording))
-
-            if let recording = recorder.completedRecordingURL {
-                comparisonView(for: recording)
-                if aiEnabled && canRecognize(recording) { aiComparisonView(recording: recording) }
-            }
-
             if recorder.permissionDenied {
-                HStack(spacing: 8) {
-                    Text("请在系统设置中允许使用麦克风。")
-                        .font(.caption)
-                        .foregroundStyle(progress.theme.error)
-                    Spacer(minLength: 0)
-                    Button("去设置") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                    }
-                    .font(.caption.weight(.semibold))
-                }
+                microphonePermission
             } else if let error = recorder.errorMessage {
                 Text(error)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(progress.theme.error)
+            }
+            if recorder.completedRecordingURL != nil {
+                comparisonSummary
+            }
+            playbackControls
+            recordButton
+            if case .success(let result)? = currentComparison {
+                comparisonDetails(result)
+            }
+            if let recording = recorder.completedRecordingURL, aiEnabled && canRecognize(recording) {
+                aiComparisonView(recording: recording)
             }
         }
         .padding(10)
@@ -719,6 +686,9 @@ struct ShadowingPracticeCard: View {
                 aiRequest = nil
             }
         }
+        .onChange(of: recorder.state, initial: true) { _, state in
+            recordingState?.wrappedValue = state == .recording
+        }
         .onChange(of: recorder.completedRecordingURL) { _, _ in
             showsComparisonDetails = false
             resetAIComparison()
@@ -734,43 +704,110 @@ struct ShadowingPracticeCard: View {
             recorder.cleanup()
         }
         .onDisappear {
+            recordingState?.wrappedValue = false
             resetAIComparison()
             recorder.cleanup()
         }
     }
 
-    @ViewBuilder private func comparisonView(for recording: URL) -> some View {
+    private var microphonePermission: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("请在系统设置中允许使用麦克风。")
+                .font(.subheadline)
+                .foregroundStyle(progress.theme.error)
+            Button("打开系统设置", systemImage: "gear") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(StudyButtonStyle(learningAction: true))
+        }
+    }
+
+    private var playbackControls: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 6))
+        let playingRecording = recorder.state == .playing && recorder.playingSegment == nil
+        return layout {
+            Button {
+                recorder.pauseForReferencePlayback()
+                audio.speak(hebrew, rate: referenceURL == nil ? progress.speechRate : 1,
+                            bundledOnly: referenceURL != nil)
+            } label: {
+                Label("原音", systemImage: "speaker.wave.2").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(StudyButtonStyle())
+            .disabled(recorder.state == .recording)
+
+            if recorder.completedRecordingURL != nil {
+                Button {
+                    audio.stop()
+                    if recorder.playingSegment != nil { recorder.stopPlayback() }
+                    recorder.togglePlayback()
+                } label: {
+                    Label(playingRecording ? "停止回放" : "我的录音",
+                          systemImage: playingRecording ? "stop.circle" : "play.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle(selected: playingRecording))
+            }
+        }
+    }
+
+    private var recordButton: some View {
+        let recording = recorder.state == .recording
+        let retrying = recorder.hasRecording || shouldRetake
+        return Button {
+            audio.stop()
+            Task { await recorder.toggleRecording() }
+        } label: {
+            Label(recording ? "停止录音" : (retrying ? "重录" : "开始录音"),
+                  systemImage: recording ? "stop.fill" : "mic.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(StudyButtonStyle(learningAction: !recorder.permissionDenied &&
+                                    (recording || !recorder.hasRecording || shouldRetake)))
+    }
+
+    private var comparisonSummary: some View {
         VStack(alignment: .leading, spacing: 5) {
-            if comparison?.recording != recording {
-                ProgressView("正在对比读音…")
-            } else if case .success(let result)? = comparison?.result {
+            switch currentComparison {
+            case .success(let result)?:
                 Text("节奏相似度 \(result.score) / 100")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(progress.theme.ink)
                 Text(result.feedback)
-                DisclosureGroup("查看对比详情", isExpanded: $showsComparisonDetails) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("原音 \(result.referenceDuration.formatted(.number.precision(.fractionLength(2)))) 秒 · 录音 \(result.recordingDuration.formatted(.number.precision(.fractionLength(2)))) 秒")
-                        Text("语速 \(result.paceScore) · 停顿 \(result.pauseScore)（原音 \(result.referencePauseCount) 次，你的录音 \(result.recordingPauseCount) 次）")
-                        if let acoustic = result.acoustic {
-                            soundComparison(acoustic)
-                        } else {
-                            Text("有效声音片段太短，只显示节奏分。")
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-                .frame(minHeight: 44)
-            } else if case .failure(let issue)? = comparison?.result {
-                Text("这次暂不评分").font(.subheadline.weight(.semibold))
+            case .failure(let issue)?:
+                Text(issue == .noReference ? "暂无对比分数" : "这次暂不评分")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(issue == .noReference ? progress.theme.ink : progress.theme.error)
                 Text(issue.message)
+            case nil:
+                ProgressView("正在对比读音…")
             }
         }
-        .font(.caption)
+        .font(.footnote)
         .foregroundStyle(progress.theme.mutedInk)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func comparisonDetails(_ result: StudyRhythmComparison) -> some View {
+        DisclosureGroup("查看对比详情", isExpanded: $showsComparisonDetails) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("原音 \(result.referenceDuration.formatted(.number.precision(.fractionLength(2)))) 秒 · 录音 \(result.recordingDuration.formatted(.number.precision(.fractionLength(2)))) 秒")
+                Text("语速 \(result.paceScore) · 停顿 \(result.pauseScore)（原音 \(result.referencePauseCount) 次，你的录音 \(result.recordingPauseCount) 次）")
+                if let acoustic = result.acoustic {
+                    soundComparison(acoustic)
+                } else {
+                    Text("有效声音片段太短，只显示节奏分。")
+                }
+            }
+            .padding(.top, 4)
+        }
+        .font(.footnote)
+        .foregroundStyle(progress.theme.mutedInk)
+        .frame(minHeight: 44)
     }
 
     private func soundComparison(_ result: StudySoundComparison) -> some View {
@@ -909,11 +946,11 @@ struct ShadowingPracticeCard: View {
         }
     }
 
-    private var statusText: String {
+    private var statusText: String? {
         switch recorder.state {
         case .idle: "最长 10 秒，仅本机暂存"
         case .recording: "正在录音…"
-        case .recorded: "已录制，可回放对比"
+        case .recorded: nil
         case .playing: recorder.playingSegment == nil ? "正在播放你的录音" : "正在播放分段对比"
         }
     }

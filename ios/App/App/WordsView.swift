@@ -64,17 +64,7 @@ struct WordsView: View {
             case "reading":
                 StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud))
             default:
-                HStack(spacing: 8) {
-                    searchField
-                    Button { showsFilters = true } label: {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .frame(width: 44, height: 44)
-                            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(progress.theme.accent)
-                    .accessibilityLabel("筛选与排序")
-                }
+                searchControls
                 if hasFilters { activeFilters }
                 wordLibrary
             }
@@ -106,14 +96,52 @@ struct WordsView: View {
         })
     }
 
+    private var searchControls: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 6))
+        let favoritesOnly = preferences.scope == "favorites"
+        return layout {
+            searchField
+            HStack(spacing: 6) {
+                Button {
+                    var state = preferences
+                    state.topic = state.selectedTopic
+                    state.activeFilter = favoritesOnly ? "all" : "favorites"
+                    progress.write(state, for: "alef.wordsState.v1")
+                } label: {
+                    Image(systemName: favoritesOnly ? "bookmark.fill" : "bookmark")
+                        .frame(width: 44, height: 44)
+                        .background(favoritesOnly ? progress.theme.highlightedSurface : progress.theme.insetSurface,
+                                    in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("仅看收藏")
+                .accessibilityAddTraits(favoritesOnly ? .isSelected : [])
+                Button { showsFilters = true } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .frame(width: 44, height: 44)
+                        .background(hasFilters ? progress.theme.highlightedSurface : progress.theme.insetSurface,
+                                    in: RoundedRectangle(cornerRadius: 12))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("筛选与排序")
+            }
+            .foregroundStyle(progress.theme.accent)
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass").foregroundStyle(progress.theme.mutedInk).accessibilityHidden(true)
-            TextField("希伯来语、中文、音译、词根…", text: setting(\.searchQuery))
+            TextField("搜索单词", text: setting(\.searchQuery))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .submitLabel(.search)
                 .accessibilityLabel("搜索词库")
+                .accessibilityHint("可按希伯来语、中文、音译或词根搜索")
             if !preferences.searchQuery.isEmpty {
                 Button {
                     setting(\.searchQuery).wrappedValue = ""
@@ -131,7 +159,8 @@ struct WordsView: View {
     }
 
     private var hasFilters: Bool {
-        preferences.scope != "all" || preferences.selectedTopic != nil || preferences.initialLetter != "all"
+        let scope = preferences.scope
+        return (scope != "all" && scope != "favorites") || preferences.selectedTopic != nil || preferences.initialLetter != "all"
     }
 
     private var activeFilters: some View {
@@ -499,6 +528,7 @@ struct WordDetailView: View {
     let content: StudyContent
     @State var showNiqqud: Bool
     @State var showCursive: Bool
+    @State private var isRecording = false
 
     init(word: StudyWord, content: StudyContent, showNiqqud: Bool = true, showCursive: Bool = false) {
         self.word = word
@@ -526,6 +556,7 @@ struct WordDetailView: View {
                     Spacer(minLength: 0)
                     PronunciationButton(hebrew: word.hebrew, iconOnly: true,
                                         title: "播放单词发音")
+                        .disabled(isRecording)
                 }
             }
             if let sentence = word.sentence {
@@ -534,6 +565,7 @@ struct WordDetailView: View {
                     WordExampleRow(example: StudyExample(hebrew: sentence.hebrew, transliteration: sentence.transliteration,
                                                          meaning: sentence.meaningZh, note: nil),
                                    showNiqqud: showNiqqud, cursive: showCursive)
+                        .disabled(isRecording)
                 }
             }
             MasteryPicker(value: Binding(get: { progress.wordMastery[word.id] ?? .unlearned }, set: {
@@ -546,7 +578,7 @@ struct WordDetailView: View {
             }
             StudyCard {
                 DisclosureGroup("跟读录音对比") {
-                    ShadowingPracticeCard(hebrew: word.hebrew)
+                    ShadowingPracticeCard(hebrew: word.hebrew, recordingState: $isRecording)
                         .padding(.top, 6)
                 }
             }
@@ -666,6 +698,7 @@ struct WordDetailView: View {
 
 struct StudyReadingView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
     let reading: StudyReading
     private var showNiqqudBinding: Binding<Bool>?
     @State private var niqqudMode: ReadingNiqqudMode
@@ -675,6 +708,7 @@ struct StudyReadingView: View {
     @State private var revealedPointed: Set<Int> = []
     @State private var activeSentence: Int?
     @State private var shadowingSentence: Int?
+    @State private var isRecording = false
 
     init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil) {
         self.reading = reading
@@ -694,7 +728,7 @@ struct StudyReadingView: View {
             }
             if niqqudMode == .assisted {
                 StudyNotice(title: "过渡模式：仅重点生词保留元音点", symbol: "eye",
-                            note: "其余高频词已隐藏元音点，点按下方“对照带点原文”可随时核对。")
+                            note: "打开句子操作，可查看带点原文。")
             }
             StudySectionTitle("原文与朗读")
             Text("点按带下划线的词查看释义。").font(.footnote).foregroundStyle(progress.theme.mutedInk)
@@ -745,8 +779,11 @@ struct StudyReadingView: View {
         let glosses = reading.inlineGlosses(in: text)
         let selectedTerm = selectedGloss.flatMap { $0.sentence == index ? $0.term : nil }
         let showingPointed = niqqudMode != .full && revealedPointed.contains(index)
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 4))
         return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 6) {
+            layout {
                 Text(attributedSentence(text, glosses: glosses, selectedTerm: selectedTerm))
                     .font(.title2)
                     .multilineTextAlignment(.leading)
@@ -758,18 +795,23 @@ struct StudyReadingView: View {
                         selectedGloss = selectedGloss == selection ? nil : selection
                         return .handled
                     })
-                Button {
-                    activeSentence = activeSentence == index ? nil : index
-                    shadowingSentence = nil
-                } label: {
-                    Image(systemName: activeSentence == index ? "ellipsis.circle.fill" : "ellipsis.circle")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                HStack(spacing: 0) {
+                    PronunciationButton(hebrew: sentence.hebrew, iconOnly: true, title: "朗读第 \(index + 1) 句")
+                        .disabled(isRecording)
+                    Button {
+                        activeSentence = activeSentence == index ? nil : index
+                        shadowingSentence = nil
+                    } label: {
+                        Image(systemName: activeSentence == index ? "ellipsis.circle.fill" : "ellipsis.circle")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(progress.theme.accent)
+                    .disabled(isRecording)
+                    .accessibilityLabel("第 \(index + 1) 句操作")
+                    .accessibilityValue(activeSentence == index ? "已展开" : "已收起")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(progress.theme.accent)
-                .accessibilityLabel("第 \(index + 1) 句操作")
-                .accessibilityValue(activeSentence == index ? "已展开" : "已收起")
             }
             if showingPointed {
                 HebrewText(text: sentence.hebrew, size: 22)
@@ -793,14 +835,13 @@ struct StudyReadingView: View {
             }
             if activeSentence == index {
                 let controls = Group {
-                    PronunciationButton(hebrew: sentence.hebrew,
-                                        title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
                     Button {
                         shadowingSentence = shadowingSentence == index ? nil : index
                     } label: {
                         Label("跟读", systemImage: "mic")
                     }
                     .buttonStyle(StudyButtonStyle(selected: shadowingSentence == index))
+                    .disabled(isRecording)
                     if niqqudMode != .full {
                         Button {
                             if revealedPointed.contains(index) { revealedPointed.remove(index) }
@@ -817,7 +858,7 @@ struct StudyReadingView: View {
                     VStack(alignment: .leading, spacing: 6) { controls }
                 }
                 if shadowingSentence == index {
-                    ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句")
+                    ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句", recordingState: $isRecording)
                 }
             }
         }
