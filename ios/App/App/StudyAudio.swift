@@ -19,6 +19,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
     private var sessionActive = false
 
     @Published private(set) var playbackError: String?
+    @Published private(set) var playingPronunciation: String?
     var prefersRecordings = true
     var feedbackEnabled = true
     var hapticsEnabled = true
@@ -47,6 +48,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
                 spoken.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate,
                     AVSpeechUtteranceDefaultSpeechRate * Float(safeRate)))
                 utterance = spoken
+                playingPronunciation = text
                 synthesizer.speak(spoken)
                 return
             }
@@ -75,6 +77,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         recording.delegate = self
         guard recording.play() else { return false }
         player = recording
+        playingPronunciation = text
         return true
     }
 
@@ -129,6 +132,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         let current = player
         player = nil
         utterance = nil
+        playingPronunciation = nil
         current?.stop()
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .immediate) }
     }
@@ -162,6 +166,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         DispatchQueue.main.async {
             if self.player === completed.object {
                 self.player = nil
+                self.playingPronunciation = nil
                 if !flag { self.playbackError = "录音播放失败。" }
             } else if self.feedbackPlayer === completed.object {
                 self.feedbackPlayer = nil
@@ -179,6 +184,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         DispatchQueue.main.async {
             guard self.utterance === completed.object else { return }
             self.utterance = nil
+            self.playingPronunciation = nil
             self.releaseSessionIfIdle()
         }
     }

@@ -671,12 +671,14 @@ struct StudyActionBar<Content: View>: View {
 
 struct StudyAnswerButton: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let submitted: Bool
     let selected: Bool
     let correct: Bool
     var isHebrew = false
     var optionLabel: String?
+    var playing = false
     let action: () -> Void
 
     private var surface: Color {
@@ -699,6 +701,12 @@ struct StudyAnswerButton: View {
                 if isHebrew { HebrewText(text: title, size: 28) }
                 else { Text(title).foregroundStyle(progress.theme.ink) }
                 Spacer()
+                if playing {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(progress.theme.learningAction)
+                        .symbolEffect(.variableColor, isActive: !reduceMotion)
+                        .accessibilityLabel("播放中")
+                }
                 if submitted && (selected || correct) {
                     Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundStyle(correct ? progress.theme.success : progress.theme.error)

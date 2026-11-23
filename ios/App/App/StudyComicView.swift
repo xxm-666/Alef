@@ -2,8 +2,11 @@ import SwiftUI
 
 struct StudyCafeComicView: View {
     private static let menuRequestID = "p-dine-1"
-    private static let phraseIDs = [menuRequestID, "p-dine-3", "p-dine-7"]
+    private static let waterRequestID = "p-dine-3"
+    private static let billRequestID = "p-dine-7"
+    private static let phraseIDs = [menuRequestID, waterRequestID, billRequestID]
     private static let openingID = "cafe-comic-opening"
+    private static let reactionID = "cafe-comic-reaction"
     private static let resolutionID = "cafe-comic-resolution"
 
     @Environment(StudyProgress.self) private var progress
@@ -44,12 +47,20 @@ struct StudyCafeComicView: View {
                     if completed {
                         resolution(solution)
                             .id(Self.resolutionID)
+                            .transition(.offset(y: 12).combined(with: .opacity))
                     } else {
                         dialogueChoices(choices)
                     }
                 } else {
                     ContentUnavailableView("暂时无法打开漫画", systemImage: "book.closed",
                                            description: Text("这一篇需要的台词资料不完整。"))
+                }
+            }
+            .modifier(StudyComicMotion(value: completed))
+            .onChange(of: wrongChoice?.id) { _, choiceID in
+                guard choiceID != nil else { return }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                    reader.scrollTo(Self.reactionID, anchor: .top)
                 }
             }
             .onChange(of: completed) { _, isComplete in
@@ -75,17 +86,41 @@ struct StudyCafeComicView: View {
 
     private func dialogueChoices(_ choices: [StudyPhrase]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let wrongChoice {
+                VStack {
+                    reaction(wrongChoice)
+                        .id(wrongChoice.id)
+                        .transition(.offset(y: 12).combined(with: .opacity))
+                }
+                .id(Self.reactionID)
+            }
             StudySectionTitle("你会怎么说？")
             ForEach(choices) { phrase in
                 choice(phrase)
             }
-            if let wrongChoice {
-                StudyNotice(title: "试试另一句", symbol: "arrow.counterclockwise",
-                            note: "刚才那句是「\(wrongChoice.meaningZh)」", reminder: true)
-            }
             Toggle("显示中文", isOn: $showsTranslation)
                 .font(.subheadline)
                 .tint(progress.theme.primaryButton)
+        }
+        .modifier(StudyComicMotion(value: wrongChoice?.id))
+    }
+
+    private func reaction(_ phrase: StudyPhrase) -> some View {
+        let askedForWater = phrase.id == Self.waterRequestID
+        let outcome = askedForWater ? "店员端来一杯冷水。" : "店员把账单递给你。"
+        return VStack(alignment: .leading, spacing: 8) {
+            panel(askedForWater ? "CafeWater" : "CafeBill", description: outcome)
+                .accessibilityHidden(true)
+            StudyCard {
+                StudySectionTitle(outcome)
+                HStack(spacing: 8) {
+                    PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "重听刚才的台词", bundledOnly: true)
+                    HebrewText(text: phrase.hebrew, size: 22).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                Text("你刚才说的是「\(phrase.meaningZh)」。想要菜单的话，再选一句。")
+                    .font(.footnote)
+                    .foregroundStyle(progress.theme.ink)
+            }
         }
     }
 
