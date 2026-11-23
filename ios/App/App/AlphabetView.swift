@@ -378,6 +378,11 @@ struct LetterStudyView: View {
         }
         .id(letter.id)
         .studyDetail("\(displayGlyph) · \(letter.studyName)")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                StudyMemoryCurveEntry(schedule: progress.letterSchedule[letter.id])
+            }
+        }
         .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }
     }
 

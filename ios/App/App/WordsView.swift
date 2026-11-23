@@ -667,6 +667,9 @@ struct WordDetailView: View {
         .studyDetail("单词详情")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                StudyMemoryCurveEntry(schedule: progress.schedule[word.id])
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     progress.toggleFavorite(word.id)
                 } label: {

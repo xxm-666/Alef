@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 import UIKit
 
@@ -323,6 +324,106 @@ struct StudyNotice: View {
             .padding(.horizontal, 9)
             .background(reminder ? progress.theme.reminderSurface : progress.theme.highlightedSurface,
                         in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct StudyMemoryCurveEntry: View {
+    @State private var showsCurve = false
+    let schedule: ReviewSchedule?
+
+    var body: some View {
+        Button {
+            showsCurve = true
+        } label: {
+            Label("记忆曲线", systemImage: "chart.line.downtrend.xyaxis")
+                .labelStyle(.iconOnly)
+        }
+        .sheet(isPresented: $showsCurve) {
+            NavigationStack {
+                StudyMemoryCurveView(schedule: schedule)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完成") { showsCurve = false }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+private struct StudyMemoryCurveView: View {
+    @Environment(StudyProgress.self) private var progress
+    let schedule: ReviewSchedule?
+
+    var body: some View {
+        StudyPage {
+            if let schedule, schedule.intervalDays > 0, schedule.intervalDays <= ReviewSchedule.maxIntervalDays,
+               let startDate = Calendar.current.date(byAdding: .day, value: -schedule.intervalDays, to: schedule.reviewDate) {
+                StudyCard {
+                    StudySectionTitle("预计记忆保留")
+                    curve(interval: Double(schedule.intervalDays))
+                    Text("虚线标出下次复习。示意曲线从 100% 逐渐下降，并以计划复习日的 80% 为参考。百分比是模型假设，实际记忆因人而异。")
+                        .font(.footnote)
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+                StudyCard {
+                    StudyRow(title: "本轮起点（推算）", symbol: "clock",
+                             subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
+                    scheduleRow(schedule)
+                    StudyRow(title: "当前间隔", symbol: "arrow.left.and.right",
+                             subtitle: "已巩固 \(schedule.repetitions) 次", value: schedule.intervalLabel, chevron: false)
+                }
+            } else if let schedule {
+                StudyCard { scheduleRow(schedule) }
+                Text("这条排程没有可用于绘制曲线的复习间隔。完成一次复习后即可查看。")
+                    .foregroundStyle(progress.theme.mutedInk)
+            } else {
+                ContentUnavailableView("暂无复习安排", systemImage: "chart.line.downtrend.xyaxis",
+                                       description: Text("开始学习并生成复习安排后，即可查看预计的记忆曲线。"))
+            }
+        }
+        .navigationTitle("记忆曲线")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func scheduleRow(_ schedule: ReviewSchedule) -> some View {
+        StudyRow(title: schedule.isDue ? "下次复习 · 已到期" : "下次复习", symbol: "calendar",
+                 subtitle: schedule.reviewDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
+    }
+
+    private func curve(interval: Double) -> some View {
+        Chart {
+            ForEach(0...40, id: \.self) { step in
+                let fraction = Double(step) / 40 * 1.5
+                // Illustrative exponential decay, anchored at 80% on the scheduled review day.
+                LineMark(x: .value("排程后的天数", fraction * interval),
+                         y: .value("预计记忆保留", pow(0.8, fraction)))
+                    .foregroundStyle(progress.theme.learningAction)
+            }
+            RuleMark(x: .value("下次复习", interval))
+                .foregroundStyle(progress.theme.mutedInk)
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        }
+        .chartXScale(domain: 0...(interval * 1.5))
+        .chartXAxis {
+            AxisMarks(values: [0.0, interval]) { value in
+                AxisTick()
+                AxisValueLabel {
+                    if let day = value.as(Double.self) { Text("第 \(Int(day)) 天") }
+                }
+            }
+        }
+        .chartYScale(domain: 0.0...1.0)
+        .chartYAxis {
+            AxisMarks(values: [0.0, 0.5, 1.0]) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let ratio = value.as(Double.self) { Text(ratio, format: .percent) }
+                }
+            }
+        }
+        .frame(height: 180)
+        .accessibilityHidden(true)
     }
 }
 
