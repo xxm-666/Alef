@@ -17,6 +17,18 @@ struct PracticeCenterView: View {
                 dueLettersCard(dueLetters)
             }
 
+            StudySectionTitle("学习小游戏")
+            ForEach(StudyGame.allCases) { game in
+                NavigationLink {
+                    StudyGameView(game: game, content: content)
+                } label: {
+                    StudyCard(padding: 10) {
+                        StudyRow(title: game.title, symbol: game.symbol, subtitle: game.instructions)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
             StudySectionTitle("字母练习")
             NavigationLink {
                 StudyFlashcardsView(content: content)

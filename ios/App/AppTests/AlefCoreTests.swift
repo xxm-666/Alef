@@ -307,6 +307,49 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertThrowsError(try target.previewBackup(Data(invalidReminderBackup.utf8)))
     }
 
+    func testStudyGameRepeatsMistakeOnceWithoutChangingFirstAttemptScore() throws {
+        let content = try StudyContent.load()
+        let questions = StudyGame.letters.questions(in: content)
+        XCTAssertEqual(questions.count, 6)
+        var round = StudyGameRound(questions: Array(questions.prefix(3)))
+        round.submit(correct: false)
+        round.submit(correct: true)
+        XCTAssertEqual(round.answered, 1)
+        XCTAssertEqual(round.mistakes.count, 1)
+
+        round.advance()
+        round.submit(correct: true)
+        round.advance()
+        round.submit(correct: true)
+        round.advance()
+        XCTAssertEqual(round.current?.isRetry, true)
+        XCTAssertEqual(round.score, 22)
+        round.submit(correct: false)
+        round.advance()
+        XCTAssertNil(round.current)
+        XCTAssertEqual(round.answered, 3)
+        XCTAssertEqual(round.correct, 2)
+        XCTAssertEqual(round.mistakes.count, 1)
+        XCTAssertEqual(round.score, 22)
+    }
+
+    func testStudyGameSpellingTilesIncludeEveryRequiredLetter() throws {
+        let content = try StudyContent.load()
+        let questions = StudyGame.spelling.questions(in: content)
+        XCTAssertEqual(questions.count, 6)
+        for question in questions {
+            guard case let .word(word, tiles) = question else {
+                return XCTFail("Expected a spelling question")
+            }
+            var remaining = tiles
+            for letter in word.hebrewUnpointed {
+                let index = try XCTUnwrap(remaining.firstIndex(of: String(letter)))
+                remaining.remove(at: index)
+            }
+            XCTAssertEqual(remaining.count, 2)
+        }
+    }
+
     func testAIProviderEndpointsAndOpenRouterRequestBody() throws {
         let openRouter = StudyAIProvider.openRouter
         XCTAssertEqual(try openRouter.endpoint(gateway: "https://example.com").host, "openrouter.ai")
