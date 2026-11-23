@@ -568,6 +568,7 @@ private struct WordDetailView: View {
             }))
             if let schedule = progress.schedule[word.id] {
                 StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
+                            note: "当前间隔 \(schedule.intervalDays) 天 · 已巩固 \(schedule.repetitions) 次",
                             reminder: schedule.isDue)
             }
             if let sentence = word.sentence {
@@ -845,6 +846,12 @@ struct WordQuizView: View {
     @State private var answered = 0
     @State private var streak = 0
     @State private var reviewIndex = 0
+    @State private var queue: [StudyWord] = []
+    @State private var requeuedIds: Set<String> = []
+    @State private var requeuedThisTurn = false
+    @State private var preAnswerSchedule: ReviewSchedule?
+    @State private var selectedGrade: ReviewGrade?
+    @State private var answeredDate: Date = .now
     @State private var showsSummary = false
     @State private var started = false
 
@@ -899,6 +906,7 @@ struct WordQuizView: View {
         .task {
             guard !started else { return }
             started = true
+            queue = words
             next(play: false)
         }
         .onDisappear { audio.stop() }
@@ -924,8 +932,8 @@ struct WordQuizView: View {
 
     @ViewBuilder private var quizStatus: some View {
         if reviewing {
-            Text("\(reviewIndex + 1) / \(words.count)").font(.subheadline.weight(.semibold))
-            ProgressView(value: Double(reviewIndex + 1), total: Double(max(1, words.count)))
+            Text("\(reviewIndex + 1) / \(queue.count)").font(.subheadline.weight(.semibold))
+            ProgressView(value: Double(reviewIndex + 1), total: Double(max(1, queue.count)))
                 .tint(progress.theme.accent)
                 .frame(minWidth: 38, maxWidth: 160)
                 .accessibilityLabel("复习进度")
@@ -970,8 +978,34 @@ struct WordQuizView: View {
             if kind == .spelling {
                 PronunciationButton(hebrew: target.hebrew, title: "听正确发音")
             }
+            if reviewing && !correct && requeuedThisTurn {
+                StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
+            }
             if reviewing, let schedule = progress.schedule[target.id] {
-                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar")
+                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
+                            note: "当前间隔 \(schedule.intervalDays) 天")
+                if correct {
+                    reviewGradeBar(for: target)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func reviewGradeBar(for target: StudyWord) -> some View {
+        HStack(spacing: 6) {
+            ForEach([ReviewGrade.hard, .good, .easy]) { grade in
+                let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
+                Button {
+                    selectedGrade = grade
+                    progress.adjustWordReview(target.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
+                } label: {
+                    VStack(spacing: 2) {
+                        Text(grade.title).font(.caption.weight(.semibold))
+                        Text("\(preview.intervalDays)天").font(.caption2).foregroundStyle(progress.theme.mutedInk)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(StudyButtonStyle(selected: selectedGrade == grade))
             }
         }
     }
@@ -982,7 +1016,7 @@ struct WordQuizView: View {
         } else if target == nil {
             primaryButton("返回", symbol: "chevron.backward") { dismiss() }
         } else if result != nil {
-            let finishing = reviewing && reviewIndex + 1 >= words.count
+            let finishing = reviewing && reviewIndex + 1 >= queue.count
             primaryButton(finishing ? "查看复习结果" : "下一题", symbol: "arrow.right") {
                 if finishing { showsSummary = true }
                 else {
@@ -997,7 +1031,7 @@ struct WordQuizView: View {
     }
 
     private var summary: some View {
-        let nextReview = words.compactMap { progress.schedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
+        let nextReview = queue.compactMap { progress.schedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
         return StudyQuizSummary(title: reviewing ? "完成到期复习" : "完成练习", correct: correct, answered: answered,
                                 message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
     }
@@ -1023,16 +1057,29 @@ struct WordQuizView: View {
         answered += 1
         if success { correct += 1 }
         streak = success ? streak + 1 : 0
-        if reviewing { progress.completeReview(target.id, correct: success) }
-        else { progress.recordStudy() }
+        if reviewing {
+            let now = Date.now
+            let grade: ReviewGrade = success ? .good : .again
+            preAnswerSchedule = progress.schedule[target.id]
+            answeredDate = now
+            selectedGrade = grade
+            progress.completeReview(target.id, grade: grade, date: now)
+            if !success && requeuedIds.insert(target.id).inserted {
+                queue.append(target)
+                requeuedThisTurn = true
+            }
+        } else {
+            progress.recordStudy()
+        }
         audio.playFeedback(success ? .correct : .wrong)
     }
 
     private func next(play: Bool) {
+        let source = reviewing ? queue : words
         let pool = switch kind {
-        case .spelling: words.filter(\.canPracticeSpelling)
-        case .listening: words.filter { content.audio[$0.hebrew] != nil }
-        case .meaning: words
+        case .spelling: source.filter(\.canPracticeSpelling)
+        case .listening: source.filter { content.audio[$0.hebrew] != nil }
+        case .meaning: source
         }
         if reviewing {
             target = pool.indices.contains(reviewIndex) ? pool[reviewIndex] : nil
@@ -1043,6 +1090,9 @@ struct WordQuizView: View {
         result = nil
         selectedOption = nil
         spelling = ""
+        requeuedThisTurn = false
+        preAnswerSchedule = nil
+        selectedGrade = nil
         guard let target else { return }
         if kind != .spelling {
             options = ([target] + content.distractors(for: target, listening: kind == .listening)).shuffled()

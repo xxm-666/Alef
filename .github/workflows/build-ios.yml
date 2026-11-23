@@ -31,6 +31,25 @@ jobs:
         run: |
           npm ci --replace-registry-host=always
           npm run prepare:ios
+          npm run verify:content
+
+      - name: Run iOS unit tests
+        run: |
+          SIM_ID=$(xcrun simctl list devices available -j | node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync(0, 'utf8'));
+            const devices = Object.entries(data.devices || {})
+              .filter(([runtime]) => runtime.includes('iOS'))
+              .flatMap(([, list]) => list)
+              .filter((d) => d.isAvailable !== false);
+            const iphone = devices.find((d) => /iPhone/.test(d.name)) || devices[0];
+            if (!iphone) { console.error('No available iOS simulator found'); process.exit(1); }
+            process.stdout.write(iphone.udid);
+          ")
+          xcodebuild test -project ios/App/App.xcodeproj -scheme App \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            -derivedDataPath "$RUNNER_TEMP/alef-ios-tests" \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Build unsigned device app
         run: |

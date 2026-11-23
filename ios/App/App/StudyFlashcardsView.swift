@@ -7,28 +7,14 @@ struct PracticeCenterView: View {
 
     var body: some View {
         let due = content.dueWords(in: progress)
+        let dueLetters = content.dueLetters(in: progress)
         StudyPage {
             StudyHeading(section: "练习", title: "把学过的，记牢")
             DailyVocabularyEntry(content: content)
-            NavigationLink {
-                WordReviewView(content: content, words: due)
-            } label: {
-                StudyCard(highlighted: true, padding: 10) {
-                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
-                    layout {
-                        StudyRow(title: due.isEmpty ? "暂无到期单词" : "\(due.count) 个单词到期",
-                                 symbol: "calendar", subtitle: due.isEmpty ? "查看复习队列" : "按计划巩固词义", chevron: false)
-                        Label(due.isEmpty ? "查看队列" : "开始复习", systemImage: due.isEmpty ? "chevron.right" : "play.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(Color.white)
-                            .padding(.horizontal, 10)
-                            .frame(minHeight: 44)
-                            .background(progress.theme.primaryButton, in: Capsule())
-                    }
-                }
+            dueWordsCard(due)
+            if !dueLetters.isEmpty {
+                dueLettersCard(dueLetters)
             }
-            .buttonStyle(.plain)
 
             StudySectionTitle("字母练习")
             NavigationLink {
@@ -74,6 +60,50 @@ struct PracticeCenterView: View {
         }
         .studyHome()
     }
+
+    private func dueWordsCard(_ due: [StudyWord]) -> some View {
+        NavigationLink {
+            WordReviewView(content: content, words: due)
+        } label: {
+            StudyCard(highlighted: true, padding: 10) {
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+                layout {
+                    StudyRow(title: due.isEmpty ? "暂无到期单词" : "\(due.count) 个单词到期",
+                             symbol: "calendar", subtitle: due.isEmpty ? "查看复习队列" : "按计划巩固词义", chevron: false)
+                    Label(due.isEmpty ? "查看队列" : "开始复习", systemImage: due.isEmpty ? "chevron.right" : "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .background(progress.theme.primaryButton, in: Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dueLettersCard(_ dueLetters: [StudyLetter]) -> some View {
+        NavigationLink {
+            LetterReviewView(letters: dueLetters, allLetters: content.letters)
+        } label: {
+            StudyCard(highlighted: true, padding: 10) {
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+                layout {
+                    StudyRow(title: "\(dueLetters.count) 个字母到期",
+                             symbol: "calendar.badge.clock", subtitle: "巩固字母字形与读音", chevron: false)
+                    Label("开始复习", systemImage: "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .background(progress.theme.primaryButton, in: Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private struct FlashcardPreferences: Codable {
@@ -93,7 +123,9 @@ struct StudyFlashcardsView: View {
     @State private var shuffledIDs: [String]?
     @State private var showsOptions = false
 
-    private let scopes: [(value: String, title: String)] = [("all", "全部"), ("needs_review", "需复习"), ("sofit", "词尾形"), ("begadkefat", "达盖什")]
+    private let scopes: [(value: String, title: String)] = [
+        ("all", "全部"), ("due_srs", "到期复习"), ("needs_review", "需复习"), ("sofit", "词尾形"), ("begadkefat", "达盖什")
+    ]
     private let frontStyles: [(value: String, title: String)] = [("block", "印刷体"), ("cursive", "手写体"), ("both", "印刷与手写"), ("sofit", "词尾形")]
 
     var body: some View {
@@ -239,18 +271,42 @@ struct StudyFlashcardsView: View {
     }
 
     private func masteryControls(for current: StudyLetter) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            MasteryPicker(value: Binding(get: { progress.letterMastery[current.id] ?? .unlearned }, set: {
-                rate($0, for: current)
-            }))
-            Text("标记后进入下一张").font(.caption).foregroundStyle(progress.theme.mutedInk)
+        let existing = progress.letterSchedule[current.id]
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: typeSize.isAccessibilitySize ? 2 : 4)
+        return VStack(alignment: .leading, spacing: 6) {
+            if let existing {
+                Text("下次复习 · \(existing.displayDate)（间隔 \(existing.intervalDays) 天）")
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            LazyVGrid(columns: columns, spacing: 6) {
+                ForEach(ReviewGrade.allCases) { grade in
+                    let preview = ReviewSchedule.next(from: existing, grade: grade, on: .now)
+                    Button {
+                        rate(grade, for: current)
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: grade.symbol)
+                                .font(.caption.weight(.semibold))
+                            Text(grade.title)
+                                .font(.caption.weight(.semibold))
+                            Text("\(preview.intervalDays)天")
+                                .font(.caption2)
+                                .foregroundStyle(progress.theme.mutedInk)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: grade == .good))
+                }
+            }
+            Text("自评后自动进入下一张并安排下次复习").font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
     }
 
-    private func rate(_ level: Mastery, for current: StudyLetter) {
+    private func rate(_ grade: ReviewGrade, for current: StudyLetter) {
         let cards = deck
         let following = cards.isEmpty ? nil : cards[safe: (index + 1) % cards.count]?.id
-        progress.setLetter(current.id, mastery: level)
+        progress.completeLetterReview(current.id, grade: grade)
         let next = deck.firstIndex { $0.id == following } ?? 0
         setting(\.cardIndex).wrappedValue = next
         flipped = false
@@ -287,13 +343,21 @@ struct StudyFlashcardsView: View {
 
     private var deck: [StudyLetter] {
         let mastery = progress.letterMastery
-        let filtered = content.letters.filter { letter in
-            switch preferences.deckScope {
-            case "needs_review": mastery[letter.id] != .mastered
-            case "sofit": letter.sofit != nil
-            case "begadkefat": letter.begadkefat != nil
-            default: true
+        let filtered: [StudyLetter]
+        if preferences.deckScope == "due_srs" {
+            filtered = content.dueLetters(in: progress)
+        } else {
+            filtered = content.letters.filter { letter in
+                switch preferences.deckScope {
+                case "needs_review": mastery[letter.id] != .mastered
+                case "sofit": letter.sofit != nil
+                case "begadkefat": letter.begadkefat != nil
+                default: true
+                }
             }
+        }
+        if preferences.deckScope == "due_srs" && shuffledIDs == nil {
+            return filtered
         }
         let ordered = shuffledIDs?.compactMap { id in filtered.first { $0.id == id } } ?? []
         return ordered.count == filtered.count ? ordered : filtered
@@ -372,12 +436,23 @@ private enum LetterQuizKind: String, CaseIterable, Identifiable {
     }
 }
 
+private struct LetterReviewView: View {
+    let letters: [StudyLetter]
+    let allLetters: [StudyLetter]
+
+    var body: some View {
+        FlashQuizView(letters: letters, allLetters: allLetters, kind: .blockToSound, reviewing: true)
+    }
+}
+
 private struct FlashQuizView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     let letters: [StudyLetter]
+    let allLetters: [StudyLetter]
     @Environment(\.dismiss) private var dismiss
     let kind: LetterQuizKind
+    var reviewing = false
     @State private var question: Question?
     @State private var answer: String?
     @State private var selection: String?
@@ -385,8 +460,24 @@ private struct FlashQuizView: View {
     @State private var correct = 0
     @State private var total = 0
     @State private var streak = 0
+    @State private var queue: [StudyLetter] = []
+    @State private var reviewIndex = 0
+    @State private var requeuedIds: Set<String> = []
+    @State private var requeuedThisTurn = false
+    @State private var preAnswerSchedule: ReviewSchedule?
+    @State private var selectedGrade: ReviewGrade?
+    @State private var answeredDate: Date = .now
+    @State private var started = false
+
+    init(letters: [StudyLetter], allLetters: [StudyLetter]? = nil, kind: LetterQuizKind, reviewing: Bool = false) {
+        self.letters = letters
+        self.allLetters = allLetters ?? letters
+        self.kind = kind
+        self.reviewing = reviewing
+    }
 
     private struct Question {
+        let kind: LetterQuizKind
         let letter: StudyLetter
         let glyph: String
         let choices: [String]
@@ -399,103 +490,196 @@ private struct FlashQuizView: View {
         ScrollViewReader { scroll in
             StudyPage {
                 if showsSummary {
-                    StudyQuizSummary(title: "完成字母练习", correct: correct, answered: total)
+                    summary
                 } else if let question {
-                    HStack {
-                        Label("得分 \(correct) / \(total)", systemImage: "star")
-                        Spacer()
-                        Label("连对 \(streak)", systemImage: "flame")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(progress.theme.mutedInk)
-                    .monospacedDigit()
-                    StudyCard {
-                        StudySectionTitle(prompt)
-                        Group {
-                            if kind == .cursiveToBlock {
-                                StudyCursiveLetter(letter: question.letter, size: 70)
-                            } else {
-                                HebrewText(text: question.glyph, size: 70, style: .largeTitle)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        if answer != nil {
-                            if let sample = question.modernExample {
-                                PronunciationButton(hebrew: sample, title: "听现代音节 \(sample)", bundledOnly: true)
-                            } else {
-                                PronunciationButton(hebrew: question.letter.nameHebrew, title: "朗读字母名")
-                            }
-                        }
-                    }
-                    .id("flash-question")
+                    quizHeader
+                    questionCard(question).id("flash-question")
                     ForEach(Array(question.choices.enumerated()), id: \.offset) { index, choice in
                         StudyAnswerButton(title: choice, submitted: answer != nil,
                                           selected: selection == choice, correct: choice == question.solution,
-                                          isHebrew: kind == .cursiveToBlock || kind == .sofitMatch,
+                                          isHebrew: question.kind == .cursiveToBlock || question.kind == .sofitMatch,
                                           optionLabel: studyOptionLabel(index)) {
                             selection = choice
                         }
                     }
                     if let answer {
-                        StudyQuizFeedback(correct: answer == question.solution, solution: question.solution,
-                                          response: answer, explanation: question.explanation)
-                            .id("flash-result")
+                        feedbackView(question, answer: answer).id("flash-result")
                     }
-                } else {
-                    ContentUnavailableView("没有可用题目", systemImage: "rectangle.on.rectangle")
+                } else if started {
+                    ContentUnavailableView(reviewing ? "没有到期的字母" : "没有可用题目",
+                                           systemImage: reviewing ? "calendar.badge.checkmark" : "rectangle.on.rectangle")
                 }
             }
             .onChange(of: answer) { _, value in
                 scroll.scrollTo(value == nil ? "flash-question" : "flash-result", anchor: value == nil ? .top : .bottom)
             }
         }
-        .studyDetail(kind.title)
+        .studyDetail(reviewing ? "到期字母复习" : kind.title)
         .toolbar {
-            if total > 0 && !showsSummary {
+            if !reviewing && total > 0 && !showsSummary {
                 ToolbarItem(placement: .topBarTrailing) { Button("结束") { showsSummary = true } }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showsSummary {
-                StudyActionBar {
-                    Button { dismiss() } label: { Text("完成").frame(maxWidth: .infinity) }
-                        .buttonStyle(StudyButtonStyle(prominent: true))
-                }
-            } else if let question {
-                StudyActionBar {
-                    if answer != nil {
-                        Button(action: next) {
-                            Label("下一题", systemImage: "arrow.right").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(StudyButtonStyle(prominent: true))
-                    } else {
-                        Button {
-                            if let selection { grade(selection, solution: question.solution) }
-                        } label: {
-                            Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(StudyButtonStyle(prominent: true))
-                        .disabled(selection == nil)
-                    }
-                }
-            }
+            if started { bottomBar }
         }
-        .task { if question == nil { next() } }
+        .task {
+            guard !started else { return }
+            started = true
+            queue = letters
+            next()
+        }
         .onDisappear { audio.stop() }
     }
 
+    private var quizHeader: some View {
+        HStack(spacing: 9) {
+            if reviewing {
+                Text("\(reviewIndex + 1) / \(queue.count)").font(.subheadline.weight(.semibold))
+                ProgressView(value: Double(reviewIndex + 1), total: Double(max(1, queue.count)))
+                    .tint(progress.theme.accent)
+                    .frame(minWidth: 38, maxWidth: 160)
+                    .accessibilityLabel("复习进度")
+            }
+            Label("得分 \(correct) / \(total)", systemImage: "star")
+            Spacer()
+            if !reviewing {
+                Label("连对 \(streak)", systemImage: "flame")
+                    .foregroundStyle(progress.theme.reminder)
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(progress.theme.mutedInk)
+        .monospacedDigit()
+    }
+
+    private func questionCard(_ question: Question) -> some View {
+        StudyCard {
+            StudySectionTitle(prompt(for: question.kind))
+            Group {
+                if question.kind == .cursiveToBlock {
+                    StudyCursiveLetter(letter: question.letter, size: 70)
+                } else {
+                    HebrewText(text: question.glyph, size: 70, style: .largeTitle)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            if answer != nil {
+                if let sample = question.modernExample {
+                    PronunciationButton(hebrew: sample, title: "听现代音节 \(sample)", bundledOnly: true)
+                } else {
+                    PronunciationButton(hebrew: question.letter.nameHebrew, title: "朗读字母名")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func feedbackView(_ question: Question, answer: String) -> some View {
+        let success = answer == question.solution
+        VStack(alignment: .leading, spacing: 8) {
+            StudyQuizFeedback(correct: success, solution: question.solution,
+                              response: answer, explanation: question.explanation)
+            if reviewing && !success && requeuedThisTurn {
+                StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
+            }
+            if reviewing, let schedule = progress.letterSchedule[question.letter.id] {
+                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
+                            note: "当前间隔 \(schedule.intervalDays) 天")
+                if success {
+                    reviewGradeBar(for: question.letter)
+                }
+            }
+        }
+    }
+
+    private func reviewGradeBar(for letter: StudyLetter) -> some View {
+        HStack(spacing: 6) {
+            ForEach([ReviewGrade.hard, .good, .easy]) { grade in
+                let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
+                Button {
+                    selectedGrade = grade
+                    progress.adjustLetterReview(letter.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
+                } label: {
+                    VStack(spacing: 2) {
+                        Text(grade.title).font(.caption.weight(.semibold))
+                        Text("\(preview.intervalDays)天").font(.caption2).foregroundStyle(progress.theme.mutedInk)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(StudyButtonStyle(selected: selectedGrade == grade))
+            }
+        }
+    }
+
+    private var summary: some View {
+        let nextReview = queue.compactMap { progress.letterSchedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
+        return StudyQuizSummary(title: reviewing ? "完成字母复习" : "完成字母练习", correct: correct, answered: total,
+                                message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
+    }
+
+    @ViewBuilder private var bottomBar: some View {
+        if showsSummary {
+            StudyActionBar {
+                Button { dismiss() } label: { Text("完成").frame(maxWidth: .infinity) }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+            }
+        } else if let question {
+            StudyActionBar {
+                if answer != nil {
+                    let finishing = reviewing && reviewIndex + 1 >= queue.count
+                    Button {
+                        if finishing { showsSummary = true }
+                        else {
+                            if reviewing { reviewIndex += 1 }
+                            next()
+                        }
+                    } label: {
+                        Label(finishing ? "查看复习结果" : "下一题", systemImage: "arrow.right").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                } else {
+                    Button {
+                        if let selection { grade(selection, solution: question.solution) }
+                    } label: {
+                        Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .disabled(selection == nil)
+                }
+            }
+        } else {
+            StudyActionBar {
+                Button { dismiss() } label: { Text("返回").frame(maxWidth: .infinity) }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+            }
+        }
+    }
+
     private func grade(_ choice: String, solution: String) {
-        guard answer == nil else { return }
+        guard answer == nil, let question else { return }
         answer = choice
         total += 1
         let success = choice == solution
         if success { correct += 1 }
         streak = success ? streak + 1 : 0
+        if reviewing {
+            let now = Date.now
+            let grade: ReviewGrade = success ? .good : .again
+            preAnswerSchedule = progress.letterSchedule[question.letter.id]
+            answeredDate = now
+            selectedGrade = grade
+            progress.completeLetterReview(question.letter.id, grade: grade, date: now)
+            if !success && requeuedIds.insert(question.letter.id).inserted {
+                queue.append(question.letter)
+                requeuedThisTurn = true
+            }
+        } else {
+            progress.recordStudy()
+        }
         audio.playFeedback(success ? .correct : .wrong)
-        progress.recordStudy()
     }
 
-    private var prompt: String {
+    private func prompt(for kind: LetterQuizKind) -> String {
         switch kind {
         case .cursiveToBlock: "请选择手写体对应的印刷字母。"
         case .sofitMatch: "请选择这个字母的词尾形。"
@@ -504,48 +688,79 @@ private struct FlashQuizView: View {
         }
     }
 
+    private func questionKind(for letter: StudyLetter, index: Int) -> LetterQuizKind {
+        guard reviewing else { return kind }
+        var supported: [LetterQuizKind] = [.blockToSound, .cursiveToBlock]
+        if letter.sofit != nil { supported.append(.sofitMatch) }
+        if letter.begadkefat != nil { supported.append(.dagesh) }
+        return supported[index % supported.count]
+    }
+
     private func next() {
-        let pool = letters.filter { letter in
-            switch kind {
+        let target: StudyLetter
+        if reviewing {
+            guard queue.indices.contains(reviewIndex) else {
+                question = nil
+                return
+            }
+            target = queue[reviewIndex]
+        } else {
+            let pool = allLetters.filter { letter in
+                switch kind {
+                case .sofitMatch: letter.sofit != nil
+                case .dagesh: letter.begadkefat != nil
+                default: true
+                }
+            }
+            let candidates = pool.filter { $0.id != question?.letter.id }
+            guard let picked = (candidates.isEmpty ? pool : candidates).randomElement() else { return }
+            target = picked
+        }
+
+        let activeKind = questionKind(for: target, index: reviewIndex)
+        let distractorPool = allLetters.filter { letter in
+            switch activeKind {
             case .sofitMatch: letter.sofit != nil
             case .dagesh: letter.begadkefat != nil
             default: true
             }
         }
-        let candidates = pool.filter { $0.id != question?.letter.id }
-        guard let target = (candidates.isEmpty ? pool : candidates).randomElement() else { return }
+
         var glyph = target.hebrew
         let solution: String
         let possible: [String]
         let explanation: String
         var modernExample: String?
-        switch kind {
+        switch activeKind {
         case .sofitMatch:
             solution = target.sofit ?? target.hebrew
-            possible = pool.compactMap(\.sofit)
+            possible = distractorPool.compactMap(\.sofit)
             explanation = target.sofitInfo?.rule ?? "\(target.hebrew) 的词尾形是 \(solution)。"
         case .cursiveToBlock:
             solution = target.hebrew
-            possible = pool.map(\.hebrew)
+            possible = distractorPool.map(\.hebrew)
             explanation = target.cursiveDesc
         case .dagesh:
             guard let variants = target.begadkefat else { return }
             let variant = Bool.random() ? variants.withDagesh : variants.withoutDagesh
             solution = variant.modernIpa
             glyph = variant.glyph
-            possible = pool.compactMap(\.begadkefat).flatMap { [$0.withDagesh.modernIpa, $0.withoutDagesh.modernIpa] }
+            possible = distractorPool.compactMap(\.begadkefat).flatMap { [$0.withDagesh.modernIpa, $0.withoutDagesh.modernIpa] }
             explanation = "\(variant.name)：现代 \(variant.modernIpa)，古典 \(variant.biblicalIpa)。\(variants.note)"
             modernExample = variants.modernExample(for: variant)
         default:
             solution = soundLabel(target)
-            possible = pool.map(soundLabel)
+            possible = distractorPool.map(soundLabel)
             explanation = target.pronunciationDesc
         }
         let distractors = Set(possible).subtracting([solution]).shuffled().prefix(3)
-        question = Question(letter: target, glyph: glyph, choices: ([solution] + Array(distractors)).shuffled(),
+        question = Question(kind: activeKind, letter: target, glyph: glyph, choices: ([solution] + Array(distractors)).shuffled(),
                             solution: solution, explanation: explanation, modernExample: modernExample)
         answer = nil
         selection = nil
+        requeuedThisTurn = false
+        preAnswerSchedule = nil
+        selectedGrade = nil
     }
 
     private func soundLabel(_ letter: StudyLetter) -> String { "\(letter.nameEnglish) · \(letter.modernIpa)" }

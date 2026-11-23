@@ -62,9 +62,16 @@ struct StudyContent: Decodable {
         return visible
     }
 
-    func dueWords(in progress: StudyProgress) -> [StudyWord] {
+    func dueWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
         let schedule = progress.schedule
-        return words.filter { schedule[$0.id]?.isDue == true }.sorted {
+        return words.filter { schedule[$0.id]?.isDue(at: date) == true }.sorted {
+            (schedule[$0.id]?.nextReviewAt ?? 0) < (schedule[$1.id]?.nextReviewAt ?? 0)
+        }
+    }
+
+    func dueLetters(in progress: StudyProgress, at date: Date = .now) -> [StudyLetter] {
+        let schedule = progress.letterSchedule
+        return letters.filter { schedule[$0.id]?.isDue(at: date) == true }.sorted {
             (schedule[$0.id]?.nextReviewAt ?? 0) < (schedule[$1.id]?.nextReviewAt ?? 0)
         }
     }

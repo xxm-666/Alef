@@ -317,6 +317,11 @@ struct LetterStudyView: View {
             MasteryPicker(value: Binding(get: { progress.letterMastery[letter.id] ?? .unlearned }, set: {
                 if (progress.letterMastery[letter.id] ?? .unlearned) != $0 { progress.setLetter(letter.id, mastery: $0) }
             }))
+            if let schedule = progress.letterSchedule[letter.id] {
+                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
+                            note: "当前间隔 \(schedule.intervalDays) 天 · 已巩固 \(schedule.repetitions) 次",
+                            reminder: schedule.isDue)
+            }
             if let variants = letter.begadkefat { soundComparison(variants) }
             if showsFinalForm, let form = letter.sofitInfo { finalFormDetails(form) }
             if let example = letter.examples.first {

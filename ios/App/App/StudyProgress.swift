@@ -38,19 +38,159 @@ enum StudyTheme: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct ReviewSchedule: Codable {
+enum ReviewGrade: String, Codable, CaseIterable, Identifiable {
+    case again, hard, good, easy
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .again: "重来"
+        case .hard: "困难"
+        case .good: "记住"
+        case .easy: "轻松"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .again: "arrow.counterclockwise"
+        case .hard: "tortoise"
+        case .good: "checkmark"
+        case .easy: "bolt"
+        }
+    }
+
+    var mastery: Mastery {
+        self == .again ? .learning : .mastered
+    }
+}
+
+struct ReviewSchedule: Codable, Equatable {
+    static let defaultEase = 2.5
+    static let minEase = 1.3
+    static let maxEase = 3.0
+    static let maxIntervalDays = 180
+
     let nextReviewAt: Int64
     let intervalDays: Int
+    let easeFactor: Double
+    let repetitions: Int
+    let lapses: Int
+
+    enum CodingKeys: String, CodingKey {
+        case nextReviewAt, intervalDays, easeFactor, repetitions, lapses
+    }
+
+    init(nextReviewAt: Int64, intervalDays: Int, easeFactor: Double = defaultEase, repetitions: Int = 0, lapses: Int = 0) {
+        self.nextReviewAt = nextReviewAt
+        self.intervalDays = intervalDays
+        self.easeFactor = easeFactor
+        self.repetitions = repetitions
+        self.lapses = lapses
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let nextReviewAt = try container.decode(Int64.self, forKey: .nextReviewAt)
+        let intervalDays = try container.decode(Int.self, forKey: .intervalDays)
+        self.nextReviewAt = nextReviewAt
+        self.intervalDays = intervalDays
+        self.easeFactor = try container.decodeIfPresent(Double.self, forKey: .easeFactor) ?? Self.defaultEase
+        self.repetitions = try container.decodeIfPresent(Int.self, forKey: .repetitions) ?? (intervalDays >= 3 ? 1 : 0)
+        self.lapses = try container.decodeIfPresent(Int.self, forKey: .lapses) ?? 0
+    }
 
     var reviewDate: Date { Date(timeIntervalSince1970: Double(nextReviewAt) / 1_000) }
-    var isDue: Bool { reviewDate <= .now }
 
-    var displayDate: String {
-        let calendar = Calendar.current
-        if isDue { return "已到期" }
-        if calendar.isDateInToday(reviewDate) { return "今天" }
-        if calendar.isDateInTomorrow(reviewDate) { return "明天" }
+    func isDue(at date: Date) -> Bool { reviewDate <= date }
+
+    var isDue: Bool { isDue(at: .now) }
+
+    func displayDate(relativeTo now: Date = .now, calendar: Calendar = .current) -> String {
+        if isDue(at: now) { return "已到期" }
+        if calendar.isDate(reviewDate, inSameDayAs: now) { return "今天" }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+           calendar.isDate(reviewDate, inSameDayAs: tomorrow) { return "明天" }
         return reviewDate.formatted(.dateTime.month().day().locale(Locale(identifier: "zh_CN")))
+    }
+
+    var displayDate: String { displayDate(relativeTo: .now) }
+
+    var intervalLabel: String { "\(intervalDays) 天" }
+
+    var isValid: Bool {
+        nextReviewAt >= 0 && intervalDays >= 0 && easeFactor.isFinite
+            && (1.0...5.0).contains(easeFactor) && repetitions >= 0 && lapses >= 0
+    }
+
+    static func next(from current: ReviewSchedule?, grade: ReviewGrade, on date: Date,
+                     calendar: Calendar = .current) -> ReviewSchedule {
+        let ease = min(maxEase, max(minEase, current?.easeFactor ?? defaultEase))
+        let reps = max(0, current?.repetitions ?? 0)
+        let lapses = max(0, current?.lapses ?? 0)
+        let prevInterval = max(1, current?.intervalDays ?? 1)
+
+        let outcome: (interval: Int, newEase: Double, newReps: Int, newLapses: Int)
+        switch grade {
+        case .again:
+            outcome = (1, max(minEase, ease - 0.2), 0, lapses + 1)
+        case .hard:
+            let interval = reps == 0
+                ? 1
+                : min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * 1.2))))
+            outcome = (interval, max(minEase, ease - 0.15), reps + 1, lapses)
+        case .good:
+            let interval: Int = switch reps {
+            case 0: 3
+            case 1: 7
+            default: min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * ease))))
+            }
+            outcome = (interval, ease, reps + 1, lapses)
+        case .easy:
+            let interval = reps == 0
+                ? 5
+                : min(maxIntervalDays, max(prevInterval + 2, Int(round(Double(prevInterval) * ease * 1.3))))
+            outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses)
+        }
+
+        let nextDate = calendar.date(byAdding: .day, value: outcome.interval, to: date) ?? date
+        return ReviewSchedule(
+            nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
+            intervalDays: outcome.interval,
+            easeFactor: outcome.newEase,
+            repetitions: outcome.newReps,
+            lapses: outcome.newLapses
+        )
+    }
+
+    static func manual(mastery: Mastery, existing: ReviewSchedule?, on date: Date,
+                       calendar: Calendar = .current) -> ReviewSchedule? {
+        switch mastery {
+        case .unlearned:
+            return nil
+        case .learning:
+            let nextDate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            return ReviewSchedule(
+                nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
+                intervalDays: 1,
+                easeFactor: existing?.easeFactor ?? defaultEase,
+                repetitions: 0,
+                lapses: existing?.lapses ?? 0
+            )
+        case .mastered:
+            if let existing, !existing.isDue(at: date), existing.repetitions >= 1 {
+                return existing
+            }
+            let nextDate = calendar.date(byAdding: .day, value: 3, to: date) ?? date
+            return ReviewSchedule(
+                nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
+                intervalDays: 3,
+                easeFactor: existing?.easeFactor ?? defaultEase,
+                repetitions: 1,
+                lapses: existing?.lapses ?? 0
+            )
+        }
     }
 }
 
@@ -173,6 +313,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private static let storageKey = "alef.native.progress.v1"
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
+    static let letterScheduleKey = "alef.native.letterSrs.v1"
     // Keep the shared theme keys readable by Alef's web and desktop versions.
     private static let appearanceKey = "alef.native.appearance.v1"
     private enum AppearanceOverride: String, Codable {
@@ -191,6 +332,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     var letterMastery: [String: Mastery] { read("alef.mastery.v1", default: [:]) }
+    var letterSchedule: [String: ReviewSchedule] { read(Self.letterScheduleKey, default: [:]) }
     var wordMastery: [String: Mastery] { read("alef.wordMastery.v1", default: [:]) }
     var schedule: [String: ReviewSchedule] { read("alef.wordSrs.v1", default: [:]) }
     var favorites: [String] { read("alef.favoriteWords.v1", default: []) }
@@ -248,25 +390,55 @@ struct DailyVocabularyPlan: Codable, Equatable {
         set { write(newValue ? "rtl" : "ltr", for: "alef.order.v1") }
     }
 
-    func setLetter(_ id: String, mastery: Mastery) {
-        var values = letterMastery
-        values[id] = mastery
-        var stats = statistics
-        stats.record(on: .now)
-        update { entries, encoder in
-            entries["alef.mastery.v1"] = try encoder.encode(values)
-            entries["alef.studyStats.v1"] = try encoder.encode(stats)
+    var reminderPreferences: ReminderPreferences {
+        get {
+            let stored = read(ReminderPreferences.storageKey, default: ReminderPreferences())
+            return stored.isValid ? stored : ReminderPreferences()
         }
+        set {
+            guard newValue.isValid else { return }
+            write(newValue, for: ReminderPreferences.storageKey)
+        }
+    }
+
+    func setLetter(_ id: String, mastery: Mastery, date: Date = .now) {
+        if (letterMastery[id] ?? .unlearned) == mastery,
+           (letterSchedule[id] == nil) == (mastery == .unlearned) { return }
+        saveManual(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey, mastery: mastery, date: date)
+    }
+
+    func completeLetterReview(_ id: String, grade: ReviewGrade, date: Date = .now) {
+        saveReview(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey,
+                   base: letterSchedule[id], grade: grade, recordStats: true, date: date)
+    }
+
+    func completeLetterReview(_ id: String, correct: Bool, date: Date = .now) {
+        completeLetterReview(id, grade: correct ? .good : .again, date: date)
+    }
+
+    func adjustLetterReview(_ id: String, base: ReviewSchedule?, grade: ReviewGrade, date: Date = .now) {
+        saveReview(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey,
+                   base: base, grade: grade, recordStats: false, date: date)
     }
 
     func setWord(_ id: String, mastery: Mastery, date: Date = .now) {
         if (wordMastery[id] ?? .unlearned) == mastery,
            (schedule[id] == nil) == (mastery == .unlearned) { return }
-        saveWord(id, mastery: mastery, reviewed: false, date: date)
+        saveManual(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1", mastery: mastery, date: date)
+    }
+
+    func completeReview(_ id: String, grade: ReviewGrade, date: Date = .now) {
+        saveReview(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                   base: schedule[id], grade: grade, recordStats: true, date: date)
     }
 
     func completeReview(_ id: String, correct: Bool, date: Date = .now) {
-        saveWord(id, mastery: correct ? .mastered : .learning, reviewed: true, date: date)
+        completeReview(id, grade: correct ? .good : .again, date: date)
+    }
+
+    func adjustWordReview(_ id: String, base: ReviewSchedule?, grade: ReviewGrade, date: Date = .now) {
+        saveReview(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                   base: base, grade: grade, recordStats: false, date: date)
     }
 
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
@@ -319,29 +491,42 @@ struct DailyVocabularyPlan: Codable, Equatable {
         let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer))
         plan.groups[index].answers.append(attempt)
         plan.groups[index].feedbackPending = true
-        saveWord(word.id, mastery: attempt.correct ? .mastered : .learning, reviewed: true, date: date, dailyPlan: plan)
+        saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                   base: schedule[word.id], grade: attempt.correct ? .good : .again,
+                   recordStats: true, date: date, dailyPlan: plan)
         return attempt
     }
 
-    private func saveWord(_ id: String, mastery: Mastery, reviewed: Bool, date: Date, dailyPlan: DailyVocabularyPlan? = nil) {
-        var values = wordMastery
-        var dates = schedule
+    private func saveManual(_ id: String, masteryKey: String, scheduleKey: String, mastery: Mastery, date: Date) {
+        var values: [String: Mastery] = read(masteryKey, default: [:])
+        var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
         values[id] = mastery
-        switch mastery {
-        case .unlearned:
+        if let updated = ReviewSchedule.manual(mastery: mastery, existing: dates[id], on: date) {
+            dates[id] = updated
+        } else {
             dates.removeValue(forKey: id)
-        case .learning, .mastered:
-            let previous = reviewed ? dates[id]?.intervalDays ?? 1 : 1
-            let interval = mastery == .learning ? 1 : ([3, 7, 14, 30].first { $0 > previous } ?? 30)
-            let next = Calendar.current.date(byAdding: .day, value: interval, to: date) ?? date
-            dates[id] = ReviewSchedule(nextReviewAt: Int64(next.timeIntervalSince1970 * 1_000), intervalDays: interval)
         }
         var stats = statistics
         stats.record(on: date)
         update { entries, encoder in
-            entries["alef.wordMastery.v1"] = try encoder.encode(values)
-            entries["alef.wordSrs.v1"] = try encoder.encode(dates)
+            entries[masteryKey] = try encoder.encode(values)
+            entries[scheduleKey] = try encoder.encode(dates)
             entries["alef.studyStats.v1"] = try encoder.encode(stats)
+        }
+    }
+
+    private func saveReview(_ id: String, masteryKey: String, scheduleKey: String, base: ReviewSchedule?,
+                            grade: ReviewGrade, recordStats: Bool, date: Date, dailyPlan: DailyVocabularyPlan? = nil) {
+        var values: [String: Mastery] = read(masteryKey, default: [:])
+        var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
+        values[id] = grade.mastery
+        dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date)
+        var stats = statistics
+        if recordStats { stats.record(on: date) }
+        update { entries, encoder in
+            entries[masteryKey] = try encoder.encode(values)
+            entries[scheduleKey] = try encoder.encode(dates)
+            if recordStats { entries["alef.studyStats.v1"] = try encoder.encode(stats) }
             if let dailyPlan { entries[DailyVocabularyPlan.storageKey] = try encoder.encode(dailyPlan) }
         }
     }
@@ -470,9 +655,11 @@ struct DailyVocabularyPlan: Codable, Equatable {
             _ = try decoder.decode([String: Mastery].self, from: data)
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
             _ = try decoder.decode([String].self, from: data)
-        case "alef.wordSrs.v1":
+        case "alef.wordSrs.v1", Self.letterScheduleKey:
             let dates = try decoder.decode([String: ReviewSchedule].self, from: data)
-            guard dates.values.allSatisfy({ $0.nextReviewAt >= 0 && $0.intervalDays >= 0 }) else { throw BackupError.invalid }
+            guard dates.values.allSatisfy(\.isValid) else { throw BackupError.invalid }
+        case ReminderPreferences.storageKey:
+            guard try decoder.decode(ReminderPreferences.self, from: data).isValid else { throw BackupError.invalid }
         case DailyVocabularyPlan.storageKey:
             guard try decoder.decode(DailyVocabularyPlan.self, from: data).isValid else { throw BackupError.invalid }
         case "alef.studyStats.v1":

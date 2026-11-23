@@ -26,6 +26,8 @@
 		A1EF20000000000000000014 /* WordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000013 /* WordsView.swift */; };
 		A1EF20000000000000000016 /* StudyAssets in Resources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000015 /* StudyAssets */; };
 		A1EF20000000000000000018 /* DailyVocabularyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000017 /* DailyVocabularyView.swift */; };
+		A1EF2000000000000000001A /* StudyReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000019 /* StudyReminders.swift */; };
+		A1EF40000000000000000001 /* AlefCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF40000000000000000002 /* AlefCoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,6 +37,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A1EF10000000000000000009;
 			remoteInfo = DailyLetterWidget;
+		};
+		A1EF40000000000000000008 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 504EC3031FED79650016851F;
+			remoteInfo = App;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -74,10 +83,20 @@
 		A1EF20000000000000000013 /* WordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordsView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000015 /* StudyAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = StudyAssets; sourceTree = "<group>"; };
 		A1EF20000000000000000017 /* DailyVocabularyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyVocabularyView.swift; sourceTree = "<group>"; };
+		A1EF20000000000000000019 /* StudyReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyReminders.swift; sourceTree = "<group>"; };
+		A1EF40000000000000000002 /* AlefCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlefCoreTests.swift; sourceTree = "<group>"; };
+		A1EF40000000000000000003 /* AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		504EC3011FED79650016851F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1EF40000000000000000007 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -91,6 +110,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3061FED79650016851F /* App */,
+				A1EF40000000000000000004 /* AppTests */,
 				A1EF10000000000000000008 /* DailyLetterWidget */,
 				A1EF30000000000000000003 /* DailyLetter.swift */,
 				504EC3051FED79650016851F /* Products */,
@@ -102,6 +122,7 @@
 			children = (
 				A1EF10000000000000000007 /* DailyLetterWidget.appex */,
 				504EC3041FED79650016851F /* App.app */,
+				A1EF40000000000000000003 /* AppTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,6 +135,7 @@
 				A1EF20000000000000000013 /* WordsView.swift */,
 				A1EF20000000000000000017 /* DailyVocabularyView.swift */,
 				A1EF20000000000000000011 /* StudySettingsView.swift */,
+				A1EF20000000000000000019 /* StudyReminders.swift */,
 				A1EF2000000000000000000F /* StudyRulesView.swift */,
 				A1EF2000000000000000000D /* StudyRootView.swift */,
 				A1EF2000000000000000000B /* StudyProgress.swift */,
@@ -127,6 +149,14 @@
 				504EC3131FED79650016851F /* Info.plist */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		A1EF40000000000000000004 /* AppTests */ = {
+			isa = PBXGroup;
+			children = (
+				A1EF40000000000000000002 /* AlefCoreTests.swift */,
+			);
+			path = AppTests;
 			sourceTree = "<group>";
 		};
 		A1EF10000000000000000008 /* DailyLetterWidget */ = {
@@ -173,6 +203,23 @@
 			productReference = A1EF10000000000000000007 /* DailyLetterWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A1EF40000000000000000005 /* AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1EF4000000000000000000A /* Build configuration list for PBXNativeTarget "AppTests" */;
+			buildPhases = (
+				A1EF40000000000000000006 /* Sources */,
+				A1EF40000000000000000007 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1EF40000000000000000009 /* PBXTargetDependency */,
+			);
+			name = AppTests;
+			productName = AppTests;
+			productReference = A1EF40000000000000000003 /* AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -186,6 +233,9 @@
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
+					};
+					A1EF40000000000000000005 = {
+						TestTargetID = 504EC3031FED79650016851F;
 					};
 				};
 			};
@@ -204,6 +254,7 @@
 			targets = (
 				A1EF10000000000000000009 /* DailyLetterWidget */,
 				504EC3031FED79650016851F /* App */,
+				A1EF40000000000000000005 /* AppTests */,
 			);
 		};
 /* End PBXProject section */
@@ -230,6 +281,7 @@
 				A1EF20000000000000000014 /* WordsView.swift in Sources */,
 				A1EF20000000000000000018 /* DailyVocabularyView.swift in Sources */,
 				A1EF20000000000000000012 /* StudySettingsView.swift in Sources */,
+				A1EF2000000000000000001A /* StudyReminders.swift in Sources */,
 				A1EF20000000000000000010 /* StudyRulesView.swift in Sources */,
 				A1EF2000000000000000000E /* StudyRootView.swift in Sources */,
 				A1EF30000000000000000001 /* DailyLetter.swift in Sources */,
@@ -251,6 +303,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1EF40000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1EF40000000000000000001 /* AlefCoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -258,6 +318,11 @@
 			isa = PBXTargetDependency;
 			target = A1EF10000000000000000009 /* DailyLetterWidget */;
 			targetProxy = A1EF10000000000000000003 /* PBXContainerItemProxy */;
+		};
+		A1EF40000000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 504EC3031FED79650016851F /* App */;
+			targetProxy = A1EF40000000000000000008 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -467,6 +532,50 @@
 			};
 			name = Release;
 		};
+		A1EF4000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xxm666.alef.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+			};
+			name = Debug;
+		};
+		A1EF4000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xxm666.alef.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -496,6 +605,15 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		A1EF4000000000000000000A /* Build configuration list for PBXNativeTarget "AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1EF4000000000000000000B /* Debug */,
+				A1EF4000000000000000000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 

@@ -8,6 +8,7 @@
     "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "tsc && vite build",
     "prepare:ios": "node build/prepare-ios.mjs",
+    "verify:content": "node --test build/validate-content.test.mjs",
     "start": "npm run build && electron .",
     "preview": "vite preview",
     "pack": "npm run build && electron-builder --dir",

@@ -2,8 +2,19 @@ import SwiftUI
 import UIKit
 
 struct StudyRootView: View {
+    private struct ReminderSyncKey: Equatable {
+        let active: Bool
+        let preferences: ReminderPreferences
+        let dueWords: Int
+        let dueLetters: Int
+        let streakDays: Int
+        let todayReviews: Int
+    }
+
     @Environment(StudyProgress.self) private var progress
+    @Environment(StudyReminderManager.self) private var reminders
     @EnvironmentObject private var audio: StudyAudio
+    @Environment(\.scenePhase) private var scenePhase
     let content: StudyContent
     @State private var dailyLetterPath = NavigationPath()
 
@@ -44,12 +55,46 @@ struct StudyRootView: View {
             progress.write("grid", for: "alef.activeView.v1")
             dailyLetterPath = NavigationPath([id])
         }
+        .onAppear { handlePendingReminderTab() }
+        .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openTabNotification)) { _ in
+            handlePendingReminderTab()
+        }
+        .task(id: reminderSyncKey) {
+            let dueWords = content.dueWords(in: progress).count
+            let dueLetters = content.dueLetters(in: progress).count
+            await reminders.sync(
+                preferences: progress.reminderPreferences,
+                dueWords: dueWords,
+                dueLetters: dueLetters,
+                streakDays: progress.statistics.streakDays,
+                todayReviews: progress.statistics.reviewsToday
+            )
+        }
         .alert("发音", isPresented: Binding(get: { audio.playbackError != nil }, set: { visible in
             if !visible { audio.dismissError() }
         })) {
             Button("好", role: .cancel) {}
         } message: {
             Text(audio.playbackError ?? "")
+        }
+    }
+
+    private var reminderSyncKey: ReminderSyncKey {
+        ReminderSyncKey(
+            active: scenePhase == .active,
+            preferences: progress.reminderPreferences,
+            dueWords: content.dueWords(in: progress).count,
+            dueLetters: content.dueLetters(in: progress).count,
+            streakDays: progress.statistics.streakDays,
+            todayReviews: progress.statistics.reviewsToday
+        )
+    }
+
+    private func handlePendingReminderTab() {
+        guard let tab = StudyReminderManager.pendingTargetTab else { return }
+        StudyReminderManager.pendingTargetTab = nil
+        if ["grid", "words", "flashcards", "rules", "settings"].contains(tab) {
+            progress.write(tab, for: "alef.activeView.v1")
         }
     }
 

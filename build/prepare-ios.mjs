@@ -1,36 +1,25 @@
-import { copyFile, mkdir, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
+import { copyFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { loadStudyContent, validateStudyContent } from './validate-content.mjs';
 
 const root = new URL('../', import.meta.url);
 const assets = new URL('ios/App/App/StudyAssets/', root);
-const { outputFiles: [bundle] } = await build({
-  stdin: {
-    resolveDir: fileURLToPath(root),
-    contents: `
-      export { HEBREW_LETTERS as letters, NIQQUD_ITEMS as niqqud, CONFUSABLE_GROUPS as confusables } from './src/data/hebrewLetters';
-      export { HEBREW_WORDS as words, WORD_CATEGORY_META as wordCategories } from './src/data/hebrewWords';
-      export { HEBREW_PHRASES as phrases, PHRASE_SCENARIO_META as phraseCategories } from './src/data/hebrewPhrases';
-      export { HEBREW_READINGS as readings, READING_CATEGORIES as readingCategories } from './src/data/hebrewReadings';
-      export { WORD_INFLECTIONS as inflections } from './src/data/wordInflections';
-      export { CONSONANT_OPTIONS as consonants, VOWEL_PATTERNS as vowels } from './src/data/syllables';
-      export { DEFAULT_DISPLAY_CONFIG as defaultDisplay, DISPLAY_PRESETS as displayPresets } from './src/data/letterDisplay';
-      export { AUDIO_FILE_MAP as audio } from './src/data/audioManifest';
-    `,
-  },
-  bundle: true,
-  format: 'esm',
-  platform: 'node',
-  write: false,
-});
+const audioDir = new URL('audio/', assets);
 
-const content = await import(`data:text/javascript;base64,${Buffer.from(bundle.contents).toString('base64')}`);
+const content = await loadStudyContent(root);
+const summary = await validateStudyContent(content, { rootUrl: root });
+
 const files = [...new Set(Object.values(content.audio))];
-await mkdir(new URL('audio/', assets), { recursive: true });
-await Promise.all(files.map(async (name) => {
-  if (!/^audio\/he_[a-f0-9]{12}\.mp3$/.test(name)) throw new Error(`Invalid recording path ${name}`);
-  await copyFile(new URL(`public/${name}`, root), new URL(name, assets));
-}));
+const expectedMp3Names = new Set(files.map((name) => name.replace(/^audio\//, '')));
+
+await mkdir(audioDir, { recursive: true });
+const existingAudioEntries = await readdir(audioDir, { withFileTypes: true });
+await Promise.all(
+  existingAudioEntries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.mp3') && !expectedMp3Names.has(entry.name))
+    .map((entry) => rm(new URL(entry.name, audioDir))),
+);
+
+await Promise.all(files.map((name) => copyFile(new URL(`public/${name}`, root), new URL(name, assets))));
 await copyFile(new URL('public/audio/CREDITS.md', root), new URL('audio/CREDITS.md', assets));
 await copyFile(new URL('build/fonts/GveretLevin-Regular.ttf', root), new URL('GveretLevin-Regular.ttf', assets));
 await copyFile(new URL('build/fonts/GveretLevin-OFL.txt', root), new URL('GveretLevin-OFL.txt', assets));
@@ -41,7 +30,10 @@ await Promise.all([
 ].map(([name, duration, start, end, sweep, volume, triangle]) =>
   writeFile(new URL(`audio/${name}.wav`, assets), feedbackWave(duration, start, end, sweep, volume, triangle))));
 await writeFile(new URL('content.json', assets), JSON.stringify(content));
-console.log(`Prepared ${content.letters.length} letters, ${content.words.length} words and ${files.length} recordings for iOS.`);
+console.log(
+  `Prepared ${summary.letters} letters, ${summary.words} words, ${summary.phrases} phrases, ` +
+    `${summary.readings} readings and ${summary.recordings} recordings for iOS.`,
+);
 
 function feedbackWave(duration, startFrequency, endFrequency, sweep, volume, triangle) {
   const sampleRate = 24_000;

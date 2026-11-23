@@ -66,11 +66,12 @@ struct StudySettingsView: View {
         let wordMastery = progress.wordMastery
         let masteredLetters = content.letters.filter { letterMastery[$0.id] == .mastered }.count
         let masteredWords = content.words.filter { wordMastery[$0.id] == .mastered }.count
+        let dueCount = content.dueWords(in: progress).count + content.dueLetters(in: progress).count
         let stats = progress.statistics
         let values = [
             ("\(masteredLetters) / \(content.letters.count)", "掌握字母", "book"),
             (String(masteredWords), "掌握单词", "square.stack.3d.up"),
-            (String(content.dueWords(in: progress).count), "到期复习", "calendar"),
+            (String(dueCount), "到期复习", "calendar"),
             (String(stats.reviewsToday), "今日练习", "target"),
             (String(stats.streakDays), "连续天数", "flame"),
             (String(stats.totalReviews), "累计练习", "chart.bar.xaxis")
@@ -111,6 +112,153 @@ struct StudySettingsView: View {
                 StudyRow(title: "字母卡片显示项", symbol: "rectangle.3.group")
             }
             .buttonStyle(.plain)
+            Divider()
+            NavigationLink {
+                StudyReminderSettingsView(content: content)
+            } label: {
+                StudyRow(title: "学习提醒", symbol: "bell.badge", value: reminderSummary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var reminderSummary: String {
+        let pref = progress.reminderPreferences
+        return pref.enabled ? "\(pref.timeText)\(pref.onlyWhenDue ? " · 到期时" : "")" : "已关闭"
+    }
+}
+
+private struct StudyReminderSettingsView: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(StudyReminderManager.self) private var reminders
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    let content: StudyContent
+    @State private var deniedAlert = false
+
+    private var pref: ReminderPreferences { progress.reminderPreferences }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { pref.enabled && StudyReminderManager.isAuthorized(reminders.authorizationStatus) },
+            set: { nextValue in
+                if !nextValue {
+                    var updated = pref
+                    updated.enabled = false
+                    progress.reminderPreferences = updated
+                    return
+                }
+                Task {
+                    await reminders.refreshAuthorizationStatus()
+                    if reminders.authorizationStatus == .denied {
+                        deniedAlert = true
+                        return
+                    }
+                    let granted = StudyReminderManager.isAuthorized(reminders.authorizationStatus)
+                        ? true
+                        : await reminders.requestAuthorization()
+                    var updated = progress.reminderPreferences
+                    updated.enabled = granted
+                    progress.reminderPreferences = updated
+                    if !granted { deniedAlert = true }
+                }
+            }
+        )
+    }
+
+    private var timeBinding: Binding<Date> {
+        Binding(
+            get: { pref.date() },
+            set: { newDate in
+                var updated = pref
+                updated.setTime(from: newDate)
+                progress.reminderPreferences = updated
+            }
+        )
+    }
+
+    private var onlyWhenDueBinding: Binding<Bool> {
+        Binding(
+            get: { pref.onlyWhenDue },
+            set: { value in
+                var updated = pref
+                updated.onlyWhenDue = value
+                progress.reminderPreferences = updated
+            }
+        )
+    }
+
+    var body: some View {
+        let dueWords = content.dueWords(in: progress).count
+        let dueLetters = content.dueLetters(in: progress).count
+        let preview = StudyReminderManager.makeRequest(
+            preferences: pref,
+            dueWords: dueWords,
+            dueLetters: dueLetters,
+            streakDays: progress.statistics.streakDays,
+            todayReviews: progress.statistics.reviewsToday
+        )
+        StudyPage {
+            StudyCard {
+                Toggle(isOn: enabledBinding) {
+                    StudyRow(title: "每日学习提醒", symbol: "bell.badge",
+                             subtitle: "离线本地推送，不会上传学习数据", chevron: false)
+                }
+                .tint(progress.theme.primaryButton)
+                if pref.enabled {
+                    Divider()
+                    DatePicker("提醒时间", selection: timeBinding, displayedComponents: .hourAndMinute)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(progress.theme.ink)
+                    Divider()
+                    Toggle(isOn: onlyWhenDueBinding) {
+                        StudyRow(title: "仅在有到期复习时提醒", symbol: "calendar.badge.clock",
+                                 subtitle: "无到期单词或字母时不打扰", chevron: false)
+                    }
+                    .tint(progress.theme.primaryButton)
+                }
+            }
+
+            if reminders.authorizationStatus == .denied {
+                StudyNotice(title: "系统通知权限未开启", symbol: "bell.slash",
+                            note: "请在系统设置中允许 Alef 发送通知。", reminder: true)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                } label: {
+                    Label("前往系统设置开启", systemImage: "arrow.up.forward.app").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle(prominent: true))
+            }
+
+            if let error = reminders.lastError {
+                StudyNotice(title: "提醒安排失败", symbol: "exclamationmark.triangle", note: error, reminder: true)
+            }
+
+            if let preview {
+                StudySectionTitle("下一次提醒预览")
+                StudyCard(highlighted: true) {
+                    Text(preview.content.title).font(.headline).foregroundStyle(progress.theme.ink)
+                    Text(preview.content.body).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                }
+            } else if pref.enabled && pref.onlyWhenDue {
+                StudyNotice(title: "当前没有到期复习项目", symbol: "checkmark.circle",
+                            note: "有单词或字母到期后，将在 \(pref.timeText) 提醒你。")
+            }
+        }
+        .studyDetail("学习提醒")
+        .task { await reminders.refreshAuthorizationStatus() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await reminders.refreshAuthorizationStatus() }
+            }
+        }
+        .alert("需要通知权限", isPresented: $deniedAlert) {
+            Button("取消", role: .cancel) {}
+            Button("去设置") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+        } message: {
+            Text("请在「设置 → Alef → 通知」中开启允许通知，才能按计划收到学习提醒。")
         }
     }
 }
@@ -515,7 +663,8 @@ private struct StudyBackupView: View {
         switch key {
         case "alef.mastery.v1": "book"
         case "alef.wordMastery.v1": "square.stack.3d.up"
-        case "alef.wordSrs.v1": "calendar"
+        case "alef.wordSrs.v1", StudyProgress.letterScheduleKey: "calendar"
+        case ReminderPreferences.storageKey: "bell.badge"
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1": "bookmark"
         case "alef.studyStats.v1": "chart.bar.xaxis"
         default: "gearshape"
@@ -525,7 +674,8 @@ private struct StudyBackupView: View {
     private func backupCount(_ key: String, data: Data?) -> String? {
         guard let data, let value = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) else { return nil }
         switch key {
-        case "alef.mastery.v1", "alef.wordMastery.v1", "alef.wordSrs.v1", "alef.studyStats.v1", "alef.displayConfig.v1":
+        case "alef.mastery.v1", "alef.wordMastery.v1", "alef.wordSrs.v1", StudyProgress.letterScheduleKey,
+             "alef.studyStats.v1", "alef.displayConfig.v1":
             return (value as? [String: Any]).map { "\($0.count) 项" }
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
             return (value as? [String]).map { "\($0.count) 项" }
@@ -576,6 +726,8 @@ private struct StudyBackupView: View {
         case "alef.mastery.v1": "字母掌握度"
         case "alef.wordMastery.v1": "单词掌握度"
         case "alef.wordSrs.v1": "单词复习排期"
+        case StudyProgress.letterScheduleKey: "字母复习排期"
+        case ReminderPreferences.storageKey: "学习提醒"
         case DailyVocabularyPlan.storageKey: "今日记词进度"
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.native.phraseFavorites.v1": "收藏短语"
