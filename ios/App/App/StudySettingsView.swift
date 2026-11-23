@@ -5,62 +5,57 @@ import UniformTypeIdentifiers
 struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(StudyFolderSyncManager.self) private var folderSync
-    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var showsDisplay = false
     @State private var showsThemes = false
 
     var body: some View {
         StudyPage {
-            StudyHeading(section: "我的", title: "按照你的节奏学习")
+            StudyHeading(title: "学习与设置")
             statistics
-            StudySectionTitle("学习设置")
+
+            StudySectionTitle("学习偏好")
             learningSettings
 
-            StudySectionTitle("发音与音效")
-            StudyCard {
-                StudySpeechControls()
+            StudySectionTitle("外观与设备")
+            StudyCard(padding: 10, spacing: 2) {
+                Button { showsThemes = true } label: {
+                    StudyRow(title: "外观主题", symbol: "sun.max", value: progress.theme.title)
+                }
+                .buttonStyle(.plain)
+                Divider()
                 NavigationLink {
-                    StudySpeechView(content: content)
+                    StudyWidgetPreview(content: content)
                 } label: {
-                    StudyRow(title: "发音设置", symbol: "headphones", subtitle: "\(recordingCount) 段离线录音")
+                    StudyRow(title: "每日字母小组件", symbol: "square.grid.2x2")
                 }
                 .buttonStyle(.plain)
             }
 
-            NavigationLink {
-                StudyAISettingsView()
-            } label: {
-                StudyCard(padding: 9) {
+            StudySectionTitle("语音与数据")
+            StudyCard(padding: 10, spacing: 2) {
+                NavigationLink {
+                    StudySpeechView(content: content)
+                } label: {
+                    StudyRow(title: "发音与音效", symbol: "headphones", subtitle: "\(recordingCount) 段离线录音")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    StudyAISettingsView()
+                } label: {
                     StudyRow(title: "AI 功能", symbol: "waveform.badge.magnifyingglass",
-                             subtitle: "跟读文字对照与识别服务密钥")
+                             subtitle: "跟读识别服务")
                 }
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                StudyBackupView()
-            } label: {
-                StudyCard(padding: 9) {
-                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive",
-                             subtitle: backupSubtitle)
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    StudyBackupView()
+                } label: {
+                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive", subtitle: backupSubtitle)
                 }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-
-            StudySectionTitle("外观选择")
-            StudyCard { StudyThemeChoices() }
-
-            NavigationLink {
-                StudyWidgetPreview(content: content)
-            } label: {
-                StudyCard(padding: 9) {
-                    StudyRow(title: "每日字母小组件", symbol: "square.grid.2x2", subtitle: "查看今天的字母与添加方式")
-                }
-            }
-            .buttonStyle(.plain)
-            StudyNotice(title: "学习资料与记录保存在设备上", symbol: "iphone",
-                        note: "内置录音和小组件可离线使用。用 JSON 备份在设备间迁移记录。")
         }
         .studyHome()
         .sheet(isPresented: $showsDisplay) {
@@ -80,40 +75,27 @@ struct StudySettingsView: View {
         let masteredWords = content.words.filter { wordMastery[$0.id] == .mastered }.count
         let dueCount = content.dueWords(in: progress).count + content.dueLetters(in: progress).count
         let stats = progress.statistics
-        let values = [
-            ("\(masteredLetters) / \(content.letters.count)", "掌握字母", "book"),
-            (String(masteredWords), "掌握单词", "square.stack.3d.up"),
-            (String(dueCount), "到期复习", "calendar"),
-            (String(stats.reviewsToday), "今日练习", "target"),
-            (String(stats.streakDays), "连续天数", "flame"),
-            (String(stats.totalReviews), "累计练习", "chart.bar.xaxis")
-        ]
-        let count = typeSize.isAccessibilitySize ? 1 : 3
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: count), spacing: 7) {
-            ForEach(values, id: \.1) { value, title, symbol in
-                StudyCard(padding: 8) {
-                    VStack(spacing: 5) {
-                        Image(systemName: symbol).font(.subheadline).foregroundStyle(title == "连续天数" ? progress.theme.reminder : progress.theme.accent)
-                            .accessibilityHidden(true)
-                        Text(value).font(.headline.monospacedDigit()).foregroundStyle(progress.theme.ink)
-                        Text(title).font(.caption).foregroundStyle(progress.theme.mutedInk)
-                    }
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, minHeight: 64)
-                    .accessibilityElement(children: .combine)
+        return StudyCard(padding: 10) {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent("掌握字母", value: "\(masteredLetters) / \(content.letters.count)")
+                    LabeledContent("掌握单词", value: "\(masteredWords)")
+                    LabeledContent("到期复习", value: "\(dueCount)")
+                    LabeledContent("累计练习", value: "\(stats.totalReviews)")
                 }
+                .font(.subheadline)
+                .foregroundStyle(progress.theme.mutedInk)
+                .padding(.top, 4)
+            } label: {
+                StudyRow(title: "学习进度", symbol: "chart.bar",
+                         subtitle: "今日练习 \(stats.reviewsToday) 次 · 连续 \(stats.streakDays) 天", chevron: false)
             }
         }
     }
 
     private var learningSettings: some View {
         @Bindable var progress = progress
-        return StudyCard(padding: 9) {
-            Button { showsThemes = true } label: {
-                StudyRow(title: "外观主题", symbol: "sun.max", value: progress.theme.title)
-            }
-            .buttonStyle(.plain)
-            Divider()
+        return StudyCard(padding: 9, spacing: 2) {
             Toggle(isOn: $progress.alphabetFromRight) {
                 StudyRow(title: "字母从右向左排列", symbol: "arrow.left.arrow.right",
                          subtitle: progress.alphabetFromRight ? "RTL" : "LTR", chevron: false)
@@ -608,14 +590,18 @@ private struct StudyBackupView: View {
             }
             StudySectionTitle("手动备份与导出")
             backupAction("导出 JSON", note: "保存学习记录与偏好到文件", symbol: "square.and.arrow.up", action: export)
-            backupAction("复制备份", note: "复制 JSON 到剪贴板", symbol: "doc.on.doc", action: copyBackup)
             if status == .copied { StudyNotice(title: "已复制备份", symbol: "checkmark.circle") }
             StudySectionTitle("恢复学习数据")
             backupAction("从文件恢复", note: "选择一个 Alef JSON 备份", symbol: "square.and.arrow.down") { importing = true }
-            backupAction(showsBackupText ? "收起文本输入" : "粘贴文本",
-                         note: "粘贴备份后，先预览将更新的项目", symbol: "doc.text") {
-                showsBackupText.toggle()
+            Menu {
+                Button("复制备份", systemImage: "doc.on.doc", action: copyBackup)
+                Button(showsBackupText ? "收起文本输入" : "粘贴备份文本", systemImage: "doc.text") {
+                    showsBackupText.toggle()
+                }
+            } label: {
+                Label("更多备份操作", systemImage: "ellipsis")
             }
+            .buttonStyle(StudyButtonStyle())
             if showsBackupText {
                 StudyCard {
                     StudySectionTitle("JSON 备份文本")

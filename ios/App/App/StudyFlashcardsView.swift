@@ -2,97 +2,56 @@ import SwiftUI
 
 struct PracticeCenterView: View {
     @Environment(StudyProgress.self) private var progress
-    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
 
     var body: some View {
-        let due = content.dueWords(in: progress)
-        let dueLetters = content.dueLetters(in: progress)
+        let words = content.dueWords(in: progress)
+        let letters = content.dueLetters(in: progress)
         StudyPage {
-            StudyHeading(section: "练习", title: "把学过的，记牢")
-            LearningPathEntry(content: content)
-            DailyVocabularyEntry(content: content)
-            dueWordsCard(due)
-            if !dueLetters.isEmpty {
-                dueLettersCard(dueLetters)
+            StudyHeading(title: "今日练习")
+            if !words.isEmpty || !letters.isEmpty {
+                reviewLinks(words: words, letters: letters)
             }
+            DailyVocabularyEntry(content: content, emphasized: words.isEmpty && letters.isEmpty)
+            LearningPathEntry(content: content, highlighted: false)
 
-            StudySectionTitle("学习小游戏")
-            ForEach(StudyGame.allCases) { game in
+            StudySectionTitle("专项练习")
+            StudyCard(padding: 10, spacing: 2) {
                 NavigationLink {
-                    if game == .matching {
-                        StudyMatchingGameView(content: content)
-                    } else {
-                        StudyGameView(game: game, content: content)
-                    }
+                    letterExercises
                 } label: {
-                    StudyCard(padding: 10) {
-                        StudyRow(title: game.title, symbol: game.symbol, subtitle: game.instructions)
-                    }
+                    StudyRow(title: "字母练习", symbol: "textformat.abc")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    wordExercises
+                } label: {
+                    StudyRow(title: "单词练习", symbol: "character.book.closed")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    MinimalPairQuizView(content: content)
+                } label: {
+                    StudyRow(title: "易混音辨析", symbol: "ear", value: "\(content.minimalPairs.count) 组")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    games
+                } label: {
+                    StudyRow(title: "学习小游戏", symbol: "gamecontroller")
                 }
                 .buttonStyle(.plain)
             }
 
+            StudySectionTitle("互动漫画")
             NavigationLink {
                 StudyCafeComicView(content: content)
             } label: {
                 StudyCard(padding: 10) {
-                    StudyRow(title: "漫画 · 咖啡馆点单", symbol: "book",
-                             subtitle: "看漫画、听原音，替主角选一句台词。")
-                }
-            }
-            .buttonStyle(.plain)
-
-            StudySectionTitle("字母练习")
-            NavigationLink {
-                StudyFlashcardsView(content: content)
-            } label: {
-                StudyCard(highlighted: true, padding: 10) {
-                    StudyRow(title: "字母闪卡", symbol: "rectangle.on.rectangle",
-                             subtitle: "强化记忆：字形、发音与例词")
-                }
-            }
-            .buttonStyle(.plain)
-            VStack(spacing: 7) {
-                ForEach(LetterQuizKind.allCases) { kind in
-                    NavigationLink {
-                        FlashQuizView(letters: content.letters, kind: kind)
-                    } label: {
-                        StudyCard(padding: 8) {
-                            StudyRow(title: kind.title, symbol: kind.symbol, subtitle: kind.subtitle)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            StudySectionTitle("单词练习")
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-            layout {
-                ForEach(WordQuizKind.allCases) { kind in
-                    NavigationLink {
-                        WordQuizView(content: content, words: content.words, kind: kind)
-                    } label: {
-                        Label(kind.title, systemImage: kind.symbol)
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(progress.theme.accent)
-                            .frame(maxWidth: .infinity, minHeight: 49)
-                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 12))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            StudySectionTitle("听力辨音")
-            NavigationLink {
-                MinimalPairQuizView(content: content)
-            } label: {
-                StudyCard(padding: 10) {
-                    StudyRow(title: "易混音辨析（最小对立对）", symbol: "ear",
-                             subtitle: "对比 ח/ה、ב/פ、ס/שׁ、ק/ג 等高频混音",
-                             value: "\(content.minimalPairs.count) 组")
+                    StudyRow(title: "咖啡馆点单", symbol: "book")
                 }
             }
             .buttonStyle(.plain)
@@ -100,48 +59,92 @@ struct PracticeCenterView: View {
         .studyHome()
     }
 
-    private func dueWordsCard(_ due: [StudyWord]) -> some View {
-        NavigationLink {
-            WordReviewView(content: content, words: due)
-        } label: {
-            StudyCard(highlighted: true, padding: 10) {
-                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
-                layout {
-                    StudyRow(title: due.isEmpty ? "暂无到期单词" : "\(due.count) 个单词到期",
-                             symbol: "calendar", subtitle: due.isEmpty ? "查看复习队列" : "按计划巩固词义", chevron: false)
-                    Label(due.isEmpty ? "查看队列" : "开始复习", systemImage: due.isEmpty ? "chevron.right" : "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(due.isEmpty ? progress.theme.accent : Color.white)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
-                        .background(due.isEmpty ? progress.theme.insetSurface : progress.theme.learningAction, in: Capsule())
+    private func reviewLinks(words: [StudyWord], letters: [StudyLetter]) -> some View {
+        VStack(spacing: 8) {
+            if !words.isEmpty {
+                NavigationLink {
+                    WordReviewView(content: content, words: words)
+                } label: {
+                    StudyRow(title: "复习单词", symbol: "play.fill", subtitle: "\(words.count) 个单词到期", emphasized: true)
                 }
+                .buttonStyle(.plain)
+            }
+            if !letters.isEmpty {
+                NavigationLink {
+                    LetterReviewView(letters: letters, allLetters: content.letters)
+                } label: {
+                    if words.isEmpty {
+                        StudyRow(title: "复习字母", symbol: "play.fill", subtitle: "\(letters.count) 个字母到期", emphasized: true)
+                    } else {
+                        StudyCard(padding: 10) {
+                            StudyRow(title: "复习字母", symbol: "calendar", value: "\(letters.count) 个到期")
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func dueLettersCard(_ dueLetters: [StudyLetter]) -> some View {
-        NavigationLink {
-            LetterReviewView(letters: dueLetters, allLetters: content.letters)
-        } label: {
-            StudyCard(highlighted: true, padding: 10) {
-                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
-                layout {
-                    StudyRow(title: "\(dueLetters.count) 个字母到期",
-                             symbol: "calendar.badge.clock", subtitle: "巩固字母字形与读音", chevron: false)
-                    Label("开始复习", systemImage: "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
-                        .background(progress.theme.learningAction, in: Capsule())
+    private var letterExercises: some View {
+        StudyPage {
+            StudyCard(padding: 10, spacing: 2) {
+                NavigationLink {
+                    StudyFlashcardsView(content: content)
+                } label: {
+                    StudyRow(title: "字母闪卡", symbol: "rectangle.on.rectangle")
+                }
+                .buttonStyle(.plain)
+                ForEach(LetterQuizKind.allCases) { kind in
+                    Divider()
+                    NavigationLink {
+                        FlashQuizView(letters: content.letters, kind: kind)
+                    } label: {
+                        StudyRow(title: kind.title, symbol: kind.symbol, subtitle: kind.subtitle)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .buttonStyle(.plain)
+        .studyDetail("字母练习")
+    }
+
+    private var wordExercises: some View {
+        StudyPage {
+            StudyCard(padding: 10, spacing: 2) {
+                ForEach(WordQuizKind.allCases) { kind in
+                    if kind != WordQuizKind.allCases.first { Divider() }
+                    NavigationLink {
+                        WordQuizView(content: content, words: content.words, kind: kind)
+                    } label: {
+                        StudyRow(title: kind.title, symbol: kind.symbol)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .studyDetail("单词练习")
+    }
+
+    private var games: some View {
+        StudyPage {
+            StudyCard(padding: 10, spacing: 2) {
+                ForEach(StudyGame.allCases) { game in
+                    if game != StudyGame.allCases.first { Divider() }
+                    NavigationLink {
+                        if game == .matching {
+                            StudyMatchingGameView(content: content)
+                        } else {
+                            StudyGameView(game: game, content: content)
+                        }
+                    } label: {
+                        StudyRow(title: game.title, symbol: game.symbol, subtitle: game.instructions)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .studyDetail("学习小游戏")
     }
 }
 
@@ -173,7 +176,6 @@ struct StudyFlashcardsView: View {
             StudyPage {
                 if let current = cards[safe: index] {
                     cardProgress(count: cards.count).id("flashcard-top")
-                    quickControls
                     studyCard(current)
                     if flipped {
                         cardDetails(current)
@@ -181,7 +183,6 @@ struct StudyFlashcardsView: View {
                     }
                     cardNavigation
                 } else {
-                    quickControls
                     ContentUnavailableView("这个范围没有卡片", systemImage: "rectangle.on.rectangle",
                                            description: Text("可以打开闪卡选项切换范围。"))
                 }
@@ -222,42 +223,6 @@ struct StudyFlashcardsView: View {
             .disabled(deck.count < 2 && shuffledIDs == nil)
         }
         .studyDetail("闪卡选项")
-    }
-
-    private var quickControls: some View {
-        let scope = scopes.first { $0.value == preferences.deckScope }?.title ?? "全部"
-        let front = frontStyles.first { $0.value == preferences.frontType }?.title ?? "印刷与手写"
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 6))
-        return layout {
-            Menu {
-                Picker("卡片范围", selection: setting(\.deckScope)) {
-                    ForEach(scopes, id: \.value) { item in Text(item.title).tag(item.value) }
-                }
-            } label: {
-                Text(scope).frame(minWidth: 50)
-            }
-            .buttonStyle(StudyButtonStyle(selected: true))
-            .accessibilityLabel("卡片范围")
-            .accessibilityValue(scope)
-            Menu {
-                Picker("正面字形", selection: setting(\.frontType)) {
-                    ForEach(frontStyles, id: \.value) { item in Text(item.title).tag(item.value) }
-                }
-            } label: {
-                Text(front).frame(minWidth: 60)
-            }
-            .buttonStyle(StudyButtonStyle())
-            .accessibilityLabel("正面字形")
-            .accessibilityValue(front)
-            Button {
-                resetDeck(shuffle: shuffledIDs == nil)
-            } label: {
-                Image(systemName: shuffledIDs == nil ? "shuffle" : "arrow.counterclockwise").frame(minWidth: 24)
-            }
-            .buttonStyle(StudyButtonStyle())
-            .disabled(deck.count < 2 && shuffledIDs == nil)
-            .accessibilityLabel(shuffledIDs == nil ? "打乱顺序" : "恢复字母顺序")
-        }
     }
 
     private func cardProgress(count: Int) -> some View {

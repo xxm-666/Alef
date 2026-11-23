@@ -3,6 +3,7 @@ import SwiftUI
 struct DailyVocabularyEntry: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
+    var emphasized = true
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
@@ -11,9 +12,13 @@ struct DailyVocabularyEntry: View {
             NavigationLink {
                 DailyVocabularyView(content: content)
             } label: {
-                StudyCard(highlighted: true, padding: 10) {
-                    StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark",
-                             subtitle: plan.nextGroup.map { "\(status) · \($0.status)" } ?? status)
+                let summary = plan.nextGroup.map { "\(status) · \($0.status)" } ?? status
+                if emphasized {
+                    StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark", subtitle: summary, emphasized: true)
+                } else {
+                    StudyCard(padding: 10) {
+                        StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark", subtitle: summary)
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -47,6 +52,17 @@ private struct DailyVocabularyView: View {
                 if group != nil {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("今日计划") { openGroup(nil) }
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("每日新词分组", systemImage: "slider.horizontal.3") {
+                            Picker("每日新词分组", selection: groupsPerDay) {
+                                ForEach(DailyVocabularyPlan.groupOptions, id: \.self) { count in
+                                    Text("\(count) 组").tag(count)
+                                }
+                            }
+                            if current.hasStarted { Text("调整从明天生效") }
+                        }
                     }
                 }
             }
@@ -130,18 +146,12 @@ private struct DailyVocabularyView: View {
                         .font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.accent)
                 }
             }
-            StudyCard {
-                StudySectionTitle("每日新词分组")
-                if today.hasStarted {
-                    Text("今天已开始，调整从明天生效。")
-                        .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                }
-                StudySegments(title: "每日新词分组",
-                              options: DailyVocabularyPlan.groupOptions.map { ($0, "\($0) 组") },
-                              selection: Binding(get: { progress.dailyVocabulary.groupsPerDay },
-                                                 set: { progress.setDailyVocabularyLimit($0, words: content.words) }))
-            }
         }
+    }
+
+    private var groupsPerDay: Binding<Int> {
+        Binding(get: { progress.dailyVocabulary.groupsPerDay },
+                set: { progress.setDailyVocabularyLimit($0, words: content.words) })
     }
 
     private func groupRow(_ group: DailyVocabularyGroup, index: Int, completed: Int) -> some View {

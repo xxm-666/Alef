@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum StudyGame: String, CaseIterable, Identifiable {
-    case letters, spelling, listening, matching, situations
+    case letters, spelling, listening, matching
 
     var id: Self { self }
 
@@ -11,7 +11,6 @@ enum StudyGame: String, CaseIterable, Identifiable {
         case .spelling: "拼字工坊"
         case .listening: "听音寻宝"
         case .matching: "翻牌配对"
-        case .situations: "情景闯关"
         }
     }
 
@@ -21,7 +20,6 @@ enum StudyGame: String, CaseIterable, Identifiable {
         case .spelling: "square.grid.3x2"
         case .listening: "ear"
         case .matching: "rectangle.on.rectangle"
-        case .situations: "bubble.left.and.bubble.right"
         }
     }
 
@@ -31,7 +29,6 @@ enum StudyGame: String, CaseIterable, Identifiable {
         case .spelling: "看词义或听原音，从右往左拼出单词。"
         case .listening: "听原音，找出对应的字母或单词。"
         case .matching: "翻开两张牌，配对字形或词义。"
-        case .situations: "在问候、点餐和问路时选一句合适的话。"
         }
     }
 
@@ -82,8 +79,6 @@ enum StudyGame: String, CaseIterable, Identifiable {
                                   prompt: "听原音，选出对应单词")
             }
             return (letterQuestions + wordQuestions).shuffled()
-        case .situations:
-            return StudyGameScene.questions(in: content)
         case .matching:
             return []
         }
@@ -94,7 +89,6 @@ enum StudyGameQuestion {
     case letter(StudyLetter, options: [StudyLetter], showCursive: Bool)
     case word(StudyWord, tiles: [String])
     case listening(StudyGameChoice, options: [StudyGameChoice], prompt: String)
-    case situation(StudyGameScene, answer: StudyGameChoice, options: [StudyGameChoice], leadIn: StudyPhrase?)
 }
 
 struct StudyGameChoice: Identifiable {
@@ -115,54 +109,6 @@ struct StudyGameChoice: Identifiable {
         hebrew = word.hebrew
         audio = word.hebrew
         hint = word.meaningZh
-    }
-
-    init(_ phrase: StudyPhrase) {
-        id = phrase.id
-        hebrew = phrase.hebrew
-        audio = phrase.hebrew
-        hint = phrase.meaningZh
-    }
-}
-
-struct StudyGameScene {
-    let title: String
-    let prompt: String
-    let response: String
-    let answerID: String
-    let alternatives: [String]
-    var leadInID: String? = nil
-
-    static func questions(in content: StudyContent) -> [StudyGameQuestion] {
-        let phrases = Dictionary(content.phrases.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let scenes: [Self] = [
-            .init(title: "街头寒暄", prompt: "朋友问你最近怎么样。你想说「一切都好，谢谢！」",
-                  response: "朋友笑着点点头。",
-                  answerID: "p-greet-2", alternatives: ["p-greet-4", "p-greet-8"], leadInID: "p-greet-1"),
-            .init(title: "初次见面", prompt: "对方问你的名字。假设你叫大卫，你会怎么回答？",
-                  response: "对方伸出手，和你打招呼。",
-                  answerID: "p-greet-4", alternatives: ["p-greet-6", "p-greet-8"], leadInID: "p-greet-5"),
-            .init(title: "餐厅点餐", prompt: "你刚坐下，想先请服务员拿一份菜单。",
-                  response: "店员把菜单递给你。",
-                  answerID: "p-dine-1", alternatives: ["p-dine-3", "p-dine-7"]),
-            .init(title: "帮人指路", prompt: "有人问怎么去那里。你想告诉对方「直走，然后向右转」。",
-                  response: "对方道了谢，朝你指的方向走去。",
-                  answerID: "p-dir-3", alternatives: ["p-dir-4", "p-dir-5"], leadInID: "p-dir-2"),
-            .init(title: "结账付款", prompt: "你想问店员能不能刷信用卡。",
-                  response: "店员点点头，把刷卡机转向你。",
-                  answerID: "p-shop-2", alternatives: ["p-shop-1", "p-shop-7"]),
-            .init(title: "练习对话", prompt: "你听得懂对方的话，但语速太快，想请对方说慢一点。",
-                  response: "对方放慢语速，又说了一遍。",
-                  answerID: "p-study-2", alternatives: ["p-study-1", "p-study-4"])
-        ]
-        return scenes.shuffled().compactMap { scene in
-            guard let answer = phrases[scene.answerID] else { return nil }
-            let wrong = scene.alternatives.compactMap { phrases[$0] }
-            guard !wrong.isEmpty else { return nil }
-            let leadIn = scene.leadInID.flatMap { phrases[$0] }
-            return .situation(scene, answer: .init(answer), options: ([answer] + wrong).map(StudyGameChoice.init).shuffled(),
-                              leadIn: leadIn)
-        }
     }
 }
 
@@ -235,40 +181,33 @@ struct StudyGameView: View {
     @State private var selectedTiles: [Int] = []
 
     var body: some View {
-        StudyPage {
-            if let round {
-                if let turn = round.current {
-                    header(round, retry: turn.isRetry)
-                    switch turn.question {
-                    case let .letter(letter, options, showCursive):
-                        letterQuestion(letter, options: options, showCursive: showCursive, answer: round.answer)
-                    case let .word(word, tiles):
-                        spellingQuestion(word, tiles: tiles, answer: round.answer)
-                    case let .listening(solution, options, prompt):
-                        broadcast(solution, prompt: prompt, answered: round.answer != nil)
-                        audioChoices(solution: solution, options: options, answer: round.answer)
-                    case let .situation(scene, solution, options, leadIn):
-                        StudyCard {
-                            StudySectionTitle(scene.title)
-                            Text(scene.prompt).foregroundStyle(progress.theme.ink)
-                            if let leadIn {
-                                PronunciationButton(hebrew: leadIn.hebrew, title: "听对方怎么说", bundledOnly: true)
-                            }
-                            if let answer = round.answer, let reply = options.first(where: { $0.id == selectedChoice }) {
-                                dialogueReply(reply, response: scene.response, accepted: answer)
-                                    .transition(.offset(x: 20).combined(with: .opacity))
-                            }
+        ScrollViewReader { scroll in
+            StudyPage {
+                if let round {
+                    if let turn = round.current {
+                        header(round, retry: turn.isRetry).id("game-top")
+                        switch turn.question {
+                        case let .letter(letter, options, showCursive):
+                            letterQuestion(letter, options: options, showCursive: showCursive, answer: round.answer)
+                        case let .word(word, tiles):
+                            spellingQuestion(word, tiles: tiles, answer: round.answer)
+                        case let .listening(solution, options, prompt):
+                            listeningPrompt(solution, prompt: prompt, answered: round.answer != nil)
+                            audioChoices(solution: solution, options: options, answer: round.answer)
                         }
-                        .modifier(StudyComicMotion(value: round.answer))
-                        .id(scene.answerID)
-                        audioChoices(solution: solution, options: options, answer: round.answer)
+                    } else {
+                        summary(round).id("game-top")
                     }
-                } else {
-                    summary(round)
                 }
             }
+            .onChange(of: round?.index) { _, _ in scroll.scrollTo("game-top", anchor: .top) }
         }
         .studyDetail(game.title)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if round?.answer != nil {
+                StudyActionBar { nextButton }
+            }
+        }
         .onAppear {
             if round == nil { start(game.questions(in: content)) }
         }
@@ -353,7 +292,6 @@ struct StudyGameView: View {
                 }
             }
             PronunciationButton(hebrew: letter.nameHebrew, title: "听字母名称")
-            nextButton
         }
     }
 
@@ -364,39 +302,14 @@ struct StudyGameView: View {
         }
     }
 
-    private func broadcast(_ solution: StudyGameChoice, prompt: String, answered: Bool) -> some View {
+    private func listeningPrompt(_ solution: StudyGameChoice, prompt: String, answered: Bool) -> some View {
         let playing = !answered && audio.playingPronunciation == solution.audio
         return StudyCard {
-            Image("ComicNeighborhood")
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .accessibilityHidden(true)
-            Label(playing ? "广播播放中" : "街角广播", systemImage: playing ? "waveform" : "radio")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(playing ? progress.theme.learningAction : progress.theme.mutedInk)
-                .symbolEffect(.variableColor, isActive: playing && !reduceMotion)
             StudySectionTitle(prompt)
             if !answered {
-                PronunciationButton(hebrew: solution.audio, title: "听题目原音", bundledOnly: true)
+                PronunciationButton(hebrew: solution.audio, title: playing ? "播放中，点按重听" : "听题目原音", bundledOnly: true)
             }
         }
-    }
-
-    private func dialogueReply(_ reply: StudyGameChoice, response: String, accepted: Bool) -> some View {
-        VStack(alignment: .trailing, spacing: 5) {
-            Text("你说").font(.caption).foregroundStyle(progress.theme.mutedInk)
-            HebrewText(text: reply.hebrew, size: 22)
-            Label(accepted ? response : "对方露出疑惑的表情。",
-                  systemImage: accepted ? "checkmark.bubble" : "ellipsis.bubble")
-                .font(.footnote)
-                .foregroundStyle(progress.theme.ink)
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(10)
-        .background(accepted ? progress.theme.successSurface : progress.theme.errorSurface,
-                    in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder private func audioChoices(solution: StudyGameChoice, options: [StudyGameChoice], answer: Bool?) -> some View {
@@ -416,7 +329,6 @@ struct StudyGameView: View {
                 PronunciationButton(hebrew: selected.audio, title: "重听我的选项", bundledOnly: true)
             }
             PronunciationButton(hebrew: solution.audio, title: "重听正确答案", bundledOnly: true)
-            nextButton
         }
     }
 
@@ -427,8 +339,6 @@ struct StudyGameView: View {
             Text("从右往左拼写 · \(selectedTiles.count) / \(word.hebrewUnpointed.count) 个字母")
                 .font(.footnote).foregroundStyle(progress.theme.mutedInk)
             PronunciationButton(hebrew: word.hebrew, title: "听单词原音")
-            Label("招牌", systemImage: "signpost.right")
-                .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
             Group {
                 if answer != nil || typeSize.isAccessibilitySize {
                     HebrewText(text: spelling.isEmpty ? "…" : spelling, size: 30, style: .title)
@@ -502,7 +412,6 @@ struct StudyGameView: View {
             if answer {
                 PronunciationButton(hebrew: word.hebrew, title: "听拼好的单词")
             }
-            nextButton
         }
     }
 
@@ -661,14 +570,6 @@ struct StudyMatchingGameView: View {
                         tile(card, position: position)
                     }
                 }
-                if round.hasMismatch {
-                    Button {
-                        round.coverMismatch()
-                    } label: {
-                        Label("盖回这两张", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(StudyButtonStyle(learningAction: true))
-                }
                 if round.complete {
                     StudyNotice(title: "全部配对成功", symbol: "trophy")
                 }
@@ -686,6 +587,18 @@ struct StudyMatchingGameView: View {
             }
         }
         .studyDetail(StudyGame.matching.title)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if round.hasMismatch {
+                StudyActionBar {
+                    Button {
+                        round.coverMismatch()
+                    } label: {
+                        Label("盖回这两张", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
+                }
+            }
+        }
         .onChange(of: deck, initial: true) { _, _ in start() }
         .onDisappear { audio.stop() }
     }
@@ -704,7 +617,7 @@ struct StudyMatchingGameView: View {
                         .transition(.modifier(active: StudyMatchingFlip(angle: 90),
                                               identity: StudyMatchingFlip(angle: 0)))
                 } else {
-                    Image(systemName: "photo.on.rectangle.angled")
+                    Image(systemName: "rectangle.portrait")
                         .font(.title2)
                         .foregroundStyle(progress.theme.accent)
                         .modifier(StudyMatchingTileSurface(matched: false, revealed: false))

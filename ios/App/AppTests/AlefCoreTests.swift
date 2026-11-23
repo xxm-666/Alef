@@ -350,29 +350,17 @@ final class AlefCoreTests: XCTestCase {
         }
     }
 
-    func testStudyGameAudioRoundsUseRecordedChoices() throws {
+    func testStudyGameListeningUsesRecordedChoices() throws {
         let content = try StudyContent.load()
-        for game in [StudyGame.listening, .situations] {
-            let questions = game.questions(in: content)
-            XCTAssertEqual(questions.count, 6)
-            for question in questions {
-                let solution: StudyGameChoice
-                let options: [StudyGameChoice]
-                switch question {
-                case .listening(let target, let choices, _):
-                    solution = target
-                    options = choices
-                case .situation(_, let target, let choices, let leadIn):
-                    if let leadIn { XCTAssertNotNil(content.audio[leadIn.hebrew]) }
-                    solution = target
-                    options = choices
-                default:
-                    return XCTFail("Expected an audio question")
-                }
-                XCTAssertEqual(options.filter { $0.id == solution.id }.count, 1)
-                XCTAssertEqual(Set(options.map(\.hebrew)).count, options.count)
-                XCTAssertTrue(options.allSatisfy { content.audio[$0.audio] != nil })
+        let questions = StudyGame.listening.questions(in: content)
+        XCTAssertEqual(questions.count, 6)
+        for question in questions {
+            guard case let .listening(solution, options, _) = question else {
+                return XCTFail("Expected a listening question")
             }
+            XCTAssertEqual(options.filter { $0.id == solution.id }.count, 1)
+            XCTAssertEqual(Set(options.map(\.hebrew)).count, options.count)
+            XCTAssertTrue(options.allSatisfy { content.audio[$0.audio] != nil })
         }
     }
 

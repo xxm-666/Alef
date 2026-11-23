@@ -14,18 +14,19 @@ struct AlphabetView: View {
         let mastery = progress.letterMastery
         let letters = content.letters.filter { scope == "all" || mastery[$0.id] != .mastered }
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
-            StudyHeading(section: "从字母开始", title: "认识希伯来字母")
-            learningProgress
-            if let next = continueLetter {
-                NavigationLink {
-                    LetterStudyView(letter: next, content: content)
-                } label: {
-                    StudyRow(title: "继续学习 \(next.nameEnglish)", symbol: "book",
-                             subtitle: "学习字形、发音与写法", emphasized: true)
+            StudyHeading(title: "认识希伯来字母")
+            StudyCard(padding: 10) {
+                learningProgress
+                if let next = continueLetter {
+                    Divider()
+                    NavigationLink {
+                        LetterStudyView(letter: next, content: content)
+                    } label: {
+                        StudyRow(title: "继续学习 \(next.nameEnglish)", symbol: "book")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
-            LearningPathEntry(content: content)
             controls
             if letters.isEmpty {
                 ContentUnavailableView("没有需复习的字母", systemImage: "checkmark.circle",
@@ -40,6 +41,7 @@ struct AlphabetView: View {
                 .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
             }
 
+            LearningPathEntry(content: content, highlighted: false)
             NavigationLink {
                 StudySofitView(content: content)
             } label: {
@@ -83,7 +85,6 @@ struct AlphabetView: View {
                 scopeButton("需复习", value: "review")
                 Spacer(minLength: 0)
                 displayButton
-                directionButton
             }
             .fixedSize(horizontal: true, vertical: false)
             VStack(alignment: .leading, spacing: 6) {
@@ -91,10 +92,7 @@ struct AlphabetView: View {
                     scopeButton("全部", value: "all")
                     scopeButton("需复习", value: "review")
                 }
-                HStack {
-                    displayButton
-                    directionButton
-                }
+                displayButton
             }
         }
     }
@@ -109,21 +107,14 @@ struct AlphabetView: View {
         Menu {
             Button("定制字母卡片", systemImage: "slider.horizontal.3") { showsDisplay = true }
             Toggle("快速操作", isOn: $quickActions)
+            Button(progress.alphabetFromRight ? "改为从左向右排列" : "改为从右向左排列",
+                   systemImage: "arrow.left.arrow.right") {
+                progress.alphabetFromRight.toggle()
+            }
         } label: {
             Label("显示项", systemImage: "slider.horizontal.3")
         }
         .buttonStyle(StudyButtonStyle())
-    }
-
-    private var directionButton: some View {
-        Button {
-            progress.alphabetFromRight.toggle()
-        } label: {
-            Label(progress.alphabetFromRight ? "RTL" : "LTR", systemImage: "arrow.left.arrow.right")
-        }
-        .buttonStyle(StudyButtonStyle())
-        .accessibilityLabel("字母排列")
-        .accessibilityValue(progress.alphabetFromRight ? "从右到左" : "从左到右")
     }
 
     private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
@@ -313,6 +304,14 @@ struct LetterStudyView: View {
         StudyPage {
             pager
             letterHeader
+            NavigationLink {
+                LetterWritingView(guide: letter.strokeGuide, startsWithFinalForm: showsFinalForm)
+            } label: {
+                StudyCard(padding: 10) {
+                    StudyRow(title: "笔顺与手写练习", symbol: "pencil.and.outline")
+                }
+            }
+            .buttonStyle(.plain)
             MasteryPicker(value: Binding(get: { progress.letterMastery[letter.id] ?? .unlearned }, set: {
                 if (progress.letterMastery[letter.id] ?? .unlearned) != $0 { progress.setLetter(letter.id, mastery: $0) }
             }))
@@ -345,14 +344,6 @@ struct LetterStudyView: View {
                 }
             }
             if !showsFinalForm, let form = letter.sofitInfo { finalFormDetails(form) }
-            NavigationLink {
-                LetterWritingView(guide: letter.strokeGuide, startsWithFinalForm: showsFinalForm)
-            } label: {
-                StudyCard(padding: 10) {
-                    StudyRow(title: "笔顺与手写练习", symbol: "pencil.and.outline")
-                }
-            }
-            .buttonStyle(.plain)
             StudyCard {
                 DisclosureGroup("字源与数值") {
                     LabeledContent("标准 Gematria", value: String(letter.gematria))

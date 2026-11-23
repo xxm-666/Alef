@@ -612,6 +612,7 @@ struct ShadowingPracticeCard: View {
     var title = "跟读对比"
     @State private var recorder = StudyVoiceRecorder()
     @State private var comparison: (recording: URL, result: Result<StudyRhythmComparison, StudyRecordingIssue>)?
+    @State private var showsComparisonDetails = false
 
     @State private var showsAIProviders = false
     @State private var aiRequest: AIRequest?
@@ -647,17 +648,19 @@ struct ShadowingPracticeCard: View {
                 .buttonStyle(StudyButtonStyle())
                 .disabled(recorder.state == .recording)
 
-                Button {
-                    audio.stop()
-                    if recorder.playingSegment != nil { recorder.stopPlayback() }
-                    recorder.togglePlayback()
-                } label: {
-                    Label(recorder.state == .playing && recorder.playingSegment == nil ? "停止回放" : "我的录音",
-                          systemImage: recorder.state == .playing && recorder.playingSegment == nil ? "stop.circle" : "play.circle")
-                        .frame(maxWidth: .infinity)
+                if recorder.hasRecording {
+                    Button {
+                        audio.stop()
+                        if recorder.playingSegment != nil { recorder.stopPlayback() }
+                        recorder.togglePlayback()
+                    } label: {
+                        Label(recorder.state == .playing && recorder.playingSegment == nil ? "停止回放" : "我的录音",
+                              systemImage: recorder.state == .playing && recorder.playingSegment == nil ? "stop.circle" : "play.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: recorder.state == .playing && recorder.playingSegment == nil))
+                    .disabled(recorder.state == .recording)
                 }
-                .buttonStyle(StudyButtonStyle(selected: recorder.state == .playing && recorder.playingSegment == nil))
-                .disabled(!recorder.hasRecording || recorder.state == .recording)
             }
 
             Button {
@@ -668,7 +671,7 @@ struct ShadowingPracticeCard: View {
                       systemImage: recorder.state == .recording ? "stop.fill" : "mic.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(StudyButtonStyle(selected: recorder.state == .recording))
+            .buttonStyle(StudyButtonStyle(selected: recorder.state == .recording, learningAction: !recorder.hasRecording))
 
             if let recording = recorder.completedRecordingURL {
                 comparisonView(for: recording)
@@ -716,7 +719,10 @@ struct ShadowingPracticeCard: View {
                 aiRequest = nil
             }
         }
-        .onChange(of: recorder.completedRecordingURL) { _, _ in resetAIComparison() }
+        .onChange(of: recorder.completedRecordingURL) { _, _ in
+            showsComparisonDetails = false
+            resetAIComparison()
+        }
         .onChange(of: aiEnabled, initial: true) { _, _ in reloadAIConfiguration() }
         .onChange(of: aiSettingsRevision) { _, _ in reloadAIConfiguration() }
         .onChange(of: openRouterModel) { _, _ in
@@ -741,14 +747,20 @@ struct ShadowingPracticeCard: View {
                 Text("节奏相似度 \(result.score) / 100")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(progress.theme.ink)
-                Text("原音 \(result.referenceDuration.formatted(.number.precision(.fractionLength(2)))) 秒 · 录音 \(result.recordingDuration.formatted(.number.precision(.fractionLength(2)))) 秒")
-                Text("语速 \(result.paceScore) · 停顿 \(result.pauseScore)（原音 \(result.referencePauseCount) 次，你的录音 \(result.recordingPauseCount) 次）")
                 Text(result.feedback)
-                if let acoustic = result.acoustic {
-                    soundComparison(acoustic)
-                } else {
-                    Text("有效声音片段太短，只显示节奏分。")
+                DisclosureGroup("查看对比详情", isExpanded: $showsComparisonDetails) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("原音 \(result.referenceDuration.formatted(.number.precision(.fractionLength(2)))) 秒 · 录音 \(result.recordingDuration.formatted(.number.precision(.fractionLength(2)))) 秒")
+                        Text("语速 \(result.paceScore) · 停顿 \(result.pauseScore)（原音 \(result.referencePauseCount) 次，你的录音 \(result.recordingPauseCount) 次）")
+                        if let acoustic = result.acoustic {
+                            soundComparison(acoustic)
+                        } else {
+                            Text("有效声音片段太短，只显示节奏分。")
+                        }
+                    }
+                    .padding(.top, 4)
                 }
+                .frame(minHeight: 44)
             } else if case .failure(let issue)? = comparison?.result {
                 Text("这次暂不评分").font(.subheadline.weight(.semibold))
                 Text(issue.message)

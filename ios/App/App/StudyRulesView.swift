@@ -34,7 +34,7 @@ struct StudyRulesView: View {
 
     private var overview: some View {
         StudyPage {
-            StudyHeading(section: "规则", title: "让每个声音，有迹可循")
+            StudyHeading(title: "规则")
             NavigationLink {
                 StudySyllablesView(consonants: content.consonants, vowels: content.vowels)
             } label: {
@@ -65,17 +65,19 @@ struct StudyRulesView: View {
             }
             .buttonStyle(.plain)
 
-            StudySectionTitle("规则速查")
-            VStack(spacing: 7) {
-                ForEach(categories, id: \.0) { key, title, symbol, subtitle, count in
-                    NavigationLink {
-                        StudyRulesView(content: content, topic: key)
-                    } label: {
-                        StudyCard(padding: 9) {
+            let groups = [("字形与发音", categories.prefix(5)), ("构词与语法", categories.dropFirst(5))]
+            ForEach(groups, id: \.0) { title, rules in
+                StudySectionTitle(title)
+                StudyCard(padding: 10, spacing: 2) {
+                    ForEach(rules, id: \.0) { key, title, symbol, subtitle, count in
+                        if key != rules.first?.key { Divider() }
+                        NavigationLink {
+                            StudyRulesView(content: content, topic: key)
+                        } label: {
                             StudyRow(title: title, symbol: symbol, subtitle: subtitle, value: count.isEmpty ? nil : count)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -480,24 +482,17 @@ private struct StudySyllablesView: View {
         }
         .studyDetail("拼读实验室")
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            StudyActionBar {
-                if quizzing {
-                    if let question {
-                        Button {
-                            if answer != nil { next() }
-                            else if let selection { grade(selection, solution: question.solution.id) }
-                        } label: {
-                            Label(answer == nil ? "确认答案" : "下一题", systemImage: answer == nil ? "checkmark" : "arrow.right")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(StudyButtonStyle(learningAction: true))
-                        .disabled(answer == nil && selection == nil)
+            if quizzing, let question {
+                StudyActionBar {
+                    Button {
+                        if answer != nil { next() }
+                        else if let selection { grade(selection, solution: question.solution.id) }
+                    } label: {
+                        Label(answer == nil ? "确认答案" : "下一题", systemImage: answer == nil ? "checkmark" : "arrow.right")
+                            .frame(maxWidth: .infinity)
                     }
-                } else {
-                    Button { quizzing = true } label: {
-                        Label("开始听音测验", systemImage: "play.fill").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
+                    .disabled(answer == nil && selection == nil)
                 }
             }
         }

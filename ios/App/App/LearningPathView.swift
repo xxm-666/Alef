@@ -3,6 +3,7 @@ import SwiftUI
 struct LearningPathEntry: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
+    var highlighted = true
 
     var body: some View {
         let completedStages = content.learningPath.filter { isComplete($0) }.count
@@ -10,7 +11,7 @@ struct LearningPathEntry: View {
         NavigationLink {
             LearningPathView(content: content)
         } label: {
-            StudyCard(highlighted: true, padding: 10) {
+            StudyCard(highlighted: highlighted, padding: 10) {
                 StudyRow(
                     title: "零基础入门路线",
                     symbol: "map",
@@ -160,6 +161,15 @@ private struct LearningStageDetailView: View {
                 Text(stage.goal)
                     .font(.subheadline)
                     .foregroundStyle(progress.theme.ink)
+                if let nextLetter = stageLetters.first(where: { progress.letterMastery[$0.id] != .mastered }) {
+                    Text("下一步 · 学习 \(nextLetter.studyName)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.accent)
+                } else if stageWords.contains(where: { progress.wordMastery[$0.id] != .mastered }) {
+                    Text("下一步 · 学习本阶高频词")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.accent)
+                }
             }
 
             if !stageLetters.isEmpty {

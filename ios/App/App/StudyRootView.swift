@@ -252,22 +252,14 @@ struct StudyPage<Content: View>: View {
 
 struct StudyHeading: View {
     @Environment(StudyProgress.self) private var progress
-    let section: String
     let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("ALEF / \(section)")
-                .font(.caption.weight(.semibold))
-                .tracking(2)
-                .foregroundStyle(progress.theme.accent)
-                .accessibilityHidden(true)
-            Text(title)
-                .font(.largeTitle.weight(.bold))
-                .foregroundStyle(progress.theme.ink)
-                .accessibilityAddTraits(.isHeader)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(title)
+            .font(.largeTitle.weight(.bold))
+            .foregroundStyle(progress.theme.ink)
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -288,10 +280,11 @@ struct StudyCard<Content: View>: View {
     @Environment(StudyProgress.self) private var progress
     var highlighted = false
     var padding: CGFloat = 14
+    var spacing: CGFloat = 10
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10, content: content)
+        VStack(alignment: .leading, spacing: spacing, content: content)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background(highlighted ? progress.theme.highlightedSurface : progress.theme.cardSurface,

@@ -40,6 +40,7 @@ private struct WordPreferences: Codable {
 
 struct WordsView: View {
     @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var showsFilters = false
@@ -49,20 +50,32 @@ struct WordsView: View {
 
     var body: some View {
         StudyPage {
-            StudyHeading(section: "词库", title: "把字母读成单词")
-            DailyVocabularyEntry(content: content)
-            StudySegments(title: "词库内容", options: [("browse", "单词"), ("phrases", "情景短语")],
-                          selection: Binding(get: { phrasesSelected ? "phrases" : "browse" }, set: {
+            StudyHeading(title: "词库")
+            StudySegments(title: "词库内容",
+                          options: [("browse", "单词"), ("phrases", "情景短语"), ("reading", "阅读")],
+                          selection: Binding(get: { libraryMode }, set: {
                 var state = preferences
                 state.setMode($0)
                 progress.write(state, for: "alef.wordsState.v1")
             }))
-            if phrasesSelected {
+            switch libraryMode {
+            case "phrases":
                 phraseLibrary
-            } else {
-                searchField
-                filters
-                if !dueWords.isEmpty { dueNotice }
+            case "reading":
+                StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud))
+            default:
+                HStack(spacing: 8) {
+                    searchField
+                    Button { showsFilters = true } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .frame(width: 44, height: 44)
+                            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(progress.theme.accent)
+                    .accessibilityLabel("筛选与排序")
+                }
+                if hasFilters { activeFilters }
                 wordLibrary
             }
         }
@@ -77,9 +90,13 @@ struct WordsView: View {
         }
     }
 
-    private var phrasesSelected: Bool { preferences.mode == "phrases" }
+    private var libraryMode: String {
+        switch preferences.mode {
+        case "phrases", "reading": preferences.mode
+        default: "browse"
+        }
+    }
     private var preferences: WordPreferences { progress.read("alef.wordsState.v1", default: WordPreferences()) }
-    private var dueWords: [StudyWord] { content.dueWords(in: progress) }
 
     private func setting<Value>(_ path: WritableKeyPath<WordPreferences, Value>) -> Binding<Value> {
         Binding(get: { preferences[keyPath: path] }, set: { value in
@@ -113,89 +130,22 @@ struct WordsView: View {
         .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var filters: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 5) { quickFilters }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .leading, spacing: 5) {
-                    let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5))
-                        : AnyLayout(HStackLayout(spacing: 5))
-                    layout {
-                        scopeButton("全部", scope: "all")
-                        scopeButton("收藏", scope: "favorites")
-                        scopeButton("到期复习", scope: "due_srs")
-                    }
-                    filterButton
-                }
-            }
-            if preferences.scope != "all" || preferences.selectedTopic != nil || preferences.initialLetter != "all" {
-                Button {
-                    var state = preferences
-                    state.resetFilters()
-                    progress.write(state, for: "alef.wordsState.v1")
-                } label: {
-                    Label("\(filterDescription) · 清除筛选", systemImage: "xmark.circle")
-                        .font(.footnote)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(progress.theme.accent)
-            }
-            NavigationLink {
-                StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud))
-            } label: {
-                Label("阅读", systemImage: "book")
-                    .font(.subheadline.weight(.medium))
-                    .frame(minHeight: 44)
-            }
-            .foregroundStyle(progress.theme.accent)
-        }
+    private var hasFilters: Bool {
+        preferences.scope != "all" || preferences.selectedTopic != nil || preferences.initialLetter != "all"
     }
 
-    @ViewBuilder private var quickFilters: some View {
-        scopeButton("全部", scope: "all")
-        scopeButton("收藏", scope: "favorites")
-        scopeButton("到期复习", scope: "due_srs")
-        filterButton
-    }
-
-    private var filterButton: some View {
-        Button { showsFilters = true } label: { Label("筛选", systemImage: "line.3.horizontal.decrease") }
-            .buttonStyle(StudyButtonStyle(selected: preferences.scope == "needs_review" || preferences.selectedTopic != nil))
-    }
-
-    private func scopeButton(_ title: String, scope: String) -> some View {
-        Button(title) {
+    private var activeFilters: some View {
+        Button {
             var state = preferences
-            state.topic = state.selectedTopic
-            state.activeFilter = scope
+            state.resetFilters()
             progress.write(state, for: "alef.wordsState.v1")
-        }
-        .buttonStyle(StudyButtonStyle(selected: preferences.scope == scope))
-        .accessibilityAddTraits(preferences.scope == scope ? .isSelected : [])
-    }
-
-    private var dueNotice: some View {
-        let count = dueWords.count
-        return NavigationLink {
-            WordReviewView(content: content, words: dueWords)
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "clock").accessibilityHidden(true)
-                Text("\(count) 个单词到期").font(.subheadline.weight(.semibold))
-                Spacer(minLength: 0)
-                Label("立即复习", systemImage: "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .multilineTextAlignment(.trailing)
-            }
-            .foregroundStyle(progress.theme.reminder)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-            .background(progress.theme.reminderSurface, in: RoundedRectangle(cornerRadius: 12))
-            .contentShape(Rectangle())
+            Label("\(filterDescription) · 清除筛选", systemImage: "xmark.circle")
+                .font(.footnote)
+                .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
+        .foregroundStyle(progress.theme.accent)
     }
 
     private var filterDescription: String {
@@ -349,8 +299,8 @@ struct WordsView: View {
                 }
             }
             .scrollIndicators(.hidden)
-            Toggle("隐藏中文，自测释义", isOn: $hidePhraseTranslation).font(.subheadline).frame(minHeight: 44)
             Menu {
+                Toggle("隐藏中文，自测释义", isOn: $hidePhraseTranslation)
                 Toggle("显示元音点", isOn: setting(\.showNiqqud))
                 Toggle("手写体", isOn: setting(\.showCursive))
             } label: {
@@ -380,20 +330,38 @@ struct WordsView: View {
 
     private func phraseRow(_ phrase: StudyPhrase, favorites: [String]) -> some View {
         let saved = favorites.contains(phrase.id)
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+        let isShadowing = shadowingPhraseId == phrase.id
         return StudyCard {
-            VStack(spacing: 5) {
+            VStack(alignment: .trailing, spacing: 4) {
                 HebrewText(text: preferences.showNiqqud ? phrase.hebrew : phrase.hebrewUnpointed,
-                           cursive: preferences.showCursive, size: 38, style: .title)
-                Text(phrase.transliteration).font(.subheadline.weight(.medium)).foregroundStyle(progress.theme.mutedInk)
+                           cursive: preferences.showCursive, size: 34, style: .title)
+                Text(phrase.transliteration).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                 if !hidePhraseTranslation {
                     Text(phrase.meaningZh).font(.headline)
                 }
             }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 34)
-            .frame(maxWidth: .infinity)
-            .overlay(alignment: .topLeading) {
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            if !hidePhraseTranslation, let note = phrase.note {
+                Text(note).font(.footnote).foregroundStyle(progress.theme.mutedInk)
+            }
+
+            HStack(spacing: 4) {
+                PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "播放短语原音")
+                Menu {
+                    Button("慢速播放（0.68×）", systemImage: "tortoise") {
+                        audio.speak(phrase.hebrew, rate: 0.68)
+                    }
+                    Button(isShadowing ? "收起跟读" : "跟读", systemImage: "mic") {
+                        shadowingPhraseId = isShadowing ? nil : phrase.id
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("短语播放与跟读选项")
+                Spacer(minLength: 0)
                 Button {
                     let updated = saved ? favorites.filter { $0 != phrase.id } : favorites + [phrase.id]
                     progress.write(updated, for: "alef.native.phraseFavorites.v1")
@@ -403,24 +371,10 @@ struct WordsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(progress.theme.accent)
                 .accessibilityLabel(saved ? "取消收藏短语" : "收藏短语")
             }
-            if !hidePhraseTranslation, let note = phrase.note {
-                StudyNotice(title: note, symbol: "info.circle")
-            }
-            layout {
-                PronunciationButton(hebrew: phrase.hebrew,
-                                    title: "正常 \(progress.speechRate.formatted(.number.precision(.fractionLength(2))))×", prominent: true)
-                PronunciationButton(hebrew: phrase.hebrew, rate: 0.68, title: "慢速 0.68×")
-                Button {
-                    shadowingPhraseId = shadowingPhraseId == phrase.id ? nil : phrase.id
-                } label: {
-                    Label("跟读", systemImage: "mic")
-                }
-                .buttonStyle(StudyButtonStyle(selected: shadowingPhraseId == phrase.id))
-            }
-            if shadowingPhraseId == phrase.id {
+            .foregroundStyle(progress.theme.accent)
+            if isShadowing {
                 ShadowingPracticeCard(hebrew: phrase.hebrew, title: "跟读短句")
             }
         }
@@ -520,29 +474,27 @@ private struct StudyReadingLibrary: View {
     @Binding var showNiqqud: Bool
 
     var body: some View {
-        StudyPage {
-            ForEach(content.readingCategories.keys.sorted(), id: \.self) { category in
-                StudySectionTitle(content.readingCategories[category] ?? category)
-                ForEach(content.readings.filter { $0.category == category }) { reading in
+        ForEach(content.readingCategories.keys.sorted(), id: \.self) { category in
+            StudySectionTitle(content.readingCategories[category] ?? category)
+            StudyCard(padding: 10, spacing: 2) {
+                let readings = content.readings.filter { $0.category == category }
+                ForEach(readings) { reading in
+                    if reading.id != readings.first?.id { Divider() }
                     NavigationLink {
                         StudyReadingView(reading: reading, showNiqqud: $showNiqqud)
                     } label: {
-                        StudyCard(padding: 10) {
-                            StudyRow(title: reading.title, symbol: "text.book.closed",
-                                     subtitle: "\(reading.sentences.count) 句 · 阅读理解")
-                        }
+                        StudyRow(title: reading.title, symbol: "text.book.closed",
+                                 subtitle: "\(reading.sentences.count) 句 · 阅读理解")
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .studyDetail("阅读练习")
     }
 }
 
 struct WordDetailView: View {
     @Environment(StudyProgress.self) private var progress
-    @Environment(\.dynamicTypeSize) private var typeSize
     let word: StudyWord
     let content: StudyContent
     @State var showNiqqud: Bool
@@ -575,9 +527,13 @@ struct WordDetailView: View {
                     PronunciationButton(hebrew: word.hebrew, iconOnly: true,
                                         title: "播放单词发音")
                 }
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) { displayControls }.fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: 6) { displayControls }
+            }
+            if let sentence = word.sentence {
+                StudySectionTitle("例句")
+                StudyCard {
+                    WordExampleRow(example: StudyExample(hebrew: sentence.hebrew, transliteration: sentence.transliteration,
+                                                         meaning: sentence.meaningZh, note: nil),
+                                   showNiqqud: showNiqqud, cursive: showCursive)
                 }
             }
             MasteryPicker(value: Binding(get: { progress.wordMastery[word.id] ?? .unlearned }, set: {
@@ -588,47 +544,66 @@ struct WordDetailView: View {
                             note: "当前间隔 \(schedule.intervalDays) 天 · 已巩固 \(schedule.repetitions) 次",
                             reminder: schedule.isDue)
             }
-            if let sentence = word.sentence {
-                StudySectionTitle("例句")
-                StudyCard {
-                    WordExampleRow(example: StudyExample(hebrew: sentence.hebrew, transliteration: sentence.transliteration,
-                                                         meaning: sentence.meaningZh, note: nil),
-                                   showNiqqud: showNiqqud, cursive: showCursive)
-                }
-            }
-            if let root = word.root, !root.isEmpty {
-                let familyCount = content.words(withRoot: root).count
-                NavigationLink {
-                    RootFamilyView(root: root, content: content)
-                } label: {
-                    StudyCard(padding: 10) {
-                        StudyRow(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
-                                 symbol: "point.3.connected.trianglepath.dotted",
-                                 subtitle: "词根 · \(root)（查看全部 \(familyCount) 个同根词）")
-                    }
-                }
-                .buttonStyle(.plain)
-            } else {
-                StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
-                            symbol: "info.circle")
-            }
             StudyCard {
                 DisclosureGroup("跟读录音对比") {
                     ShadowingPracticeCard(hebrew: word.hebrew)
                         .padding(.top, 6)
                 }
             }
-            if !word.note.isEmpty {
-                StudyCard { DisclosureGroup("用法") { Text(word.note).padding(.top, 6) } }
+            references
+        }
+        .studyDetail("单词详情")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu("显示选项", systemImage: "textformat") {
+                    Toggle("显示元音点", isOn: $showNiqqud)
+                    Toggle("使用手写体", isOn: $showCursive)
+                }
             }
-            if !letters.isEmpty {
-                StudySectionTitle("拆成字母")
-                letterLinks
+            ToolbarItem(placement: .topBarTrailing) {
+                StudyMemoryCurveEntry(schedule: progress.schedule[word.id])
             }
-            let forms = content.inflections[word.id] ?? [:]
-            if !forms.isEmpty {
-                StudySectionTitle("词形变化")
-                StudyCard {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    progress.toggleFavorite(word.id)
+                } label: {
+                    let saved = progress.favorites.contains(word.id)
+                    Label(saved ? "取消收藏" : "收藏", systemImage: saved ? "bookmark.fill" : "bookmark")
+                }
+            }
+        }
+    }
+
+    private var references: some View {
+    StudyCard {
+        DisclosureGroup("用法与词形") {
+            VStack(alignment: .leading, spacing: 10) {
+                if let root = word.root, !root.isEmpty {
+                    let familyCount = content.words(withRoot: root).count
+                    NavigationLink {
+                        RootFamilyView(root: root, content: content)
+                    } label: {
+                        StudyCard(padding: 10) {
+                            StudyRow(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                                     symbol: "point.3.connected.trianglepath.dotted",
+                                     subtitle: "词根 · \(root)（查看全部 \(familyCount) 个同根词）")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                                symbol: "info.circle")
+                }
+                if !word.note.isEmpty {
+                    Text(word.note).font(.subheadline)
+                }
+                if !letters.isEmpty {
+                    StudySectionTitle("拆成字母")
+                    letterLinks
+                }
+                let forms = content.inflections[word.id] ?? [:]
+                if !forms.isEmpty {
+                    StudySectionTitle("词形变化")
                     ForEach(formLabels, id: \.0) { key, label in
                         if let form = forms[key] {
                             HStack {
@@ -646,50 +621,9 @@ struct WordDetailView: View {
                     }
                 }
             }
-            if let root = word.root {
-                let related = content.words.filter { $0.root == root && $0.id != word.id }
-                if !related.isEmpty {
-                    StudyCard {
-                        DisclosureGroup("同词根关联词") {
-                            ForEach(related) { item in
-                                NavigationLink {
-                                    WordDetailView(word: item, content: content, showNiqqud: showNiqqud, showCursive: showCursive)
-                                } label: {
-                                    StudyRow(title: item.hebrew, symbol: "link", subtitle: item.meaningZh)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .studyDetail("单词详情")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                StudyMemoryCurveEntry(schedule: progress.schedule[word.id])
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    progress.toggleFavorite(word.id)
-                } label: {
-                    let saved = progress.favorites.contains(word.id)
-                    Label(saved ? "取消收藏" : "收藏", systemImage: saved ? "bookmark.fill" : "bookmark")
-                }
-            }
+            .padding(.top, 8)
         }
     }
-
-    @ViewBuilder private var displayControls: some View {
-        Button { showNiqqud.toggle() } label: {
-            Label("元音点：\(showNiqqud ? "开" : "关")", systemImage: "ellipsis")
-        }
-        .buttonStyle(StudyButtonStyle(selected: showNiqqud))
-        Button { showCursive.toggle() } label: {
-            Label(showCursive ? "手写体" : "印刷体", systemImage: "textformat")
-        }
-        .buttonStyle(StudyButtonStyle())
-        .accessibilityHint("轻点切换字形")
     }
 
     private var letterLinks: some View {
@@ -739,6 +673,7 @@ struct StudyReadingView: View {
     @State private var answer: Int?
     @State private var selectedGloss: GlossSelection?
     @State private var revealedPointed: Set<Int> = []
+    @State private var activeSentence: Int?
     @State private var shadowingSentence: Int?
 
     init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil) {
@@ -757,16 +692,17 @@ struct StudyReadingView: View {
             if let source = reading.source {
                 Text(source).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
             }
-            StudySegments(title: "阅读方式", options: [(false, "原文"), (true, "中希对照")], selection: $showTranslation)
-            StudySegments(title: "元音点过渡", options: ReadingNiqqudMode.allCases.map { (value: $0, title: $0.title) }, selection: $niqqudMode)
             if niqqudMode == .assisted {
                 StudyNotice(title: "过渡模式：仅重点生词保留元音点", symbol: "eye",
                             note: "其余高频词已隐藏元音点，点按下方“对照带点原文”可随时核对。")
             }
             StudySectionTitle("原文与朗读")
-            StudyNotice(title: "点按带下划线的词查看释义", symbol: "hand.tap")
-            ForEach(Array(reading.sentences.enumerated()), id: \.offset) { index, sentence in
-                StudyCard { sentenceRow(sentence, at: index) }
+            Text("点按带下划线的词查看释义。").font(.footnote).foregroundStyle(progress.theme.mutedInk)
+            StudyCard {
+                ForEach(Array(reading.sentences.enumerated()), id: \.offset) { index, sentence in
+                    if index > 0 { Divider() }
+                    sentenceRow(sentence, at: index)
+                }
             }
             StudySectionTitle("阅读理解")
             StudyCard { Text(reading.question.prompt).font(.headline) }
@@ -785,6 +721,18 @@ struct StudyReadingView: View {
             }
         }
         .studyDetail(reading.title)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu("阅读选项", systemImage: "slider.horizontal.3") {
+                    Toggle("中希对照", isOn: $showTranslation)
+                    Picker("元音点", selection: $niqqudMode) {
+                        ForEach(ReadingNiqqudMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                }
+            }
+        }
         .onChange(of: niqqudMode) { _, mode in
             selectedGloss = nil
             revealedPointed.removeAll()
@@ -798,17 +746,31 @@ struct StudyReadingView: View {
         let selectedTerm = selectedGloss.flatMap { $0.sentence == index ? $0.term : nil }
         let showingPointed = niqqudMode != .full && revealedPointed.contains(index)
         return VStack(alignment: .leading, spacing: 8) {
-            Text(attributedSentence(text, glosses: glosses, selectedTerm: selectedTerm))
-                .font(.title2)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .environment(\.layoutDirection, .rightToLeft)
-                .environment(\.openURL, OpenURLAction { url in
-                    guard url.scheme == "alef-gloss", let term = Int(url.lastPathComponent), glosses.indices.contains(term) else { return .discarded }
-                    let selection = GlossSelection(sentence: index, term: term)
-                    selectedGloss = selectedGloss == selection ? nil : selection
-                    return .handled
-                })
+            HStack(alignment: .top, spacing: 6) {
+                Text(attributedSentence(text, glosses: glosses, selectedTerm: selectedTerm))
+                    .font(.title2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .environment(\.layoutDirection, .rightToLeft)
+                    .environment(\.openURL, OpenURLAction { url in
+                        guard url.scheme == "alef-gloss", let term = Int(url.lastPathComponent), glosses.indices.contains(term) else { return .discarded }
+                        let selection = GlossSelection(sentence: index, term: term)
+                        selectedGloss = selectedGloss == selection ? nil : selection
+                        return .handled
+                    })
+                Button {
+                    activeSentence = activeSentence == index ? nil : index
+                    shadowingSentence = nil
+                } label: {
+                    Image(systemName: activeSentence == index ? "ellipsis.circle.fill" : "ellipsis.circle")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(progress.theme.accent)
+                .accessibilityLabel("第 \(index + 1) 句操作")
+                .accessibilityValue(activeSentence == index ? "已展开" : "已收起")
+            }
             if showingPointed {
                 HebrewText(text: sentence.hebrew, size: 22)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -829,32 +791,34 @@ struct StudyReadingView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            let controls = Group {
-                PronunciationButton(hebrew: sentence.hebrew,
-                                    title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
-                Button {
-                    shadowingSentence = shadowingSentence == index ? nil : index
-                } label: {
-                    Label("跟读", systemImage: "mic")
-                }
-                .buttonStyle(StudyButtonStyle(selected: shadowingSentence == index))
-                if niqqudMode != .full {
+            if activeSentence == index {
+                let controls = Group {
+                    PronunciationButton(hebrew: sentence.hebrew,
+                                        title: "朗读第 \(index + 1) 句", minimumHitSize: 44)
                     Button {
-                        if revealedPointed.contains(index) { revealedPointed.remove(index) }
-                        else { revealedPointed.insert(index) }
+                        shadowingSentence = shadowingSentence == index ? nil : index
                     } label: {
-                        Label(showingPointed ? "隐藏带点" : "带点对照",
-                              systemImage: showingPointed ? "eye.slash" : "eye")
+                        Label("跟读", systemImage: "mic")
                     }
-                    .buttonStyle(StudyButtonStyle(selected: showingPointed))
+                    .buttonStyle(StudyButtonStyle(selected: shadowingSentence == index))
+                    if niqqudMode != .full {
+                        Button {
+                            if revealedPointed.contains(index) { revealedPointed.remove(index) }
+                            else { revealedPointed.insert(index) }
+                        } label: {
+                            Label(showingPointed ? "隐藏带点" : "带点对照",
+                                  systemImage: showingPointed ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(StudyButtonStyle(selected: showingPointed))
+                    }
                 }
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) { controls }.fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .leading, spacing: 6) { controls }
-            }
-            if shadowingSentence == index {
-                ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { controls }.fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 6) { controls }
+                }
+                if shadowingSentence == index {
+                    ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句")
+                }
             }
         }
     }
