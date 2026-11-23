@@ -605,16 +605,13 @@ struct DailyVocabularyPlan: Codable, Equatable {
                   (try? validateBackupEntry(key, data: data)) != nil else { continue }
             migrated[key] = data
         }
-        let changed = hasSyncableDifference(from: entries, to: migrated)
-        entries = migrated
-        if changed { bumpSyncTimestamp() }
-        save()
+        saveLocalEntries(migrated)
         defaults.set(true, forKey: Self.migrationKey)
     }
 
     func exportBackup() throws -> Data {
         var document: [String: Any] = [:]
-        for (key, data) in entries {
+        for (key, data) in entries where key != StudySyncMerger.itemVersionsKey {
             document[key] = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
         }
         return try JSONSerialization.data(withJSONObject: [
@@ -646,6 +643,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
 
     func backupChanges(_ restored: [String: Data]) -> [String] {
         restored.keys.filter { key in
+            guard key != StudySyncMerger.itemVersionsKey else { return false }
             guard let old = entries[key], let new = restored[key] else { return true }
             return canonicalJSON(old) != canonicalJSON(new)
         }.sorted()
@@ -660,7 +658,8 @@ struct DailyVocabularyPlan: Codable, Equatable {
         }
     }
 
-    func applyBackup(_ restored: [String: Data]) {
+    func applyBackup(_ backup: [String: Data]) {
+        let restored = backup.filter { $0.key != StudySyncMerger.itemVersionsKey }
         let previous = entries.filter { restored[$0.key] != nil }
         let absent = restored.keys.filter { entries[$0] == nil }
         let undo = BackupUndo(previous: previous, absent: absent)
@@ -668,20 +667,14 @@ struct DailyVocabularyPlan: Codable, Equatable {
         restorePoint = undo
         defaults.set(backupData, forKey: Self.restoreKey)
         let merged = entries.merging(restored) { _, incoming in incoming }
-        let changed = hasSyncableDifference(from: entries, to: merged)
-        entries = merged
-        if changed { bumpSyncTimestamp() }
-        save()
+        saveLocalEntries(merged)
     }
 
     func undoBackup() {
         guard let restorePoint else { return }
         var restored = entries.merging(restorePoint.previous) { _, incoming in incoming }
         for key in restorePoint.absent { restored.removeValue(forKey: key) }
-        let changed = hasSyncableDifference(from: entries, to: restored)
-        entries = restored
-        if changed { bumpSyncTimestamp() }
-        save()
+        saveLocalEntries(restored)
         self.restorePoint = nil
         defaults.removeObject(forKey: Self.restoreKey)
     }
@@ -699,8 +692,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
             nextEntries[Self.lastBackupAtKey] = encodedBackup
         }
         entries = nextEntries
-        localUpdatedAt = updatedAt
-        defaults.set(NSNumber(value: updatedAt), forKey: Self.localUpdatedAtKey)
+        observeSyncTimestamp(updatedAt)
         save()
     }
 
@@ -751,10 +743,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private func update(_ apply: (inout [String: Data], JSONEncoder) throws -> Void) {
         var updated = entries
         guard (try? apply(&updated, JSONEncoder())) != nil else { return }
-        let changed = hasSyncableDifference(from: entries, to: updated)
-        entries = updated
-        if changed { bumpSyncTimestamp() }
-        save()
+        saveLocalEntries(updated)
     }
 
     private func hasSyncableDifference(from old: [String: Data], to new: [String: Data]) -> Bool {
@@ -768,11 +757,24 @@ struct DailyVocabularyPlan: Codable, Equatable {
         }
     }
 
-    private func bumpSyncTimestamp(on date: Date = .now) {
-        let timestamp = Int64(date.timeIntervalSince1970 * 1_000)
+    func observeSyncTimestamp(_ timestamp: Int64) {
+        guard timestamp > localUpdatedAt else { return }
         localUpdatedAt = timestamp
         defaults.set(NSNumber(value: timestamp), forKey: Self.localUpdatedAtKey)
-        syncRevision += 1
+    }
+
+    private func saveLocalEntries(_ proposed: [String: Data]) {
+        var updated = proposed
+        if hasSyncableDifference(from: entries, to: updated) {
+            let now = Int64(Date.now.timeIntervalSince1970 * 1_000)
+            let next = localUpdatedAt < Int64.max ? localUpdatedAt + 1 : localUpdatedAt
+            let timestamp = max(now, next)
+            StudySyncMerger.stampChanges(from: entries, to: &updated, at: timestamp)
+            observeSyncTimestamp(timestamp)
+            syncRevision += 1
+        }
+        entries = updated
+        save()
     }
 
     private func validateBackupEntry(_ key: String, data: Data) throws {
@@ -805,6 +807,9 @@ struct DailyVocabularyPlan: Codable, Equatable {
             guard ["rtl", "ltr"].contains(order) else { throw BackupError.invalid }
         case "alef.native.feedback.v1", "alef.native.recordings.v1", "alef.native.haptics.v1":
             _ = try decoder.decode(Bool.self, from: data)
+        case StudySyncMerger.itemVersionsKey:
+            let versions = try decoder.decode([String: [String: Int64]].self, from: data)
+            guard versions.values.allSatisfy({ $0.values.allSatisfy { $0 >= 0 } }) else { throw BackupError.invalid }
         case Self.lastBackupAtKey:
             let timestamp = try decoder.decode(Int64.self, from: data)
             guard timestamp >= 0 else { throw BackupError.invalid }

@@ -550,6 +550,75 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
     }
 
+    @MainActor
+    func testFolderSyncKeepsLatestReviewAndFavoriteRemoval() async throws {
+        let storage = MockStudySyncFolderStorage()
+        let manager = StudyFolderSyncManager(defaults: defaults, storage: storage)
+        let folder = FileManager.default.temporaryDirectory
+        let firstDay = makeDate(year: 2026, month: 11, day: 10)
+        let secondDay = makeDate(year: 2026, month: 11, day: 11)
+
+        progress.completeReview("shalom", grade: .easy, date: firstDay)
+        progress.completeLetterReview("alef", grade: .easy, date: firstDay)
+        progress.toggleFavorite("shalom")
+        progress.write(["greeting"], for: "alef.native.phraseFavorites.v1")
+        await manager.configureFolder(url: folder, progress: progress)
+        let oldCloudData = try XCTUnwrap(storage.data)
+        let oldCloud = try progress.parseSyncDocument(oldCloudData)
+        var legacyCloud = oldCloud.entries
+        legacyCloud.removeValue(forKey: StudySyncMerger.itemVersionsKey)
+        storage.data = try progress.encodeSyncDocument(entries: legacyCloud, updatedAt: oldCloud.updatedAt)
+        let oldDue = try XCTUnwrap(progress.schedule["shalom"]?.nextReviewAt)
+
+        progress.completeReview("shalom", grade: .again, date: secondDay)
+        progress.completeLetterReview("alef", grade: .again, date: secondDay)
+        progress.toggleFavorite("shalom")
+        progress.write([String](), for: "alef.native.phraseFavorites.v1")
+        let expectedSchedule = try XCTUnwrap(progress.schedule["shalom"])
+        XCTAssertLessThan(expectedSchedule.nextReviewAt, oldDue)
+
+        let reloaded = StudyProgress(defaults: defaults)
+        await manager.sync(progress: reloaded)
+        XCTAssertEqual(reloaded.schedule["shalom"], expectedSchedule)
+        XCTAssertEqual(reloaded.wordMastery["shalom"], .learning)
+        XCTAssertEqual(reloaded.letterSchedule["alef"]?.intervalDays, 1)
+        XCTAssertEqual(reloaded.letterMastery["alef"], .learning)
+        XCTAssertTrue(reloaded.favorites.isEmpty)
+        XCTAssertEqual(reloaded.read("alef.native.phraseFavorites.v1", default: [String]()), [])
+        let cloud = try reloaded.parseSyncDocument(XCTUnwrap(storage.data))
+        XCTAssertTrue(StudySyncMerger.canonicalEqual(cloud.entries, reloaded.syncSnapshot()))
+
+        reloaded.toggleFavorite("shalom")
+        await manager.sync(progress: reloaded)
+        let readded = try reloaded.parseSyncDocument(XCTUnwrap(storage.data))
+        XCTAssertEqual(reloaded.favorites, ["shalom"])
+        XCTAssertTrue(StudySyncMerger.canonicalEqual(readded.entries, reloaded.syncSnapshot()))
+    }
+
+    @MainActor
+    func testFolderSyncRetriesWhenProgressChangesDuringCloudWrite() async throws {
+        let storage = MockStudySyncFolderStorage()
+        let manager = StudyFolderSyncManager(defaults: defaults, storage: storage)
+        let remote = StudyProgress(defaults: UserDefaults(suiteName: suiteName + ".remote")!)
+        defer { UserDefaults(suiteName: suiteName + ".remote")?.removePersistentDomain(forName: suiteName + ".remote") }
+        remote.completeReview("bayit", grade: .good)
+        storage.data = try remote.encodeSyncDocument(entries: remote.syncSnapshot(), updatedAt: remote.localUpdatedAt)
+        progress.completeReview("shalom", grade: .good)
+
+        storage.onNextWrite = { [progress = self.progress!] in
+            progress.completeReview("shalom", grade: .again)
+            progress.completeReview("todah", grade: .easy)
+        }
+        await manager.configureFolder(url: FileManager.default.temporaryDirectory, progress: progress)
+
+        XCTAssertEqual(storage.writeCount, 2)
+        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
+        XCTAssertEqual(progress.wordMastery["shalom"], .learning)
+        XCTAssertEqual(progress.wordMastery["todah"], .mastered)
+        let cloud = try progress.parseSyncDocument(XCTUnwrap(storage.data))
+        XCTAssertTrue(StudySyncMerger.canonicalEqual(cloud.entries, progress.syncSnapshot()))
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 12, minute: Int = 0) -> Date {
         gregorianUtc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
@@ -593,5 +662,26 @@ private final class MockStudyNotificationCenter: StudyNotificationCenter {
 
     func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
         removedIdentifiers.append(identifiers)
+    }
+}
+
+@MainActor
+private final class MockStudySyncFolderStorage: StudySyncFolderStorage {
+    var data: Data?
+    var onNextWrite: (() -> Void)?
+    private(set) var writeCount = 0
+
+    func read(bookmarkData: Data, fileName: String) async throws -> (data: Data?, refreshedBookmark: Data?) {
+        (data, nil)
+    }
+
+    func write(_ data: Data, bookmarkData: Data, fileName: String) async throws -> Data? {
+        writeCount += 1
+        let edit = onNextWrite
+        onNextWrite = nil
+        await Task.yield()
+        edit?()
+        self.data = data
+        return nil
     }
 }

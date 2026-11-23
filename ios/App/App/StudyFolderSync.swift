@@ -2,45 +2,124 @@ import Foundation
 import Observation
 
 enum StudySyncMerger {
-    private enum Side { case local, remote }
+    static let itemVersionsKey = "alef.sync.itemVersions.v1"
+    private typealias ItemVersions = [String: [String: Int64]]
+    private static let reviewKeys = [
+        ("alef.wordSrs.v1", "alef.wordMastery.v1"),
+        (StudyProgress.letterScheduleKey, "alef.mastery.v1")
+    ]
+    private static let favoriteKeys = ["alef.favoriteWords.v1", "alef.native.phraseFavorites.v1"]
+
+    static func stampChanges(from old: [String: Data], to updated: inout [String: Data], at timestamp: Int64) {
+        var versions = decode(ItemVersions.self, from: old[itemVersionsKey]) ?? [:]
+        for (scheduleKey, masteryKey) in reviewKeys {
+            guard old[scheduleKey] != updated[scheduleKey] || old[masteryKey] != updated[masteryKey] else { continue }
+            let oldSchedules = decode([String: ReviewSchedule].self, from: old[scheduleKey]) ?? [:]
+            let newSchedules = decode([String: ReviewSchedule].self, from: updated[scheduleKey]) ?? [:]
+            let oldMastery = decode([String: Mastery].self, from: old[masteryKey]) ?? [:]
+            let newMastery = decode([String: Mastery].self, from: updated[masteryKey]) ?? [:]
+            let ids = Set(oldSchedules.keys).union(newSchedules.keys).union(oldMastery.keys).union(newMastery.keys)
+            for id in ids where oldSchedules[id] != newSchedules[id] || oldMastery[id] != newMastery[id] {
+                versions[scheduleKey, default: [:]][id] = timestamp
+            }
+        }
+        for key in favoriteKeys {
+            guard old[key] != updated[key] else { continue }
+            let before = Set(decode([String].self, from: old[key]) ?? [])
+            let after = Set(decode([String].self, from: updated[key]) ?? [])
+            for id in before.symmetricDifference(after) {
+                versions[key, default: [:]][id] = timestamp
+            }
+        }
+        if !versions.isEmpty { updated[itemVersionsKey] = encode(versions) }
+    }
 
     static func merge(local: [String: Data], remote: [String: Data],
                       localUpdatedAt: Int64, remoteUpdatedAt: Int64) -> [String: Data] {
         var result: [String: Data] = [:]
-        let allKeys = Set(local.keys).union(remote.keys)
+        let localVersions = decode(ItemVersions.self, from: local[itemVersionsKey]) ?? [:]
+        let remoteVersions = decode(ItemVersions.self, from: remote[itemVersionsKey]) ?? [:]
+        let versions = localVersions.merging(remoteVersions) { a, b in a.merging(b, uniquingKeysWith: max) }
+        var remaining = Set(local.keys).union(remote.keys)
+        remaining.remove(itemVersionsKey)
+        if !versions.isEmpty { result[itemVersionsKey] = encode(versions) }
 
-        let wordSrsWinner = srsWinners(
-            local: decode([String: ReviewSchedule].self, from: local["alef.wordSrs.v1"]),
-            remote: decode([String: ReviewSchedule].self, from: remote["alef.wordSrs.v1"]),
-            remotePreferOnTie: remoteUpdatedAt > localUpdatedAt
-        )
-        let letterSrsWinner = srsWinners(
-            local: decode([String: ReviewSchedule].self, from: local[StudyProgress.letterScheduleKey]),
-            remote: decode([String: ReviewSchedule].self, from: remote[StudyProgress.letterScheduleKey]),
-            remotePreferOnTie: remoteUpdatedAt > localUpdatedAt
-        )
+        for (scheduleKey, masteryKey) in reviewKeys {
+            remaining.remove(scheduleKey)
+            remaining.remove(masteryKey)
+            let localSchedules = decode([String: ReviewSchedule].self, from: local[scheduleKey]) ?? [:]
+            let remoteSchedules = decode([String: ReviewSchedule].self, from: remote[scheduleKey]) ?? [:]
+            let localMastery = decode([String: Mastery].self, from: local[masteryKey]) ?? [:]
+            let remoteMastery = decode([String: Mastery].self, from: remote[masteryKey]) ?? [:]
+            var schedules = localSchedules.merging(remoteSchedules) { a, b in
+                preferRemoteSchedule(a, b, remotePreferOnTie: remoteUpdatedAt > localUpdatedAt) ? b : a
+            }
+            var mastery = localMastery.merging(remoteMastery) { a, b in masteryRank(b) > masteryRank(a) ? b : a }
 
-        for key in allKeys {
-            switch (local[key], remote[key]) {
-            case let (lData?, nil):
-                result[key] = lData
-            case let (nil, rData?):
-                result[key] = rData
-            case let (lData?, rData?):
-                result[key] = mergeEntry(
-                    key: key,
-                    local: lData,
-                    remote: rData,
-                    localUpdatedAt: localUpdatedAt,
-                    remoteUpdatedAt: remoteUpdatedAt,
-                    wordSrsWinner: wordSrsWinner,
-                    letterSrsWinner: letterSrsWinner
-                )
-            case (nil, nil):
-                break
+            for id in Set(localSchedules.keys).intersection(remoteSchedules.keys) {
+                if let a = localSchedules[id], let b = remoteSchedules[id],
+                   let localLevel = localMastery[id], let remoteLevel = remoteMastery[id] {
+                    mastery[id] = preferRemoteSchedule(a, b, remotePreferOnTie: remoteUpdatedAt > localUpdatedAt)
+                        ? remoteLevel : localLevel
+                }
+            }
+            for (id, _) in versions[scheduleKey] ?? [:] {
+                let localVersion = localVersions[scheduleKey]?[id] ?? -1
+                let remoteVersion = remoteVersions[scheduleKey]?[id] ?? -1
+                let useRemote: Bool
+                if localVersion != remoteVersion {
+                    useRemote = remoteVersion > localVersion
+                } else {
+                    // Resolve edits made in the same millisecond consistently on both devices.
+                    let a = reviewTieBreaker(localSchedules[id], localMastery[id])
+                    let b = reviewTieBreaker(remoteSchedules[id], remoteMastery[id])
+                    useRemote = a.lexicographicallyPrecedes(b)
+                }
+                schedules[id] = useRemote ? remoteSchedules[id] : localSchedules[id]
+                mastery[id] = useRemote ? remoteMastery[id] : localMastery[id]
+            }
+            if local[scheduleKey] != nil || remote[scheduleKey] != nil || !schedules.isEmpty {
+                result[scheduleKey] = encode(schedules)
+            }
+            if local[masteryKey] != nil || remote[masteryKey] != nil || !mastery.isEmpty {
+                result[masteryKey] = encode(mastery)
+            }
+        }
+
+        for key in favoriteKeys {
+            remaining.remove(key)
+            guard local[key] != nil || remote[key] != nil else { continue }
+            let a = decode([String].self, from: local[key]) ?? []
+            let b = decode([String].self, from: remote[key]) ?? []
+            let localSet = Set(a)
+            let remoteSet = Set(b)
+            var seen = Set<String>()
+            let merged = (a + b).filter { id in
+                guard seen.insert(id).inserted else { return false }
+                let localVersion = localVersions[key]?[id] ?? -1
+                let remoteVersion = remoteVersions[key]?[id] ?? -1
+                if localVersion > remoteVersion { return localSet.contains(id) }
+                if remoteVersion > localVersion { return remoteSet.contains(id) }
+                return localVersion < 0 || (localSet.contains(id) && remoteSet.contains(id))
+            }
+            result[key] = encode(merged)
+        }
+
+        for key in remaining {
+            if let a = local[key], let b = remote[key] {
+                result[key] = mergeEntry(key: key, local: a, remote: b,
+                                         localUpdatedAt: localUpdatedAt, remoteUpdatedAt: remoteUpdatedAt)
+            } else {
+                result[key] = local[key] ?? remote[key]
             }
         }
         return result
+    }
+
+    private static func reviewTieBreaker(_ schedule: ReviewSchedule?, _ mastery: Mastery?) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return ((try? encoder.encode(schedule)) ?? Data()) + ((try? encoder.encode(mastery)) ?? Data())
     }
 
     static func canonicalEqual(_ lhs: [String: Data], _ rhs: [String: Data]) -> Bool {
@@ -52,8 +131,7 @@ enum StudySyncMerger {
     }
 
     private static func mergeEntry(key: String, local lData: Data, remote rData: Data,
-                                   localUpdatedAt: Int64, remoteUpdatedAt: Int64,
-                                   wordSrsWinner: [String: Side], letterSrsWinner: [String: Side]) -> Data {
+                                   localUpdatedAt: Int64, remoteUpdatedAt: Int64) -> Data {
         switch key {
         case "alef.studyStats.v1":
             guard let l = decode(StudyStatistics.self, from: lData),
@@ -75,57 +153,6 @@ enum StudySyncMerger {
             }
             return encode(merged) ?? (remoteUpdatedAt > localUpdatedAt ? rData : lData)
 
-        case "alef.wordSrs.v1", StudyProgress.letterScheduleKey:
-            guard let l = decode([String: ReviewSchedule].self, from: lData),
-                  let r = decode([String: ReviewSchedule].self, from: rData) else {
-                return remoteUpdatedAt > localUpdatedAt ? rData : lData
-            }
-            var merged: [String: ReviewSchedule] = [:]
-            for id in Set(l.keys).union(r.keys) {
-                switch (l[id], r[id]) {
-                case let (a?, nil): merged[id] = a
-                case let (nil, b?): merged[id] = b
-                case let (a?, b?):
-                    merged[id] = pickSchedule(a, b, remotePreferOnTie: remoteUpdatedAt > localUpdatedAt) == .remote ? b : a
-                case (nil, nil): break
-                }
-            }
-            return encode(merged) ?? (remoteUpdatedAt > localUpdatedAt ? rData : lData)
-
-        case "alef.wordMastery.v1", "alef.mastery.v1":
-            guard let l = decode([String: Mastery].self, from: lData),
-                  let r = decode([String: Mastery].self, from: rData) else {
-                return remoteUpdatedAt > localUpdatedAt ? rData : lData
-            }
-            let winners = key == "alef.wordMastery.v1" ? wordSrsWinner : letterSrsWinner
-            var merged: [String: Mastery] = [:]
-            for id in Set(l.keys).union(r.keys) {
-                switch (l[id], r[id]) {
-                case let (a?, nil): merged[id] = a
-                case let (nil, b?): merged[id] = b
-                case let (a?, b?):
-                    if let side = winners[id] {
-                        merged[id] = side == .remote ? b : a
-                    } else {
-                        merged[id] = masteryRank(b) > masteryRank(a) ? b : a
-                    }
-                case (nil, nil): break
-                }
-            }
-            return encode(merged) ?? (remoteUpdatedAt > localUpdatedAt ? rData : lData)
-
-        case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
-            guard let l = decode([String].self, from: lData),
-                  let r = decode([String].self, from: rData) else {
-                return remoteUpdatedAt > localUpdatedAt ? rData : lData
-            }
-            var seen = Set<String>()
-            var merged: [String] = []
-            for id in l + r where seen.insert(id).inserted {
-                merged.append(id)
-            }
-            return encode(merged) ?? lData
-
         case DailyVocabularyPlan.storageKey:
             guard let l = decode(DailyVocabularyPlan.self, from: lData),
                   let r = decode(DailyVocabularyPlan.self, from: rData) else {
@@ -143,23 +170,15 @@ enum StudySyncMerger {
         }
     }
 
-    private static func srsWinners(local: [String: ReviewSchedule]?, remote: [String: ReviewSchedule]?,
-                                   remotePreferOnTie: Bool) -> [String: Side] {
-        guard let local, let remote else { return [:] }
-        var winners: [String: Side] = [:]
-        for id in Set(local.keys).intersection(remote.keys) {
-            if let a = local[id], let b = remote[id] {
-                winners[id] = pickSchedule(a, b, remotePreferOnTie: remotePreferOnTie)
-            }
-        }
-        return winners
-    }
-
-    private static func pickSchedule(_ a: ReviewSchedule, _ b: ReviewSchedule, remotePreferOnTie: Bool) -> Side {
-        if a.nextReviewAt != b.nextReviewAt { return b.nextReviewAt > a.nextReviewAt ? .remote : .local }
-        if a.repetitions != b.repetitions { return b.repetitions > a.repetitions ? .remote : .local }
-        if a.lapses != b.lapses { return b.lapses > a.lapses ? .remote : .local }
-        return remotePreferOnTie ? .remote : .local
+    private static func preferRemoteSchedule(_ a: ReviewSchedule, _ b: ReviewSchedule, remotePreferOnTie: Bool) -> Bool {
+        // Older documents have no per-item version. Infer when the schedule was set.
+        let calendar = Calendar.current
+        let aEdited = calendar.date(byAdding: .day, value: -a.intervalDays, to: a.reviewDate) ?? a.reviewDate
+        let bEdited = calendar.date(byAdding: .day, value: -b.intervalDays, to: b.reviewDate) ?? b.reviewDate
+        if aEdited != bEdited { return bEdited > aEdited }
+        if a.repetitions != b.repetitions { return b.repetitions > a.repetitions }
+        if a.lapses != b.lapses { return b.lapses > a.lapses }
+        return remotePreferOnTie
     }
 
     private static func masteryRank(_ mastery: Mastery) -> Int {
@@ -297,6 +316,7 @@ final class StudyFolderSyncManager {
     private let storage: any StudySyncFolderStorage
     private var bookmarkData: Data?
     private var isSyncing = false
+    private var folderGeneration = 0
 
     private(set) var folderName: String?
     private(set) var state: SyncState
@@ -331,6 +351,7 @@ final class StudyFolderSyncManager {
                 relativeTo: nil
             )
             let name = url.lastPathComponent.isEmpty ? "同步文件夹" : url.lastPathComponent
+            folderGeneration += 1
             saveBookmark(bookmark, name: name)
             await sync(progress: progress, force: true)
         } catch {
@@ -339,6 +360,7 @@ final class StudyFolderSyncManager {
     }
 
     func disconnect() {
+        folderGeneration += 1
         bookmarkData = nil
         folderName = nil
         lastSummary = nil
@@ -349,95 +371,111 @@ final class StudyFolderSyncManager {
     }
 
     func sync(progress: StudyProgress, now: Date = .now, force: Bool = false) async {
-        guard !isSyncing, let initialBookmark = bookmarkData else { return }
+        guard !isSyncing else { return }
         isSyncing = true
-        state = .syncing
         defer { isSyncing = false }
 
-        do {
-            let readResult = try await storage.read(bookmarkData: initialBookmark, fileName: Self.syncFileName)
-            if let refreshed = readResult.refreshedBookmark {
-                saveBookmark(refreshed, name: folderName)
-            }
+        while let initialBookmark = bookmarkData {
+            let generation = folderGeneration
+            state = .syncing
+            do {
+                let readResult = try await storage.read(bookmarkData: initialBookmark, fileName: Self.syncFileName)
+                guard folderGeneration == generation else { continue }
+                if let refreshed = readResult.refreshedBookmark {
+                    saveBookmark(refreshed, name: folderName)
+                }
 
-            let activeBookmark = bookmarkData ?? initialBookmark
-            let localSnapshot = progress.syncSnapshot()
+                let activeBookmark = bookmarkData ?? initialBookmark
+                let localRevision = progress.syncRevision
+                let localSnapshot = progress.syncSnapshot()
 
-            if let remoteData = readResult.data {
-                let remote: (entries: [String: Data], updatedAt: Int64)
-                do {
-                    remote = try progress.parseSyncDocument(remoteData)
-                } catch {
-                    state = .failed("同步文件 \(Self.syncFileName) 格式无效，已保留本机数据。")
+                if let remoteData = readResult.data {
+                    let remote: (entries: [String: Data], updatedAt: Int64)
+                    do {
+                        remote = try progress.parseSyncDocument(remoteData)
+                    } catch {
+                        state = .failed("同步文件 \(Self.syncFileName) 格式无效，已保留本机数据。")
+                        return
+                    }
+
+                    let merged: [String: Data]
+                    let mergedUpdatedAt: Int64
+                    if localSnapshot.isEmpty {
+                        merged = remote.entries
+                        mergedUpdatedAt = remote.updatedAt
+                    } else {
+                        merged = StudySyncMerger.merge(
+                            local: localSnapshot,
+                            remote: remote.entries,
+                            localUpdatedAt: progress.localUpdatedAt,
+                            remoteUpdatedAt: remote.updatedAt
+                        )
+                        let baseTime = max(progress.localUpdatedAt, remote.updatedAt)
+                        if !StudySyncMerger.canonicalEqual(localSnapshot, merged)
+                            && !StudySyncMerger.canonicalEqual(remote.entries, merged) {
+                            mergedUpdatedAt = max(baseTime, Int64(now.timeIntervalSince1970 * 1_000))
+                        } else {
+                            mergedUpdatedAt = baseTime
+                        }
+                    }
+
+                    let localChanged = !StudySyncMerger.canonicalEqual(localSnapshot, merged)
+                    let remoteChanged = !StudySyncMerger.canonicalEqual(remote.entries, merged)
+
+                    progress.observeSyncTimestamp(mergedUpdatedAt)
+                    if remoteChanged {
+                        let payload = try progress.encodeSyncDocument(entries: merged, updatedAt: mergedUpdatedAt)
+                        let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName)
+                        guard folderGeneration == generation else { continue }
+                        if let refreshed {
+                            saveBookmark(refreshed, name: folderName)
+                        }
+                    }
+
+                    guard progress.syncRevision == localRevision else { continue }
+                    if localChanged {
+                        progress.applySyncedEntries(merged, updatedAt: mergedUpdatedAt, syncDate: now)
+                    } else {
+                        progress.markBackupExported(on: now)
+                    }
+
+                    if localChanged && remoteChanged {
+                        lastSummary = "已双向合并本机与云端进度"
+                    } else if localChanged {
+                        lastSummary = "已从同步文件夹恢复最新进度"
+                    } else if remoteChanged {
+                        lastSummary = "已将本机进度同步到文件夹"
+                    } else {
+                        lastSummary = "本机与同步文件夹已是最新"
+                    }
+                } else if !localSnapshot.isEmpty {
+                    let timestamp = max(progress.localUpdatedAt, Int64(now.timeIntervalSince1970 * 1_000))
+                    progress.observeSyncTimestamp(timestamp)
+                    let payload = try progress.encodeSyncDocument(entries: localSnapshot, updatedAt: timestamp)
+                    let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName)
+                    guard folderGeneration == generation else { continue }
+                    if let refreshed {
+                        saveBookmark(refreshed, name: folderName)
+                    }
+                    guard progress.syncRevision == localRevision else { continue }
+                    progress.markBackupExported(on: now)
+                    lastSummary = "已创建并上传 \(Self.syncFileName)"
+                } else if force {
+                    lastSummary = "已连接同步文件夹，开始学习后将自动同步"
+                } else {
+                    state = .idle
                     return
                 }
 
-                let merged: [String: Data]
-                let mergedUpdatedAt: Int64
-                if !progress.hasMeaningfulData {
-                    merged = remote.entries
-                    mergedUpdatedAt = remote.updatedAt
-                } else {
-                    merged = StudySyncMerger.merge(
-                        local: localSnapshot,
-                        remote: remote.entries,
-                        localUpdatedAt: progress.localUpdatedAt,
-                        remoteUpdatedAt: remote.updatedAt
-                    )
-                    let baseTime = max(progress.localUpdatedAt, remote.updatedAt)
-                    if !StudySyncMerger.canonicalEqual(localSnapshot, merged)
-                        && !StudySyncMerger.canonicalEqual(remote.entries, merged) {
-                        mergedUpdatedAt = max(baseTime, Int64(now.timeIntervalSince1970 * 1_000))
-                    } else {
-                        mergedUpdatedAt = baseTime
-                    }
-                }
-
-                let localChanged = !StudySyncMerger.canonicalEqual(localSnapshot, merged)
-                let remoteChanged = !StudySyncMerger.canonicalEqual(remote.entries, merged)
-
-                if remoteChanged {
-                    let payload = try progress.encodeSyncDocument(entries: merged, updatedAt: mergedUpdatedAt)
-                    if let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName) {
-                        saveBookmark(refreshed, name: folderName)
-                    }
-                }
-
-                if localChanged {
-                    progress.applySyncedEntries(merged, updatedAt: mergedUpdatedAt, syncDate: now)
-                } else {
-                    progress.markBackupExported(on: now)
-                }
-
-                if localChanged && remoteChanged {
-                    lastSummary = "已双向合并本机与云端进度"
-                } else if localChanged {
-                    lastSummary = "已从同步文件夹恢复最新进度"
-                } else if remoteChanged {
-                    lastSummary = "已将本机进度同步到文件夹"
-                } else {
-                    lastSummary = "本机与同步文件夹已是最新"
-                }
-            } else if progress.hasMeaningfulData {
-                let timestamp = max(progress.localUpdatedAt, Int64(now.timeIntervalSince1970 * 1_000))
-                let payload = try progress.encodeSyncDocument(entries: localSnapshot, updatedAt: timestamp)
-                if let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName) {
-                    saveBookmark(refreshed, name: folderName)
-                }
-                progress.markBackupExported(on: now)
-                lastSummary = "已创建并上传 \(Self.syncFileName)"
-            } else if force {
-                lastSummary = "已连接同步文件夹，开始学习后将自动同步"
-            } else {
-                state = .idle
+                let syncedMs = Int64(now.timeIntervalSince1970 * 1_000)
+                defaults.set(NSNumber(value: syncedMs), forKey: Self.lastSyncedAtKey)
+                state = .synced(now)
+                return
+            } catch {
+                guard folderGeneration == generation else { continue }
+                state = .failed("同步失败：\(error.localizedDescription)")
                 return
             }
-
-            let syncedMs = Int64(now.timeIntervalSince1970 * 1_000)
-            defaults.set(NSNumber(value: syncedMs), forKey: Self.lastSyncedAtKey)
-            state = .synced(now)
-        } catch {
-            state = .failed("同步失败：\(error.localizedDescription)")
         }
     }
 
