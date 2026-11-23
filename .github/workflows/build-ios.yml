@@ -26,10 +26,9 @@ jobs:
           cache: npm
 
       - name: Prepare native study content and audio
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
           npm ci --replace-registry-host=always
+          npm run typecheck
           npm run prepare:ios
           npm run verify:content
 

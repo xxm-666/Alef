@@ -4,30 +4,31 @@ struct DailyLetter {
     let id: String
     let glyph: String
     let name: String
+    let nameZh: String
 
     static let alphabet: [DailyLetter] = [
-        .init(id: "alef", glyph: "א", name: "Alef"),
-        .init(id: "bet", glyph: "ב", name: "Bet"),
-        .init(id: "gimel", glyph: "ג", name: "Gimel"),
-        .init(id: "dalet", glyph: "ד", name: "Dalet"),
-        .init(id: "he", glyph: "ה", name: "He"),
-        .init(id: "vav", glyph: "ו", name: "Vav"),
-        .init(id: "zayin", glyph: "ז", name: "Zayin"),
-        .init(id: "chet", glyph: "ח", name: "Chet"),
-        .init(id: "tet", glyph: "ט", name: "Tet"),
-        .init(id: "yod", glyph: "י", name: "Yod"),
-        .init(id: "kaf", glyph: "כ", name: "Kaf"),
-        .init(id: "lamed", glyph: "ל", name: "Lamed"),
-        .init(id: "mem", glyph: "מ", name: "Mem"),
-        .init(id: "nun", glyph: "נ", name: "Nun"),
-        .init(id: "samekh", glyph: "ס", name: "Samekh"),
-        .init(id: "ayin", glyph: "ע", name: "Ayin"),
-        .init(id: "pe", glyph: "פ", name: "Pe"),
-        .init(id: "tsadi", glyph: "צ", name: "Tsadi"),
-        .init(id: "qof", glyph: "ק", name: "Qof"),
-        .init(id: "resh", glyph: "ר", name: "Resh"),
-        .init(id: "shin", glyph: "ש", name: "Shin"),
-        .init(id: "tav", glyph: "ת", name: "Tav")
+        .init(id: "alef", glyph: "א", name: "Alef", nameZh: "阿莱夫"),
+        .init(id: "bet", glyph: "ב", name: "Bet", nameZh: "贝特"),
+        .init(id: "gimel", glyph: "ג", name: "Gimel", nameZh: "吉梅尔"),
+        .init(id: "dalet", glyph: "ד", name: "Dalet", nameZh: "达莱特"),
+        .init(id: "he", glyph: "ה", name: "He", nameZh: "海"),
+        .init(id: "vav", glyph: "ו", name: "Vav", nameZh: "瓦夫"),
+        .init(id: "zayin", glyph: "ז", name: "Zayin", nameZh: "扎因"),
+        .init(id: "chet", glyph: "ח", name: "Chet", nameZh: "赫特"),
+        .init(id: "tet", glyph: "ט", name: "Tet", nameZh: "泰特"),
+        .init(id: "yod", glyph: "י", name: "Yod", nameZh: "约德"),
+        .init(id: "kaf", glyph: "כ", name: "Kaf", nameZh: "卡夫"),
+        .init(id: "lamed", glyph: "ל", name: "Lamed", nameZh: "拉梅德"),
+        .init(id: "mem", glyph: "מ", name: "Mem", nameZh: "梅姆"),
+        .init(id: "nun", glyph: "נ", name: "Nun", nameZh: "努恩"),
+        .init(id: "samekh", glyph: "ס", name: "Samekh", nameZh: "萨梅赫"),
+        .init(id: "ayin", glyph: "ע", name: "Ayin", nameZh: "艾因"),
+        .init(id: "pe", glyph: "פ", name: "Pe", nameZh: "佩"),
+        .init(id: "tsadi", glyph: "צ", name: "Tsadi", nameZh: "察迪"),
+        .init(id: "qof", glyph: "ק", name: "Qof", nameZh: "科夫"),
+        .init(id: "resh", glyph: "ר", name: "Resh", nameZh: "雷什"),
+        .init(id: "shin", glyph: "ש", name: "Shin", nameZh: "辛"),
+        .init(id: "tav", glyph: "ת", name: "Tav", nameZh: "塔夫")
     ]
 
     static func on(_ date: Date, calendar: Calendar = Calendar(identifier: .gregorian)) -> DailyLetter {
@@ -89,6 +90,64 @@ struct DailyLetterCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name)")
         .accessibilityHint("打开字母详情")
+    }
+}
+
+struct DailyLetterCircularContent: View {
+    let letter: DailyLetter
+
+    var body: some View {
+        VStack(spacing: -2) {
+            Text(letter.glyph)
+                .font(.system(size: 28, weight: .semibold, design: .serif))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text(letter.name)
+                .font(.system(size: 9, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
+    }
+}
+
+struct DailyLetterRectangularContent: View {
+    let letter: DailyLetter
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(letter.glyph)
+                .font(.system(size: 34, weight: .bold, design: .serif))
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .frame(minWidth: 32)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("每日字母")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(letter.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(letter.nameZh)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
+    }
+}
+
+struct DailyLetterInlineContent: View {
+    let letter: DailyLetter
+
+    var body: some View {
+        Label("\(letter.glyph) · \(letter.name) \(letter.nameZh)", systemImage: "book")
+            .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
     }
 }
 

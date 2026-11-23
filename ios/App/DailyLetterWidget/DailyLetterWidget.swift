@@ -30,16 +30,47 @@ private struct LetterProvider: TimelineProvider {
     }
 }
 
+private struct DailyLetterWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let letter: DailyLetter
+
+    var body: some View {
+        content
+            .containerBackground(for: .widget) {
+                if family == .systemSmall {
+                    DailyLetterBackground()
+                } else {
+                    Color.clear
+                }
+            }
+            .widgetURL(letter.url)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch family {
+        case .accessoryCircular:
+            ZStack {
+                AccessoryWidgetBackground()
+                DailyLetterCircularContent(letter: letter)
+            }
+        case .accessoryRectangular:
+            DailyLetterRectangularContent(letter: letter)
+        case .accessoryInline:
+            DailyLetterInlineContent(letter: letter)
+        default:
+            DailyLetterCard(letter: letter)
+        }
+    }
+}
+
 @main
 struct DailyLetterWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "DailyLetterWidget", provider: LetterProvider()) { entry in
-            DailyLetterCard(letter: entry.letter)
-                .containerBackground(for: .widget) { DailyLetterBackground() }
-                .widgetURL(entry.letter.url)
+            DailyLetterWidgetView(letter: entry.letter)
         }
         .configurationDisplayName("Alef · 每日字母")
-        .description("每天展示一个希伯来字母。点按小组件可打开字母详情。")
-        .supportedFamilies([.systemSmall])
+        .description("每天展示一个希伯来字母，支持主屏幕与锁屏小组件。点按可打开字母详情。")
+        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }

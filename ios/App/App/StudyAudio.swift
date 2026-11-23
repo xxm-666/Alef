@@ -1,5 +1,6 @@
 import AVFAudio
 import SwiftUI
+import UIKit
 
 @MainActor
 final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate {
@@ -20,6 +21,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
     @Published private(set) var playbackError: String?
     var prefersRecordings = true
     var feedbackEnabled = true
+    var hapticsEnabled = true
 
     init(recordings: [String: String]) {
         self.recordings = recordings
@@ -73,6 +75,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
     }
 
     func playFeedback(_ kind: Feedback) {
+        triggerHaptic(for: kind)
         guard feedbackEnabled, let url = Bundle.main.url(forResource: kind.rawValue, withExtension: "wav", subdirectory: "StudyAssets/audio"),
               let feedback = try? AVAudioPlayer(contentsOf: url) else { return }
         do {
@@ -84,6 +87,30 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
             releaseSessionIfIdle()
         } catch {
             releaseSessionIfIdle()
+        }
+    }
+
+    func playSelectionHaptic() {
+        guard hapticsEnabled else { return }
+        let generator = UISelectionFeedbackGenerator()
+        generator.selectionChanged()
+    }
+
+    func playStrokeHaptic() {
+        guard hapticsEnabled else { return }
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.impactOccurred()
+    }
+
+    private func triggerHaptic(for kind: Feedback) {
+        guard hapticsEnabled else { return }
+        switch kind {
+        case .correct:
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        case .wrong:
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+        case .flip:
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
     }
 

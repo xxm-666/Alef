@@ -306,6 +306,7 @@ struct StudyFlashcardsView: View {
     private func rate(_ grade: ReviewGrade, for current: StudyLetter) {
         let cards = deck
         let following = cards.isEmpty ? nil : cards[safe: (index + 1) % cards.count]?.id
+        audio.playSelectionHaptic()
         progress.completeLetterReview(current.id, grade: grade)
         let next = deck.firstIndex { $0.id == following } ?? 0
         setting(\.cardIndex).wrappedValue = next
@@ -598,6 +599,7 @@ private struct FlashQuizView: View {
                 let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
                 Button {
                     selectedGrade = grade
+                    audio.playSelectionHaptic()
                     progress.adjustLetterReview(letter.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
                 } label: {
                     VStack(spacing: 2) {

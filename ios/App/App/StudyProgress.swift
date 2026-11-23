@@ -314,7 +314,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
     static let letterScheduleKey = "alef.native.letterSrs.v1"
-    // Keep the shared theme keys readable by Alef's web and desktop versions.
+    static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
     private static let appearanceKey = "alef.native.appearance.v1"
     private enum AppearanceOverride: String, Codable {
         case manual, system, white
@@ -342,6 +342,30 @@ struct DailyVocabularyPlan: Codable, Equatable {
         return plan.isValid ? plan : DailyVocabularyPlan()
     }
     var needsLegacyMigration: Bool { !defaults.bool(forKey: Self.migrationKey) }
+
+    var lastBackupAt: Int64? {
+        entries[Self.lastBackupAtKey].flatMap { try? JSONDecoder().decode(Int64.self, from: $0) }
+    }
+
+    var lastBackupDate: Date? {
+        lastBackupAt.map { Date(timeIntervalSince1970: Double($0) / 1_000) }
+    }
+
+    func markBackupExported(on date: Date = .now) {
+        write(Int64(date.timeIntervalSince1970 * 1_000), for: Self.lastBackupAtKey)
+    }
+
+    func backupReminderMessage(on date: Date = .now, staleDays: Int = 7) -> String? {
+        if statistics.totalReviews < 10 && wordMastery.isEmpty && letterMastery.isEmpty {
+            return nil
+        }
+        guard let lastBackupDate else {
+            return "尚未备份学习记录。重签或换机前建议保存一份 JSON 备份。"
+        }
+        let days = max(0, Int(date.timeIntervalSince(lastBackupDate) / 86_400))
+        guard days >= staleDays else { return nil }
+        return "距离上次备份已过 \(days) 天，建议导出 JSON 备份到「文件」。"
+    }
 
     private var appearanceOverride: AppearanceOverride { read(Self.appearanceKey, default: .manual) }
 
@@ -378,6 +402,11 @@ struct DailyVocabularyPlan: Codable, Equatable {
     var feedbackEnabled: Bool {
         get { read("alef.native.feedback.v1", default: true) }
         set { write(newValue, for: "alef.native.feedback.v1") }
+    }
+
+    var hapticsEnabled: Bool {
+        get { read("alef.native.haptics.v1", default: true) }
+        set { write(newValue, for: "alef.native.haptics.v1") }
     }
 
     var prefersRecordings: Bool {
@@ -676,8 +705,11 @@ struct DailyVocabularyPlan: Codable, Equatable {
         case "alef.order.v1":
             let order = try decoder.decode(String.self, from: data)
             guard ["rtl", "ltr"].contains(order) else { throw BackupError.invalid }
-        case "alef.native.feedback.v1", "alef.native.recordings.v1":
+        case "alef.native.feedback.v1", "alef.native.recordings.v1", "alef.native.haptics.v1":
             _ = try decoder.decode(Bool.self, from: data)
+        case Self.lastBackupAtKey:
+            let timestamp = try decoder.decode(Int64.self, from: data)
+            guard timestamp >= 0 else { throw BackupError.invalid }
         case "alef.displayConfig.v1":
             _ = try decoder.decode([String: Bool].self, from: data)
         default:

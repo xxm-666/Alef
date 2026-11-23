@@ -31,7 +31,8 @@ struct StudySettingsView: View {
                 StudyBackupView()
             } label: {
                 StudyCard(padding: 9) {
-                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive")
+                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive",
+                             subtitle: progress.backupReminderMessage())
                 }
             }
             .buttonStyle(.plain)
@@ -375,12 +376,15 @@ private struct StudySpeechControls: View {
                 .frame(minHeight: 44)
             Toggle(isOn: $progress.feedbackEnabled) { Label("答题与翻卡音效", systemImage: "bell") }
                 .frame(minHeight: 44)
+            Toggle(isOn: $progress.hapticsEnabled) { Label("触感反馈", systemImage: "iphone.radiowaves.left.and.right") }
+                .frame(minHeight: 44)
         }
         .tint(progress.theme.primaryButton)
     }
 }
 
 private struct StudyWidgetPreview: View {
+    @Environment(StudyProgress.self) private var progress
     let content: StudyContent
 
     var body: some View {
@@ -388,6 +392,7 @@ private struct StudyWidgetPreview: View {
             let today = DailyLetter.on(timeline.date)
             StudyPage {
                 if let letter = content.letters.first(where: { $0.id == today.id }) {
+                    StudySectionTitle("主屏幕小组件")
                     NavigationLink {
                         LetterStudyView(letter: letter, content: content)
                     } label: {
@@ -399,13 +404,35 @@ private struct StudyWidgetPreview: View {
                     }
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
+
+                    StudySectionTitle("锁屏小组件")
+                    NavigationLink {
+                        LetterStudyView(letter: letter, content: content)
+                    } label: {
+                        StudyCard {
+                            HStack(spacing: 16) {
+                                DailyLetterCircularContent(letter: today)
+                                    .frame(width: 60, height: 60)
+                                    .background(progress.theme.insetSurface, in: Circle())
+                                DailyLetterRectangularContent(letter: today)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .foregroundStyle(progress.theme.ink)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
                 StudyNotice(title: "每天一个字母", symbol: "calendar",
                             note: "小组件按手机本地日期轮换，无需联网。点按小组件可打开对应的字母详情。")
                 StudyCard {
-                    StudySectionTitle("添加到主屏幕")
-                    Text("长按 iPhone 主屏幕，选择编辑小组件，搜索「Alef」，再添加「每日字母」。")
+                    StudySectionTitle("添加方式")
+                    Text("主屏幕：长按主屏幕，点左上角「编辑 → 添加小组件」，搜索「Alef」。")
                         .font(.subheadline)
+                    Text("锁屏：长按锁定屏幕 → 自定 → 点击锁屏时间下方小组件区并搜索「Alef」。")
+                        .font(.subheadline)
+                        .foregroundStyle(progress.theme.mutedInk)
                 }
             }
         }
@@ -548,6 +575,12 @@ private struct StudyBackupView: View {
 
     var body: some View {
         StudyPage {
+            if let reminder = progress.backupReminderMessage() {
+                StudyNotice(title: "建议保存新备份", symbol: "exclamationmark.shield", note: reminder, reminder: true)
+            } else if let lastDate = progress.lastBackupDate {
+                StudyNotice(title: "最近备份 · \(lastDate.formatted(.dateTime.month().day().hour().minute().locale(Locale(identifier: "zh_CN"))))",
+                            symbol: "checkmark.shield")
+            }
             StudySectionTitle("保存备份")
             backupAction("导出 JSON", note: "保存学习记录与偏好到文件", symbol: "square.and.arrow.up", action: export)
             backupAction("复制备份", note: "复制 JSON 到剪贴板", symbol: "doc.on.doc", action: copyBackup)
@@ -589,7 +622,12 @@ private struct StudyBackupView: View {
         .studyDetail("数据备份与恢复")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json], onCompletion: prepareImport)
         .fileExporter(isPresented: $exporting, document: backup, contentType: .json, defaultFilename: "alef-backup") { outcome in
-            if case let .failure(error) = outcome { message = error.localizedDescription }
+            switch outcome {
+            case .success:
+                progress.markBackupExported()
+            case let .failure(error):
+                message = error.localizedDescription
+            }
         }
         .sheet(item: $preview) { pending in
             NavigationStack { restorePreview(pending) }
@@ -665,6 +703,7 @@ private struct StudyBackupView: View {
         case "alef.wordMastery.v1": "square.stack.3d.up"
         case "alef.wordSrs.v1", StudyProgress.letterScheduleKey: "calendar"
         case ReminderPreferences.storageKey: "bell.badge"
+        case StudyProgress.lastBackupAtKey: "clock"
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1": "bookmark"
         case "alef.studyStats.v1": "chart.bar.xaxis"
         default: "gearshape"
@@ -715,6 +754,7 @@ private struct StudyBackupView: View {
         status = nil
         do {
             UIPasteboard.general.string = String(decoding: try progress.exportBackup(), as: UTF8.self)
+            progress.markBackupExported()
             status = .copied
         } catch {
             message = error.localizedDescription
@@ -732,6 +772,8 @@ private struct StudyBackupView: View {
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.native.phraseFavorites.v1": "收藏短语"
         case "alef.native.feedback.v1": "答题与翻卡音效"
+        case "alef.native.haptics.v1": "触感反馈"
+        case StudyProgress.lastBackupAtKey: "上次备份时间"
         case "alef.native.recordings.v1": "离线录音偏好"
         case "alef.studyStats.v1": "学习统计"
         case "alef.theme.v1": "主题"

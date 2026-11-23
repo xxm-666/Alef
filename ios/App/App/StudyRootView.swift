@@ -48,6 +48,7 @@ struct StudyRootView: View {
         .preferredColorScheme(progress.theme.preferredScheme)
         .onChange(of: progress.feedbackEnabled, initial: true) { _, enabled in audio.feedbackEnabled = enabled }
         .onChange(of: progress.prefersRecordings, initial: true) { _, enabled in audio.prefersRecordings = enabled }
+        .onChange(of: progress.hapticsEnabled, initial: true) { _, enabled in audio.hapticsEnabled = enabled }
         .onChange(of: selectedTab) { _, _ in audio.stop() }
         .onChange(of: progress.dailyLetterRequest, initial: true) { _, id in
             guard let id, content.letters.contains(where: { $0.id == id }) else { return }

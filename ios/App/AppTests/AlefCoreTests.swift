@@ -308,6 +308,7 @@ final class AlefCoreTests: XCTestCase {
 
     func testDailyLetterRotationAndDeepLink() {
         XCTAssertEqual(DailyLetter.alphabet.count, 22)
+        XCTAssertTrue(DailyLetter.alphabet.allSatisfy { !$0.nameZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
         let start = makeDate(year: 2026, month: 1, day: 1)
         var seen: [String] = []
         for offset in 0..<22 {
@@ -323,6 +324,38 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(DailyLetter.id(from: alef.url!), "alef")
         XCTAssertNil(DailyLetter.id(from: URL(string: "alef://daily-letter/unknown")!))
         XCTAssertNil(DailyLetter.id(from: URL(string: "https://example.com/alef")!))
+    }
+
+    func testBackupReminderAndHapticsPersistence() throws {
+        let day1 = makeDate(year: 2026, month: 11, day: 1)
+        let day4 = makeDate(year: 2026, month: 11, day: 4)
+        let day8 = makeDate(year: 2026, month: 11, day: 8)
+
+        // Fresh user with no study activity should not be nagged
+        XCTAssertNil(progress.backupReminderMessage(on: day1))
+        XCTAssertTrue(progress.hapticsEnabled)
+
+        // After learning progress, missing backup triggers reminder
+        progress.setWord("shalom", mastery: .mastered, date: day1)
+        XCTAssertNotNil(progress.backupReminderMessage(on: day1))
+
+        // Exporting backup clears reminder until staleDays (7 days) elapses
+        progress.markBackupExported(on: day1)
+        XCTAssertNil(progress.backupReminderMessage(on: day4))
+        XCTAssertNotNil(progress.backupReminderMessage(on: day8))
+
+        // Haptics and lastBackupAt round-trip through JSON backup
+        progress.hapticsEnabled = false
+        let exported = try progress.exportBackup()
+
+        let restoredSuite = "com.xxm666.alef.tests.p2.\(UUID().uuidString)"
+        let restoredDefaults = UserDefaults(suiteName: restoredSuite)!
+        defer { restoredDefaults.removePersistentDomain(forName: restoredSuite) }
+        let restored = StudyProgress(defaults: restoredDefaults)
+        let preview = try restored.previewBackup(exported)
+        restored.applyBackup(preview)
+        XCTAssertFalse(restored.hapticsEnabled)
+        XCTAssertEqual(restored.lastBackupAt, Int64(day1.timeIntervalSince1970 * 1_000))
     }
 
     @MainActor

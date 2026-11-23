@@ -997,6 +997,7 @@ struct WordQuizView: View {
                 let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
                 Button {
                     selectedGrade = grade
+                    audio.playSelectionHaptic()
                     progress.adjustWordReview(target.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
                 } label: {
                     VStack(spacing: 2) {

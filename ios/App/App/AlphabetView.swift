@@ -622,6 +622,7 @@ struct StudyCursiveLetter: View {
 
 private struct LetterWritingView: View {
     @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -769,6 +770,7 @@ private struct LetterWritingView: View {
             HStack(spacing: 12) {
                 Toggle("描红", isOn: $showTracing).frame(minHeight: 44)
                 Button {
+                    audio.playStrokeHaptic()
                     practiceID = UUID()
                 } label: {
                     Image(systemName: "eraser").frame(width: 44, height: 44).contentShape(Rectangle())
@@ -783,7 +785,9 @@ private struct LetterWritingView: View {
                 .overlay {
                     StrokeDiagram(strokes: showTracing ? selectedStrokes : [], tracing: true)
                         .accessibilityHidden(true)
-                    DrawingPad().id(practiceID).accessibilityLabel("手写练习区")
+                    DrawingPad { audio.playStrokeHaptic() }
+                        .id(practiceID)
+                        .accessibilityLabel("手写练习区")
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -902,6 +906,12 @@ private extension StudyStrokes.Stroke {
 }
 
 private struct DrawingPad: UIViewRepresentable {
+    var onStrokeAdded: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onStrokeAdded: onStrokeAdded)
+    }
+
     func makeUIView(context: Context) -> PKCanvasView {
         let view = PKCanvasView()
         view.drawingPolicy = .anyInput
@@ -909,8 +919,28 @@ private struct DrawingPad: UIViewRepresentable {
         view.isOpaque = false
         view.isScrollEnabled = false
         view.tool = PKInkingTool(.pen, color: .label, width: 5)
+        view.delegate = context.coordinator
         return view
     }
 
-    func updateUIView(_ view: PKCanvasView, context: Context) {}
+    func updateUIView(_ view: PKCanvasView, context: Context) {
+        context.coordinator.onStrokeAdded = onStrokeAdded
+    }
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        var onStrokeAdded: () -> Void
+        private var lastStrokeCount = 0
+
+        init(onStrokeAdded: @escaping () -> Void) {
+            self.onStrokeAdded = onStrokeAdded
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            let count = canvasView.drawing.strokes.count
+            if count > lastStrokeCount {
+                onStrokeAdded()
+            }
+            lastStrokeCount = count
+        }
+    }
 }

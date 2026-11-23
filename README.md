@@ -1,113 +1,67 @@
-# Alef — 希伯来语字母与词汇学习工具
+# Alef — 希伯来语字母与词汇学习工具 (iOS 原生版)
 
-**Alef** 是一款基于 **Electron + React + TypeScript + Vite** 构建的希伯来语入门与桌面/移动端（PWA）学习应用，支持希伯来语 22 个字母的印刷体与手写体对照、笔顺描红、词尾形（Sofit）与 Begadkefat 发音规则、高频词库与间隔重复（SRS）闪卡复习，以及离线发音包。
+**Alef** 是一款基于 **SwiftUI + PencilKit + WidgetKit** 构建的离线优先希伯来语原生 iOS 学习应用（iOS 17+），内置 22 个希伯来字母的印刷体与手写体对照、分步笔顺与临摹练习、词尾形（Sofit）与 Begadkefat 规则、1,053 个高频词库、情景短语、分级阅读、拼读实验室、动态 SRS 间隔重复、本地学习提醒以及主屏幕/锁屏「每日字母」小组件。
 
 ---
 
 ## 核心功能
 
-### 1. 字母表总览与详情精学
-- **双序列切换**：支持希伯来语标准 **RTL（从右到左）** 与 **LTR** 排列顺序，提供全部、词尾形、Begadkefat、喉音、易混字母、待复习等筛选视图。
-- **多维度卡片展示**：支持自由开关印刷体（Block）、手写体（Cursive）、词尾形（Sofit）、音译、Gematria 数值、现代发音与圣经发音差异、掌握度标记等显示项。
-- **手写笔顺描红**：内置 [`StrokeOrderPad`](src/components/StrokeOrderPad.tsx)，支持印刷体与手写体（含词尾形）的分步笔顺动画演示与交互式临摹练习。
+### 1. 字母表总览、详情与 PencilKit 手写描红
+- **双序列与 13 项定制展示**：支持标准 **RTL（从右到左）** 与 **LTR** 顺序切换；支持入门/精学/自定义显示预设（印刷体、手写体、词尾形、达盖什字形、现代与古典发音、音译、Gematria 数值、掌握度等）。
+- **分步笔顺与手写临摹**：内置矢量笔顺动画与 `PKCanvasView` 手写描红区，支持印刷体、手写体、词尾形及加点手写形式，落笔与清空带有触感反馈。
 
-### 2. 高频词汇、短语与 SRS 复习
-- **多分类词汇库**：覆盖日常问候、人物家庭、时间数字、生活饮食、自然世界、核心动词、形容与颜色、城市出行、身体情绪、工作学习、圣经文化 11 大主题（见 [`hebrewWords.ts`](src/data/hebrewWords.ts) 与 [`words/`](src/data/words)）。
-- **词形与例句解析**：包含带点（Niqqud）/ 去点对照、IPA 音标、词根、语法标签、变形提示与例句发音。
-- **闪卡与间隔重复**：[`FlashcardStudyView`](src/components/FlashcardStudyView.tsx) 支持字母与词汇翻转记忆、收藏筛选与本地学习统计（连续学习天数、今日/累计复习次数）。
+### 2. 高频词汇、短语、阅读与每日记词
+- **词库与词形解析**：覆盖 11 大主题共 1,053 个词条、44 条情景短语及 6 篇短文阅读（16 个句子）；提供带点（Niqqud）/ 去点对照、IPA 音标、词根、语法标签、变形提示与例句发音。
+- **今日记词小组**：按天分组（默认每组 5 词），支持“先认读、再拼写（屏内希伯来语键盘含词尾形，或切换系统键盘）”流程。
 
-### 3. 发音规则与元音音节实验室
-- **特殊规则速查**：[`SpecialRulesView`](src/components/SpecialRulesView.tsx) 系统梳理词尾形（ם ן ץ ף ך）、Begadkefat（ב ג ד כ פ ת）点音变化、喉音字母与易混字母辨析。
-- **元音音节实验室**：[`SyllableLab`](src/components/SyllableLab.tsx) 支持自由组合辅音字母与 Niqqud 元音符号，实时试听并练习拼读。
+### 3. 动态 SRS 复习与测验练习
+- **SM-2 动态间隔重复**：单词与字母均支持基于作答表现（重来 / 困难 / 记住 / 轻松）动态计算间隔与难度系数；到期复习支持答错当场加入本轮末尾再练一次，答对后可微调难度。
+- **专项测验**：字母闪卡、字形→发音、手写→印刷、匹配词尾、达盖什辨音、词义测验、听力辨音与拼写练习，配合音效与触感反馈。
 
-### 4. 离线发音与 PWA 支持
-- **多级音频播放策略**：[`audio.ts`](src/utils/audio.ts) 优先播放内置预录 MP3（`public/audio/`），无录音时回退至浏览器希伯来语 TTS 或音译拼读。iOS 应用使用原生播放器播放录音，结束后释放音频会话。
-- **离线音频包下载**：[`offlineAudio.ts`](src/utils/offlineAudio.ts) 支持在 PWA 中缓存字母、词汇、场景短句与阅读句子的内置音频，配合 Vite 生成的 `sw.js` 离线播放。
-- **音频来源**：补充音频的作者、原始文件和许可见[发音音频来源](public/audio/CREDITS.md)，这份清单随 Web 和 iOS 资源一起分发。
-- 待补录的词条和阅读句子见[离线发音缺失清单](设计文档/离线发音缺失清单.md)。
+### 4. 发音规则、拼读实验室与离线音频
+- **规则速查与拼读实验室**：涵盖 Sofit 词尾形、Begadkefat 软硬音、易混字母、喉音与 Niqqud 元音点；支持自由组合辅音与元音试听，并提供听音辨音练习。
+- **完全离线音频**：打包脚本自动将 1,529 段预录 MP3（见 [音频来源](public/audio/CREDITS.md)）与提示音效集成至 `StudyAssets`，无录音时回退至 iOS `he-IL` 系统语音。
 
-### 5. 桌面端特性、多主题与数据备份
-- **Electron 桌面增强**：[`electron/main.cjs`](electron/main.cjs) 提供无边框自定义标题栏、窗口置顶（Always on Top）以及轻量级迷你浮窗模式（[`MiniWidgetView`](src/components/MiniWidgetView.tsx)）。
-- **多套视觉主题**：内置 `parchment`（羊皮纸）、`dark`（暗色）、`rose`、`violet` 四种主题，移动端采用悬浮毛玻璃底部导航栏。
-- **数据备份与恢复**：[`BackupModal`](src/components/BackupModal.tsx) 支持将学习进度、收藏词汇与个人设置导出/导入为 JSON 备份。
+### 5. 本地学习提醒、主题、小组件与数据备份
+- **本地提醒**：基于 `UNUserNotificationCenter` 离线安排每日固定时段提醒，支持“仅在有到期复习时提醒”与点击跳转。
+- **6 套原生外观**：跟随系统、白色、羊皮纸、玫瑰、紫罗兰、深色。
+- **主屏幕与锁屏「每日字母」小组件**：支持桌面小尺寸与锁屏圆形/矩形/单行样式，按本地日期离线轮换 22 个字母，点击直达对应字母详情。
+- **JSON 备份与防丢失提醒**：支持导入/导出/剪贴板复制、变更预览与撤销上次导入；累计一定学习进度且超过 7 天未备份时主动提醒保存备份（适配免费个人签名定期重签场景）。
 
 ---
 
-## 技术栈
+## iPhone 安装方式
 
-- **桌面端容器**：Electron 33 (`electron-builder` 打包)
-- **前端框架**：React 19 + TypeScript 5
-- **构建工具**：Vite 5（含自定义离线 PWA Service Worker 插件 `alefOfflinePwaPlugin`）
-- **UI 与字体**：`lucide-react`、`liquid-glass-react`、`@fontsource/gveret-levin`
+1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。默认使用 **Xcode 27** 预览 runner；若无法分配，可选择 **Xcode 26 (Intel)**。工作流会自动执行内容校验、TypeScript 类型检查、`AppTests` 单元测试并产出 `Alef.ipa`。
+2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`（未签名，需自签名后安装）。
+3. Windows 用户可按 [AltStore Classic 官方指南](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows) 安装 AltServer 和 AltStore，再在 iPhone 上通过 **AltStore → My Apps → ＋** 导入 `Alef.ipa`（提示保留应用扩展时选择保留，以启用小组件）。免费 Apple 账号签名通常每 7 天需刷新一次，刷新或重装前建议在「我的 → 数据备份与恢复」导出 JSON 备份。
+4. 安装后可长按主屏幕或锁定屏幕，在组件库中搜索 **Alef** 添加「每日字母」。
 
 ---
 
-## 快速开始
+## 本地开发与内容管线
 
 ### 环境要求
+- **Node.js** 20+（用于将 `src/data/` 编译并校验为 iOS 学习资源）
+- **Xcode 15+**（仅在 macOS 本地编译/运行 `ios/App/App.xcodeproj` 时需要）
 
-- **Node.js** 20+（推荐与 CI 一致使用 Node 20）
-- **npm**
-
-### 安装依赖
+### 常用命令
 
 ```bash
+# 安装轻量数据构建依赖 (esbuild + typescript)
 npm install
+
+# TypeScript 数据模型与词库类型检查
+npm run typecheck
+
+# 校验并将词库、字母、短语、阅读与离线音频同步到 ios/App/App/StudyAssets/
+npm run prepare:ios
+
+# 运行内容管线与 Widget ID 同步校验测试
+npm run verify:content
 ```
 
-### 本地开发
-
-```bash
-# 仅启动 Web / PWA 开发服务器 (默认端口 5173)
-npm run dev:web
-
-# 同时启动 Vite 与 Electron 桌面端窗口
-npm run dev
-```
-
-### 构建与运行
-
-```bash
-# TypeScript 类型检查并构建前端资源到 dist/
-npm run build
-
-# 预览构建后的 Web 版本
-npm run preview
-
-# 构建后以 Electron 桌面端启动
-npm run start
-```
-
-### 桌面端打包
-
-```bash
-# 生成未打包目录用于测试
-npm run pack
-
-# 打包 Windows 安装包与便携版 (NSIS + Portable)
-npm run dist
-
-# 打包 macOS (.dmg)
-npm run dist:mac
-
-# 打包 Linux (AppImage + deb)
-npm run dist:linux
-```
-
-打包产物默认输出至 `release/` 目录，图标位于 `build/icon.png`。
-
-### iPhone 安装与「每日字母」小组件
-
-此 iOS 版本面向 iOS 17 及以上，使用 SwiftUI 学习页面、PencilKit 手写练习及原生离线发音。词库和录音从项目共用的数据生成。小组件会按手机本地日期轮换 22 个希伯来字母，可离线使用。点按小组件可打开对应的字母详情。
-
-1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。默认使用 **Xcode 27** 预览 runner。若 GitHub 无法分配该 runner，可以新建一次运行并选择 **Xcode 26 (Intel)**。两个选项都会把应用和小组件打进 IPA。
-2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`。IPA 需要签名后才能安装。
-3. Windows 用户可以按 [AltStore Classic 官方指南](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows) 安装 AltServer 和 AltStore，再在 iPhone 上通过 **AltStore → My Apps → ＋** 导入 `Alef.ipa`。如果提示是否保留应用扩展，选择保留。免费 Apple 账号签名通常需要每 7 天刷新。
-4. 安装并打开 Alef 后，长按 iPhone 主屏幕，在小组件列表里搜索 **Alef** 并添加「每日字母」。
-
-在 Mac 本地开发时，先执行 `npm ci` 和 `npm run prepare:ios`，再打开 `ios/App/App.xcodeproj`。更新词库或录音后重新执行 `npm run prepare:ios`。
-
-旧版升级时，Alef 尝试从原应用容器读取学习进度。也可以在旧版导出 Alef JSON 备份，然后在新版「我的 → 数据备份与恢复」导入。
+在 Mac 本地开发时，更新 `src/data/` 或 `public/audio/` 后执行 `npm run prepare:ios`，再打开 `ios/App/App.xcodeproj` 编译运行或执行 `AppTests`。
 
 ---
 
@@ -116,31 +70,22 @@ npm run dist:linux
 ```text
 Alef/
 ├── .github/workflows/
-│   └── deploy-pages.yml      # GitHub Pages 自动构建与部署工作流
-├── electron/
-│   ├── main.cjs              # Electron 主进程（窗口控制、置顶、迷你模式）
-│   ├── preload.cjs           # 安全预加载脚本
-│   └── icon.png              # 桌面应用图标
-├── public/
-│   ├── audio/                # 预录希伯来语 MP3 音频资源
-│   ├── icons/                # PWA 应用图标
-│   └── manifest.webmanifest  # PWA 清单文件
+│   └── build-ios.yml             # 内容校验、XCTest 单元测试与 IPA 打包工作流
+├── build/
+│   ├── fonts/                    # Gveret Levin 手写体字体与许可
+│   ├── prepare-ios.mjs           # 生成 iOS StudyAssets 资源包与反馈音效
+│   ├── validate-content.mjs      # 词库、音频、Widget 字母表一致性校验
+│   └── validate-content.test.mjs # 数据校验单元测试
+├── ios/App/
+│   ├── App/                      # SwiftUI 主应用（字母、词库、练习、规则、我的）
+│   ├── AppTests/                 # XCTest 核心逻辑单元测试 (AlefCoreTests)
+│   ├── DailyLetterWidget/        # 主屏幕与锁屏「每日字母」WidgetKit 扩展
+│   └── Shared/                   # 主应用与小组件共享模型与视图 (DailyLetter)
+├── public/audio/                 # 1,529 段预录希伯来语 MP3 与 CREDITS.md
 ├── src/
-│   ├── components/           # 字母网格、详情、笔顺画板、单词、闪卡、规则、设置等视图组件
-│   ├── data/                 # 字母表、Niqqud 元音、短语、分批词汇及音频清单
-│   ├── types/                # TypeScript 类型定义
-│   ├── utils/                # 音频播放、离线缓存、本地存储、备份与 Electron 桥接
-│   ├── App.tsx               # 应用主入口与视图路由状态
-│   ├── index.css             # 全局样式与响应式/主题样式
-│   └── main.tsx              # React 挂载入口
-├── index.html
+│   ├── data/                     # 字母表、元音、短语、阅读、变形与分批词库数据源
+│   └── types/                    # TypeScript 数据结构定义
+├── 设计文档/                      # UI 设计说明与离线发音核对记录
 ├── package.json
-├── tsconfig.json
-└── vite.config.ts            # Vite 配置与离线 PWA Service Worker 生成插件
+└── tsconfig.json
 ```
-
----
-
-## 部署
-
-仓库配置了 GitHub Actions 工作流 [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)：每次推送到 `main` 分支（或手动触发 `workflow_dispatch`）时，会自动执行 `npm ci` 与 `npm run build`，并将 `dist/` 目录部署至 GitHub Pages。
