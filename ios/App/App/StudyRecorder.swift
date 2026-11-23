@@ -204,12 +204,23 @@ struct StudySpeechRhythm {
     private static let minimumPauseWindows = 7
 
     private let windows: [Bool]
+    private let spectra: [[Float]]
+
+    private var speechDuration: Double {
+        Double(windows.filter { $0 }.count) * Self.windowDuration
+    }
+
+    private var pauseCount: Int { Self.runs(in: windows, matching: false).count }
 
     var duration: Double { Double(windows.count) * Self.windowDuration }
 
-    init?(levels: [Float]) {
-        guard let peak = levels.max(), peak >= 0.004 else { return nil }
-        let threshold = max(0.002, peak * 0.10)
+    init?(levels: [Float], spectra: [[Float]] = []) {
+        let orderedLevels = levels.sorted()
+        guard orderedLevels.count >= Self.minimumSpeechWindows else { return nil }
+        // Use a sustained loud level so long silence or a single click cannot set the threshold.
+        let loudLevel = orderedLevels[orderedLevels.count - Self.minimumSpeechWindows]
+        guard loudLevel >= 0.004 else { return nil }
+        let threshold = max(0.002, loudLevel * 0.10)
         let active = levels.map { $0 >= threshold }
 
         // Trim leading and trailing silence. Ignore isolated transients when finding the boundaries.
@@ -222,38 +233,81 @@ struct StudySpeechRhythm {
             for index in pause { normalized[index] = false }
         }
         windows = normalized
+        if spectra.count == levels.count {
+            self.spectra = (first.lowerBound..<last.upperBound).compactMap { index in
+                active[index] && !spectra[index].isEmpty ? spectra[index] : nil
+            }
+        } else {
+            self.spectra = []
+        }
     }
 
     static func read(_ url: URL) throws -> Self? {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
         let format = file.processingFormat
         let sampleRate = format.sampleRate
-        guard sampleRate > 0, file.length > 0, Double(file.length) / sampleRate <= 60,
+        let fileLength = file.length
+        guard sampleRate >= 8_000, fileLength > 0, Double(fileLength) / sampleRate <= 60,
               let buffer = AVAudioPCMBuffer(pcmFormat: format,
                                             frameCapacity: AVAudioFrameCount((sampleRate * windowDuration).rounded())) else {
             return nil
         }
+        let frequencies: [[Double]] = [
+            [250, 350, 450], [550, 680, 810], [950, 1_120, 1_300],
+            [1_500, 1_720, 1_940], [2_200, 2_450, 2_700], [3_000, 3_300, 3_650]
+        ]
+        let coefficients = frequencies.map { band in
+            band.map { Float(2 * cos(2 * Double.pi * $0 / sampleRate)) }
+        }
+        let windowLength = Int(buffer.frameCapacity)
+        let taper = (0..<windowLength).map { index in
+            Float(0.5 - 0.5 * cos(2 * Double.pi * Double(index) / Double(windowLength - 1)))
+        }
+        var tapered = Array(repeating: Float.zero, count: windowLength)
         var levels: [Float] = []
-        while file.framePosition < file.length {
+        var spectra: [[Float]] = []
+        while file.framePosition < fileLength {
             try Task.checkCancellation()
             try file.read(into: buffer)
             let frames = Int(buffer.frameLength)
             let channels = Int(format.channelCount)
             guard frames > 0, channels > 0, let samples = buffer.floatChannelData else { break }
             var energy: Float = 0
-            for channel in 0..<channels {
-                for frame in 0..<frames {
-                    let sample = samples[channel][frame]
-                    energy += sample * sample
-                }
+            for frame in 0..<frames {
+                var mono: Float = 0
+                for channel in 0..<channels { mono += samples[channel][frame] }
+                mono /= Float(channels)
+                energy += mono * mono
+                tapered[frame] = mono * taper[frame]
             }
-            levels.append(sqrt(energy / Float(frames * channels)))
+            let rms = sqrt(energy / Float(frames))
+            levels.append(rms)
+            spectra.append(rms >= 0.002 ? bandProfile(tapered.prefix(frames), coefficients: coefficients) : [])
         }
-        return Self(levels: levels)
+        return Self(levels: levels, spectra: spectra)
+    }
+
+    private static func bandProfile(_ samples: ArraySlice<Float>, coefficients: [[Float]]) -> [Float] {
+        // Goertzel estimates energy at representative frequencies in each broad speech band.
+        let bands = coefficients.map { band in
+            band.reduce(Float.zero) { energy, coefficient in
+                var previous: Float = 0
+                var older: Float = 0
+                for sample in samples {
+                    let next = sample + coefficient * previous - older
+                    older = previous
+                    previous = next
+                }
+                return energy + max(0, previous * previous + older * older - coefficient * previous * older)
+            }
+        }
+        let total = bands.reduce(0, +)
+        guard total > 0, total.isFinite else { return [] }
+        return bands.map { sqrt($0 / total) }
     }
 
     func compare(to reference: Self) -> StudyRhythmComparison {
-        let durationMatch = min(duration, reference.duration) / max(duration, reference.duration)
+        let durationMatch = min(speechDuration, reference.speechDuration) / max(speechDuration, reference.speechDuration)
         let sampleCount = 100
         var mismatchedPauses = 0
         var longestExtraPause = 0
@@ -267,9 +321,13 @@ struct StudySpeechRhythm {
         }
         let pauseMatch = 1 - Double(mismatchedPauses) / Double(sampleCount)
         let score = Int((100 * (0.65 * durationMatch + 0.35 * pauseMatch)).rounded())
-        let timingRatio = duration / reference.duration
+        let timingRatio = speechDuration / reference.speechDuration
         let feedback: String
-        if timingRatio < 0.8 {
+        if pauseCount != reference.pauseCount && pauseMatch < 0.95 {
+            feedback = pauseCount > reference.pauseCount
+                ? "你的录音停顿更多，可以跟着原音连读。"
+                : "原音停顿更多，可以跟着它的断句。"
+        } else if timingRatio < 0.8 {
             feedback = "整体偏快，试着放慢一点。"
         } else if timingRatio > 1.25 {
             feedback = "整体偏慢，试着跟紧原音。"
@@ -280,8 +338,68 @@ struct StudySpeechRhythm {
         } else {
             feedback = "时长和停顿与原音接近。"
         }
-        return StudyRhythmComparison(score: score, referenceDuration: reference.duration,
-                                     recordingDuration: duration, feedback: feedback)
+        return StudyRhythmComparison(
+            score: score, paceScore: Int((durationMatch * 100).rounded()),
+            pauseScore: Int((pauseMatch * 100).rounded()),
+            referenceDuration: reference.duration, recordingDuration: duration,
+            referencePauseCount: reference.pauseCount, recordingPauseCount: pauseCount,
+            feedback: feedback, acoustic: compareSound(to: reference)
+        )
+    }
+
+    private func compareSound(to reference: Self) -> StudySoundComparison? {
+        guard spectra.count >= 6, reference.spectra.count >= 6 else { return nil }
+        let count = min(96, max(spectra.count, reference.spectra.count))
+        let radius = max(2, count / 8)
+        let columns = count + 1
+        var alignment = Array(repeating: Double.infinity, count: columns * columns)
+        var direction = Array(repeating: UInt8(0), count: alignment.count)
+        alignment[0] = 0
+        for row in 1...count {
+            for column in max(1, row - radius)...min(count, row + radius) {
+                let cell = row * columns + column
+                let diagonal = alignment[cell - columns - 1]
+                let up = alignment[cell - columns] + 0.08
+                let left = alignment[cell - 1] + 0.08
+                let predecessor = min(diagonal, min(up, left))
+                direction[cell] = predecessor == diagonal ? 0 : (predecessor == up ? 1 : 2)
+                alignment[cell] = predecessor + soundDistance(row - 1, column - 1, count: count, reference: reference)
+            }
+        }
+        var row = count
+        var column = count
+        var segmentTotals = Array(repeating: 0.0, count: 3)
+        var segmentCounts = Array(repeating: 0, count: 3)
+        var pathSteps = 0
+        while row > 0 && column > 0 {
+            let segment = (column - 1) * 3 / count
+            segmentTotals[segment] += soundDistance(row - 1, column - 1, count: count, reference: reference)
+            segmentCounts[segment] += 1
+            pathSteps += 1
+            switch direction[row * columns + column] {
+            case 1: row -= 1
+            case 2: column -= 1
+            default:
+                row -= 1
+                column -= 1
+            }
+        }
+        let segments = zip(segmentTotals, segmentCounts).map { total, samples in
+            Self.similarity(for: total / Double(samples))
+        }
+        let score = Self.similarity(for: alignment[alignment.count - 1] / Double(pathSteps))
+        return StudySoundComparison(score: score, segments: segments)
+    }
+
+    private func soundDistance(_ row: Int, _ column: Int, count: Int, reference: Self) -> Double {
+        let mine = spectra[row * spectra.count / count]
+        let other = reference.spectra[column * reference.spectra.count / count]
+        let overlap = zip(mine, other).reduce(Float.zero) { $0 + $1.0 * $1.1 }
+        return sqrt(max(0, 1 - Double(overlap)))
+    }
+
+    private static func similarity(for distance: Double) -> Int {
+        Int((100 * max(0, 1 - distance)).rounded())
     }
 
     private static func runs(in windows: [Bool], matching value: Bool) -> [Range<Int>] {
@@ -300,11 +418,21 @@ struct StudySpeechRhythm {
     }
 }
 
+struct StudySoundComparison: Sendable {
+    let score: Int
+    let segments: [Int]
+}
+
 struct StudyRhythmComparison: Sendable {
     let score: Int
+    let paceScore: Int
+    let pauseScore: Int
     let referenceDuration: Double
     let recordingDuration: Double
+    let referencePauseCount: Int
+    let recordingPauseCount: Int
     let feedback: String
+    let acoustic: StudySoundComparison?
 
     static func analyze(recording: URL, reference: URL?) async -> Self? {
         guard let reference else { return nil }
@@ -419,14 +547,19 @@ struct ShadowingPracticeCard: View {
     @ViewBuilder private func comparisonView(for recording: URL) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             if comparison?.recording != recording {
-                ProgressView("正在对比节奏…")
+                ProgressView("正在对比读音…")
             } else if let result = comparison?.result {
                 Text("节奏相似度 \(result.score) / 100")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(progress.theme.ink)
                 Text("原音 \(result.referenceDuration.formatted(.number.precision(.fractionLength(2)))) 秒 · 录音 \(result.recordingDuration.formatted(.number.precision(.fractionLength(2)))) 秒")
+                Text("语速 \(result.paceScore) · 停顿 \(result.pauseScore)（原音 \(result.referencePauseCount) 次，你的录音 \(result.recordingPauseCount) 次）")
                 Text(result.feedback)
-                Text("分数仅比较时长和停顿。")
+                if let acoustic = result.acoustic {
+                    soundComparison(acoustic)
+                } else {
+                    Text("有效声音片段太短，只显示节奏分。")
+                }
             } else if referenceURL == nil {
                 Text("此内容缺少内置原音，可手动回放对比。")
             } else {
@@ -438,6 +571,28 @@ struct ShadowingPracticeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func soundComparison(_ result: StudySoundComparison) -> some View {
+        let names = ["开头", "中段", "结尾"]
+        return VStack(alignment: .leading, spacing: 5) {
+            Text("声音相似度 \(result.score) / 100")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(progress.theme.ink)
+            ForEach(result.segments.indices, id: \.self) { index in
+                ProgressView(value: Double(result.segments[index]), total: 100) {
+                    Text(names[index])
+                } currentValueLabel: {
+                    Text("\(result.segments[index]) / 100")
+                }
+                .tint(progress.theme.learningAction)
+            }
+            if let weakest = result.segments.indices.min(by: { result.segments[$0] < result.segments[$1] }),
+               let highest = result.segments.max(), highest - result.segments[weakest] >= 12 {
+                Text("可以先重听\(names[weakest])，这里和原音的差异最明显。")
+            }
+            Text("声音相似度也会受嗓音、麦克风和环境噪声影响，仅供跟读参考。")
+        }
     }
 
     private var statusText: String {

@@ -327,6 +327,29 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertNil(StudySpeechRhythm(levels: silence + [0.9] + silence))
     }
 
+    func testShadowingAcousticComparisonFindsChangedSegmentAtEqualPace() throws {
+        let levels = Array(repeating: Float(0.15), count: 30)
+        let opening: [Float] = [1, 0, 0]
+        let middle: [Float] = [0, 1, 0]
+        let ending: [Float] = [0, 0, 1]
+        let spectra = Array(repeating: opening, count: 10)
+            + Array(repeating: middle, count: 10)
+            + Array(repeating: ending, count: 10)
+        let reference = try XCTUnwrap(StudySpeechRhythm(levels: levels, spectra: spectra))
+        let unchanged = try XCTUnwrap(reference.compare(to: reference).acoustic)
+        XCTAssertEqual(unchanged.segments, [100, 100, 100])
+
+        let changedSpectra = Array(repeating: opening, count: 20) + Array(repeating: ending, count: 10)
+        let attempt = try XCTUnwrap(StudySpeechRhythm(levels: levels, spectra: changedSpectra))
+        let comparison = attempt.compare(to: reference)
+        XCTAssertEqual(comparison.paceScore, 100)
+        XCTAssertEqual(comparison.pauseScore, 100)
+        let acoustic = try XCTUnwrap(comparison.acoustic)
+        XCTAssertLessThan(acoustic.score, unchanged.score)
+        XCTAssertLessThan(acoustic.segments[1], acoustic.segments[0])
+        XCTAssertLessThan(acoustic.segments[1], acoustic.segments[2])
+    }
+
     func testWidgetRoutesRoundTripAndRejectInvalidDestinations() throws {
         let routes: [StudyWidgetRoute] = [
             .letter("alef"), .word("word & form/1"), .tab(.alphabet),
