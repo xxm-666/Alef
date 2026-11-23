@@ -61,10 +61,14 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
         }
     }
 
+    func referenceRecordingURL(for text: String) -> URL? {
+        guard let asset = recordings[text.trimmingCharacters(in: .whitespacesAndNewlines)] else { return nil }
+        return Bundle.main.resourceURL?.appendingPathComponent("StudyAssets", isDirectory: true)
+            .appendingPathComponent(asset)
+    }
+
     private func playRecording(_ text: String, rate: Double) -> Bool {
-        guard let asset = recordings[text.trimmingCharacters(in: .whitespacesAndNewlines)],
-              let url = Bundle.main.resourceURL?.appendingPathComponent("StudyAssets", isDirectory: true)
-                .appendingPathComponent(asset),
+        guard let url = referenceRecordingURL(for: text),
               let recording = try? AVAudioPlayer(contentsOf: url) else { return false }
         recording.enableRate = true
         recording.rate = Float(rate)

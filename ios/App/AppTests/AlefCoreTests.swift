@@ -306,6 +306,27 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertThrowsError(try target.previewBackup(Data(invalidReminderBackup.utf8)))
     }
 
+    func testShadowingRhythmTrimsSilenceAndDetectsTimingDifferences() throws {
+        let speech = Array(repeating: Float(0.15), count: 20)
+        let silence = Array(repeating: Float(0), count: 10)
+        let reference = try XCTUnwrap(StudySpeechRhythm(levels: speech + silence + speech))
+        let paddedRecording = try XCTUnwrap(StudySpeechRhythm(levels: silence + speech + silence + speech + silence))
+        let matching = paddedRecording.compare(to: reference)
+        XCTAssertEqual(matching.score, 100)
+        XCTAssertEqual(matching.recordingDuration, 1, accuracy: 0.001)
+        XCTAssertEqual(matching.referenceDuration, 1, accuracy: 0.001)
+
+        let shiftedPause = try XCTUnwrap(StudySpeechRhythm(
+            levels: Array(speech.prefix(10)) + silence + speech + Array(speech.prefix(10))
+        ))
+        XCTAssertLessThan(shiftedPause.compare(to: reference).score, matching.score)
+
+        let faster = try XCTUnwrap(StudySpeechRhythm(levels: speech))
+        XCTAssertLessThan(faster.compare(to: reference).score, matching.score)
+        XCTAssertNil(StudySpeechRhythm(levels: silence + silence))
+        XCTAssertNil(StudySpeechRhythm(levels: silence + [0.9] + silence))
+    }
+
     func testWidgetRoutesRoundTripAndRejectInvalidDestinations() throws {
         let routes: [StudyWidgetRoute] = [
             .letter("alef"), .word("word & form/1"), .tab(.alphabet),
