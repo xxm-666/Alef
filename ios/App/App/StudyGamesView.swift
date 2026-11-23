@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum StudyGame: String, CaseIterable, Identifiable {
-    case letters, spelling
+    case letters, spelling, listening, matching, situations
 
     var id: Self { self }
 
@@ -9,6 +9,9 @@ enum StudyGame: String, CaseIterable, Identifiable {
         switch self {
         case .letters: "字母侦探"
         case .spelling: "拼字工坊"
+        case .listening: "听音寻宝"
+        case .matching: "翻牌配对"
+        case .situations: "情景闯关"
         }
     }
 
@@ -16,6 +19,9 @@ enum StudyGame: String, CaseIterable, Identifiable {
         switch self {
         case .letters: "magnifyingglass"
         case .spelling: "square.grid.3x2"
+        case .listening: "ear"
+        case .matching: "rectangle.on.rectangle"
+        case .situations: "bubble.left.and.bubble.right"
         }
     }
 
@@ -23,6 +29,9 @@ enum StudyGame: String, CaseIterable, Identifiable {
         switch self {
         case .letters: "找出指定字母，也会遇到手写体配对。"
         case .spelling: "看词义或听原音，从右往左拼出单词。"
+        case .listening: "听原音，找出对应的字母或单词。"
+        case .matching: "翻开两张牌，配对字形或词义。"
+        case .situations: "在问候、点餐和问路时选一句合适的话。"
         }
     }
 
@@ -48,6 +57,35 @@ enum StudyGame: String, CaseIterable, Identifiable {
                     .shuffled().prefix(2)
                 return .word(word, tiles: (answer.map { String($0) } + Array(distractors)).shuffled())
             }
+        case .listening:
+            let letters = content.letters.filter { content.audio[$0.nameHebrew] != nil }.shuffled()
+            let wordIDs = Set(content.learningPath.flatMap(\.wordIds))
+            let words = content.words.filter { wordIDs.contains($0.id) && content.audio[$0.hebrew] != nil }.shuffled()
+            let letterQuestions = letters.prefix(3).compactMap { letter -> StudyGameQuestion? in
+                let options = letters.filter { $0.id != letter.id && $0.hebrew != letter.hebrew }.prefix(3)
+                guard !options.isEmpty else { return nil }
+                return .listening(.init(letter), options: ([letter] + Array(options)).map(StudyGameChoice.init).shuffled(),
+                                  prompt: "听字母名称，选出对应字母")
+            }
+            let wordQuestions = words.prefix(3).compactMap { word -> StudyGameQuestion? in
+                var spellings: Set<String> = [word.hebrewUnpointed]
+                var pronunciations: Set<String> = [word.ipa]
+                var alternatives: [StudyWord] = []
+                for candidate in words where alternatives.count < 3 {
+                    guard !spellings.contains(candidate.hebrewUnpointed), !pronunciations.contains(candidate.ipa) else { continue }
+                    spellings.insert(candidate.hebrewUnpointed)
+                    pronunciations.insert(candidate.ipa)
+                    alternatives.append(candidate)
+                }
+                guard !alternatives.isEmpty else { return nil }
+                return .listening(.init(word), options: ([word] + alternatives).map(StudyGameChoice.init).shuffled(),
+                                  prompt: "听原音，选出对应单词")
+            }
+            return (letterQuestions + wordQuestions).shuffled()
+        case .situations:
+            return StudyGameScene.questions(in: content)
+        case .matching:
+            return []
         }
     }
 }
@@ -55,6 +93,70 @@ enum StudyGame: String, CaseIterable, Identifiable {
 enum StudyGameQuestion {
     case letter(StudyLetter, options: [StudyLetter], showCursive: Bool)
     case word(StudyWord, tiles: [String])
+    case listening(StudyGameChoice, options: [StudyGameChoice], prompt: String)
+    case situation(StudyGameScene, answer: StudyGameChoice, options: [StudyGameChoice], leadIn: StudyPhrase?)
+}
+
+struct StudyGameChoice: Identifiable {
+    let id: String
+    let hebrew: String
+    let audio: String
+    let hint: String
+
+    init(_ letter: StudyLetter) {
+        id = letter.id
+        hebrew = letter.hebrew
+        audio = letter.nameHebrew
+        hint = letter.studyName
+    }
+
+    init(_ word: StudyWord) {
+        id = word.id
+        hebrew = word.hebrew
+        audio = word.hebrew
+        hint = word.meaningZh
+    }
+
+    init(_ phrase: StudyPhrase) {
+        id = phrase.id
+        hebrew = phrase.hebrew
+        audio = phrase.hebrew
+        hint = phrase.meaningZh
+    }
+}
+
+struct StudyGameScene {
+    let title: String
+    let prompt: String
+    let answerID: String
+    let alternatives: [String]
+    var leadInID: String? = nil
+
+    static func questions(in content: StudyContent) -> [StudyGameQuestion] {
+        let phrases = Dictionary(content.phrases.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let scenes: [Self] = [
+            .init(title: "街头寒暄", prompt: "朋友问你最近怎么样。你想说「一切都好，谢谢！」",
+                  answerID: "p-greet-2", alternatives: ["p-greet-4", "p-greet-8"], leadInID: "p-greet-1"),
+            .init(title: "初次见面", prompt: "对方问你的名字。假设你叫大卫，你会怎么回答？",
+                  answerID: "p-greet-4", alternatives: ["p-greet-6", "p-greet-8"], leadInID: "p-greet-5"),
+            .init(title: "餐厅点餐", prompt: "你刚坐下，想先请服务员拿一份菜单。",
+                  answerID: "p-dine-1", alternatives: ["p-dine-3", "p-dine-7"]),
+            .init(title: "帮人指路", prompt: "有人问怎么去那里。你想告诉对方「直走，然后向右转」。",
+                  answerID: "p-dir-3", alternatives: ["p-dir-4", "p-dir-5"], leadInID: "p-dir-2"),
+            .init(title: "结账付款", prompt: "你想问店员能不能刷信用卡。",
+                  answerID: "p-shop-2", alternatives: ["p-shop-1", "p-shop-7"]),
+            .init(title: "练习对话", prompt: "你听得懂对方的话，但语速太快，想请对方说慢一点。",
+                  answerID: "p-study-2", alternatives: ["p-study-1", "p-study-4"])
+        ]
+        return scenes.shuffled().compactMap { scene in
+            guard let answer = phrases[scene.answerID] else { return nil }
+            let wrong = scene.alternatives.compactMap { phrases[$0] }
+            guard !wrong.isEmpty else { return nil }
+            let leadIn = scene.leadInID.flatMap { phrases[$0] }
+            return .situation(scene, answer: .init(answer), options: ([answer] + wrong).map(StudyGameChoice.init).shuffled(),
+                              leadIn: leadIn)
+        }
+    }
 }
 
 struct StudyGameRound {
@@ -110,7 +212,7 @@ struct StudyGameView: View {
     let content: StudyContent
 
     @State private var round: StudyGameRound?
-    @State private var selectedLetter: String?
+    @State private var selectedChoice: String?
     @State private var selectedTiles: [Int] = []
 
     var body: some View {
@@ -123,6 +225,21 @@ struct StudyGameView: View {
                         letterQuestion(letter, options: options, showCursive: showCursive, answer: round.answer)
                     case let .word(word, tiles):
                         spellingQuestion(word, tiles: tiles, answer: round.answer)
+                    case let .listening(solution, options, prompt):
+                        StudyCard {
+                            StudySectionTitle(prompt)
+                            PronunciationButton(hebrew: solution.audio, title: "听题目原音", bundledOnly: true)
+                        }
+                        audioChoices(solution: solution, options: options, answer: round.answer)
+                    case let .situation(scene, solution, options, leadIn):
+                        StudyCard {
+                            StudySectionTitle(scene.title)
+                            Text(scene.prompt).foregroundStyle(progress.theme.ink)
+                            if let leadIn {
+                                PronunciationButton(hebrew: leadIn.hebrew, title: "听对方怎么说", bundledOnly: true)
+                            }
+                        }
+                        audioChoices(solution: solution, options: options, answer: round.answer)
                     }
                 } else {
                     summary(round)
@@ -173,15 +290,35 @@ struct StudyGameView: View {
         }
         ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
             StudyAnswerButton(title: option.hebrew, submitted: answer != nil,
-                              selected: selectedLetter == option.id, correct: option.id == letter.id,
+                              selected: selectedChoice == option.id, correct: option.id == letter.id,
                               isHebrew: true, optionLabel: studyOptionLabel(index)) {
-                selectedLetter = option.id
+                selectedChoice = option.id
                 submit(option.id == letter.id)
             }
         }
         if let answer {
             StudyQuizFeedback(correct: answer, solution: "\(letter.hebrew) · \(letter.studyName)")
             PronunciationButton(hebrew: letter.nameHebrew, title: "听字母名称")
+            nextButton
+        }
+    }
+
+    @ViewBuilder private func audioChoices(solution: StudyGameChoice, options: [StudyGameChoice], answer: Bool?) -> some View {
+        ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
+            StudyAnswerButton(title: option.hebrew, submitted: answer != nil,
+                              selected: selectedChoice == option.id, correct: option.id == solution.id,
+                              isHebrew: true, optionLabel: studyOptionLabel(index)) {
+                selectedChoice = option.id
+                submit(option.id == solution.id)
+            }
+        }
+        if let answer {
+            let selected = options.first { $0.id == selectedChoice }
+            StudyQuizFeedback(correct: answer, solution: solution.hebrew, response: selected?.hebrew, explanation: solution.hint)
+            if !answer, let selected {
+                PronunciationButton(hebrew: selected.audio, title: "重听我的选项", bundledOnly: true)
+            }
+            PronunciationButton(hebrew: solution.audio, title: "重听正确答案", bundledOnly: true)
             nextButton
         }
     }
@@ -273,6 +410,7 @@ struct StudyGameView: View {
     private func submit(_ correct: Bool) {
         guard round?.current != nil, round?.answer == nil else { return }
         round?.submit(correct: correct)
+        audio.stop()
         audio.playFeedback(correct ? .correct : .wrong)
     }
 
@@ -283,7 +421,193 @@ struct StudyGameView: View {
     }
 
     private func resetInput() {
-        selectedLetter = nil
+        selectedChoice = nil
         selectedTiles = []
+    }
+}
+
+enum StudyMatchingDeck: String {
+    case letters, words
+
+    func cards(in content: StudyContent) -> [StudyMatchingCard] {
+        let pairs: [(StudyMatchingCard.Face, StudyMatchingCard.Face)]
+        switch self {
+        case .letters:
+            pairs = content.letters.shuffled().prefix(4).map { (.hebrew($0.hebrew), .cursive($0)) }
+        case .words:
+            let coreIDs = Set(content.learningPath.flatMap(\.wordIds))
+            let words = content.words.filter { coreIDs.contains($0.id) }.shuffled()
+            var hebrew: Set<String> = []
+            var meanings: Set<String> = []
+            var selected: [StudyWord] = []
+            for word in words where selected.count < 4 {
+                guard !hebrew.contains(word.hebrew), !meanings.contains(word.meaningZh) else { continue }
+                hebrew.insert(word.hebrew)
+                meanings.insert(word.meaningZh)
+                selected.append(word)
+            }
+            pairs = selected.map { (.hebrew($0.hebrew), .translation($0.meaningZh)) }
+        }
+        return pairs.enumerated().flatMap { index, pair in
+            [
+                StudyMatchingCard(id: index * 2, pair: index, face: pair.0),
+                StudyMatchingCard(id: index * 2 + 1, pair: index, face: pair.1)
+            ]
+        }.shuffled()
+    }
+}
+
+struct StudyMatchingCard: Identifiable {
+    enum Face {
+        case hebrew(String), cursive(StudyLetter), translation(String)
+
+        var accessibilityText: String {
+            switch self {
+            case .hebrew(let text), .translation(let text): text
+            case .cursive(let letter): "手写体 \(letter.hebrew)"
+            }
+        }
+    }
+
+    let id: Int
+    let pair: Int
+    let face: Face
+}
+
+struct StudyMatchingRound {
+    let cards: [StudyMatchingCard]
+    private(set) var revealedIDs: [Int] = []
+    private(set) var matched: Set<Int> = []
+    private(set) var attempts = 0
+
+    var complete: Bool { !cards.isEmpty && matched.count == cards.count }
+    var hasMismatch: Bool { revealedIDs.count == 2 }
+
+    mutating func flip(_ card: StudyMatchingCard) -> Bool? {
+        guard !hasMismatch, !matched.contains(card.id), !revealedIDs.contains(card.id) else { return nil }
+        revealedIDs.append(card.id)
+        guard revealedIDs.count == 2 else { return nil }
+        attempts += 1
+        guard cards.first(where: { $0.id == revealedIDs[0] })?.pair == card.pair else { return false }
+        matched.formUnion(revealedIDs)
+        revealedIDs.removeAll()
+        return true
+    }
+
+    mutating func coverMismatch() {
+        guard hasMismatch else { return }
+        revealedIDs.removeAll()
+    }
+}
+
+struct StudyMatchingGameView: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @EnvironmentObject private var audio: StudyAudio
+    let content: StudyContent
+    @State private var deck = StudyMatchingDeck.letters
+    @State private var round = StudyMatchingRound(cards: [])
+    @State private var started = false
+
+    var body: some View {
+        StudyPage {
+            StudySegments(title: "配对内容", options: [(.letters, "字形"), (.words, "词义")], selection: $deck)
+            if !round.cards.isEmpty {
+                StudyCard(padding: 10) {
+                    StudySectionTitle("已配对 \(round.matched.count / 2) / \(round.cards.count / 2) 对")
+                    Text("尝试 \(round.attempts) 次")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: typeSize.isAccessibilitySize ? 1 : 2),
+                          spacing: 8) {
+                    ForEach(Array(round.cards.enumerated()), id: \.element.id) { position, card in
+                        tile(card, position: position)
+                    }
+                }
+                if round.hasMismatch {
+                    Button {
+                        round.coverMismatch()
+                    } label: {
+                        Label("盖回这两张", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(learningAction: true))
+                }
+                if round.complete {
+                    StudyNotice(title: "全部配对成功", symbol: "trophy")
+                }
+            } else if started {
+                ContentUnavailableView("暂无可配对的卡片", systemImage: "rectangle.on.rectangle")
+            }
+
+            if started {
+                Button {
+                    start()
+                } label: {
+                    Label(round.complete ? "再玩一局" : "重新发牌", systemImage: "shuffle").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle(learningAction: round.complete))
+            }
+        }
+        .studyDetail(StudyGame.matching.title)
+        .onChange(of: deck, initial: true) { _, _ in start() }
+        .onDisappear { audio.stop() }
+    }
+
+    private func tile(_ card: StudyMatchingCard, position: Int) -> some View {
+        let matched = round.matched.contains(card.id)
+        let revealed = matched || round.revealedIDs.contains(card.id)
+        return Button {
+            if let correct = round.flip(card) {
+                audio.playFeedback(correct ? .correct : .wrong)
+            }
+        } label: {
+            Group {
+                if revealed {
+                    face(card.face)
+                } else {
+                    Image(systemName: "rectangle.portrait")
+                        .font(.title2)
+                        .foregroundStyle(progress.theme.accent)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, minHeight: 82)
+            .background(matched ? progress.theme.successSurface :
+                            (revealed ? progress.theme.highlightedSurface : progress.theme.cardSurface),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .overlay(alignment: .topTrailing) {
+                if matched {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(progress.theme.success)
+                        .padding(6)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .disabled(revealed || round.hasMismatch)
+        .accessibilityLabel(revealed ? card.face.accessibilityText : "翻开第 \(position + 1) 张卡片")
+        .accessibilityValue(matched ? "已配对" : (revealed ? "已翻开" : "未翻开"))
+    }
+
+    @ViewBuilder private func face(_ face: StudyMatchingCard.Face) -> some View {
+        switch face {
+        case .hebrew(let text):
+            HebrewText(text: text, size: 28)
+        case .cursive(let letter):
+            StudyCursiveLetter(letter: letter, size: 42)
+        case .translation(let text):
+            Text(text).font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(progress.theme.ink)
+        }
+    }
+
+    private func start() {
+        audio.stop()
+        round = StudyMatchingRound(cards: deck.cards(in: content))
+        started = true
     }
 }

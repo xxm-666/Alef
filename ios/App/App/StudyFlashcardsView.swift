@@ -20,7 +20,11 @@ struct PracticeCenterView: View {
             StudySectionTitle("学习小游戏")
             ForEach(StudyGame.allCases) { game in
                 NavigationLink {
-                    StudyGameView(game: game, content: content)
+                    if game == .matching {
+                        StudyMatchingGameView(content: content)
+                    } else {
+                        StudyGameView(game: game, content: content)
+                    }
                 } label: {
                     StudyCard(padding: 10) {
                         StudyRow(title: game.title, symbol: game.symbol, subtitle: game.instructions)
