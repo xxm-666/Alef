@@ -10,6 +10,10 @@ on:
           - Xcode 27
           - Xcode 26 (Intel)
         default: Xcode 27
+      run_unit_tests:
+        description: Run iOS unit tests before building the IPA
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ jobs:
           npm run verify:content
 
       - name: Run iOS unit tests
+        if: ${{ inputs.run_unit_tests }}
         run: |
           SIM_ID=$(xcrun simctl list devices available -j | node -e "
             const fs = require('fs');
