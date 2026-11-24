@@ -267,7 +267,8 @@ struct StudyPage<Content: View>: View {
             VStack(alignment: .leading, spacing: 16, content: content)
                 .frame(maxWidth: maxWidth, alignment: .leading)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
         }
         .background(progress.theme.canvas.ignoresSafeArea())
@@ -348,15 +349,15 @@ struct StudyHeroCard<Content: View>: View {
             .padding(padding)
             .foregroundStyle(Color.white)
             .background {
-                ZStack(alignment: .topTrailing) {
-                    LinearGradient(colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Circle()
-                        .fill(Color.white.opacity(0.14))
-                        .frame(width: 140, height: 140)
-                        .offset(x: 42, y: -48)
-                        .allowsHitTesting(false)
-                }
-                .clipShape(shape)
+                LinearGradient(colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .overlay(alignment: .topTrailing) {
+                        Circle()
+                            .fill(Color.white.opacity(0.14))
+                            .frame(width: 140, height: 140)
+                            .offset(x: 42, y: -48)
+                            .allowsHitTesting(false)
+                    }
+                    .clipShape(shape)
             }
             .overlay {
                 shape
