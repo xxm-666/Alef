@@ -2,6 +2,8 @@ import SwiftUI
 
 struct StudyAchievementsView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .caption) private var requirementHeight: CGFloat = 32
 
     var body: some View {
         let earned = progress.earnedAchievements
@@ -12,11 +14,11 @@ struct StudyAchievementsView: View {
             overview(unlocked: unlocked.count)
             if !unlocked.isEmpty {
                 StudySectionTitle("已解锁")
-                achievementList(unlocked, unlocked: true, measured: measured)
+                achievementGrid(unlocked, unlocked: true, measured: measured)
             }
             if !locked.isEmpty {
                 StudySectionTitle("待解锁")
-                achievementList(locked, unlocked: false, measured: measured)
+                achievementGrid(locked, unlocked: false, measured: measured)
             }
         }
         .studyDetail("学习成就")
@@ -30,73 +32,85 @@ struct StudyAchievementsView: View {
 
     private func overview(unlocked: Int) -> some View {
         let total = StudyAchievement.allCases.count
-        return StudyCard(spacing: 12) {
-            HStack(spacing: 11) {
-                StudyIconBadge(symbol: "trophy.fill", colors: progress.theme.warmGradient, size: 42)
+        let theme = progress.theme
+        return StudyHeroCard(colors: [theme.primaryButton, theme.heroGradient.first ?? theme.primaryButton],
+                             padding: 18, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .frame(width: 54, height: 54)
+                    .background(Color.white.opacity(0.17), in: Circle())
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("已解锁 \(unlocked) / \(total)")
-                        .font(.headline)
-                        .foregroundStyle(progress.theme.ink)
-                        .accessibilityLabel("已解锁 \(unlocked) 项成就，共 \(total) 项")
-                    if unlocked < total {
-                        Text("达到学习目标后自动解锁")
-                            .font(.subheadline)
-                            .foregroundStyle(progress.theme.mutedInk)
-                    }
+                    Text("已解锁成就")
+                        .font(.subheadline.weight(.semibold))
+                    Text("\(unlocked) / \(total)")
+                        .font(.largeTitle.weight(.bold).monospacedDigit())
                 }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("已解锁 \(unlocked) 项成就，共 \(total) 项")
             ProgressView(value: Double(unlocked), total: Double(total))
-                .tint(progress.theme.accent)
+                .tint(.white)
                 .accessibilityHidden(true)
         }
     }
 
-    private func achievementList(_ achievements: [StudyAchievement], unlocked: Bool,
+    private func achievementGrid(_ achievements: [StudyAchievement], unlocked: Bool,
                                  measured: StudyAchievementProgress) -> some View {
-        StudyCard(padding: 12, spacing: 0) {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+                            count: typeSize.isAccessibilitySize ? 1 : 2)
+        return LazyVGrid(columns: columns, spacing: 12) {
             ForEach(achievements) { achievement in
-                if achievement != achievements.first { Divider() }
-                achievementRow(achievement, unlocked: unlocked, value: measured.value(for: achievement))
+                achievementCard(achievement, unlocked: unlocked, value: measured.value(for: achievement))
             }
         }
     }
 
-    private func achievementRow(_ achievement: StudyAchievement, unlocked: Bool, value: Int) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            if unlocked {
-                StudyIconBadge(symbol: achievement.symbol, colors: progress.theme.heroGradient, size: 36)
-            } else {
-                Image(systemName: "lock")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(progress.theme.mutedInk)
-                    .frame(width: 36, height: 36)
-                    .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 11))
+    private func achievementCard(_ achievement: StudyAchievement, unlocked: Bool, value: Int) -> some View {
+        let theme = progress.theme
+        let color = unlocked ? achievement.color(in: theme) : theme.mutedInk
+        let current = min(max(0, value), achievement.goal)
+        return StudyCard(spacing: 10) {
+            HStack(alignment: .top) {
+                Image(systemName: achievement.symbol)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 52, height: 52)
+                    .background(unlocked ? color.opacity(0.15) : theme.insetSurface, in: Circle())
+                    .overlay {
+                        Circle().strokeBorder(color.opacity(unlocked ? 0.32 : 0.15), lineWidth: 1)
+                    }
+                    .accessibilityHidden(true)
+                Spacer(minLength: 4)
+                Image(systemName: unlocked ? "checkmark.seal.fill" : "lock")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(color)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(achievement.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(progress.theme.ink)
+                    .font(.headline)
+                    .foregroundStyle(theme.ink)
                 Text(achievement.requirement)
                     .font(.caption)
-                    .foregroundStyle(progress.theme.mutedInk)
-                if !unlocked {
-                    Text("进度 \(min(value, achievement.goal)) / \(achievement.goal)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(progress.theme.mutedInk)
+                    .foregroundStyle(theme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: typeSize.isAccessibilitySize ? nil : requirementHeight, alignment: .topLeading)
+            }
+            if !unlocked {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("\(current) / \(achievement.goal)")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(theme.mutedInk)
+                    ProgressView(value: Double(current), total: Double(achievement.goal))
+                        .tint(theme.accent)
                 }
             }
-            Spacer(minLength: 0)
-            if unlocked {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(progress.theme.success)
-                    .accessibilityHidden(true)
-            }
         }
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(achievement.title)，\(achievement.requirement)")
+        .accessibilityValue(Text(unlocked ? "已解锁" : "待解锁，进度 \(current) / \(achievement.goal)"))
     }
 }
 
@@ -118,7 +132,7 @@ private extension StudyAchievement {
         switch self {
         case .firstPractice: "记录第一次学习"
         case .tenLetters, .alphabet: "掌握 \(goal) 个字母"
-        case .firstVocabularyGroup: "完成一组「今日记词」的认读和拼写"
+        case .firstVocabularyGroup: "完成一组「今日记词」"
         case .twentyWords, .fiftyWords: "掌握 \(goal) 个单词"
         case .threeDays, .sevenDays: "连续学习 \(goal) 天"
         }
@@ -127,10 +141,21 @@ private extension StudyAchievement {
     var symbol: String {
         switch self {
         case .firstPractice: "sparkles"
-        case .tenLetters, .alphabet: "character.book.closed.fill"
+        case .tenLetters: "character.book.closed.fill"
+        case .alphabet: "graduationcap.fill"
         case .firstVocabularyGroup: "pencil"
-        case .twentyWords, .fiftyWords: "text.book.closed.fill"
-        case .threeDays, .sevenDays: "flame.fill"
+        case .twentyWords: "text.book.closed.fill"
+        case .fiftyWords: "books.vertical.fill"
+        case .threeDays: "flame.fill"
+        case .sevenDays: "calendar.badge.checkmark"
+        }
+    }
+
+    func color(in theme: StudyTheme) -> Color {
+        switch self {
+        case .firstPractice, .tenLetters, .alphabet: theme.accent
+        case .firstVocabularyGroup, .twentyWords, .fiftyWords: theme.success
+        case .threeDays, .sevenDays: theme.reminder
         }
     }
 }
