@@ -316,6 +316,53 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 }
 
+enum StudyWordMistakeKind: String, Codable, CaseIterable, Hashable {
+    case meaning, spelling
+
+    var title: String { self == .meaning ? "词义" : "拼写" }
+}
+
+struct StudyWordMistake: Codable, Identifiable, Equatable {
+    static let storageKey = "alef.native.wordMistakes.v1"
+
+    let wordID: String
+    let kind: StudyWordMistakeKind
+    var count = 1
+    var lastMissedAt: Date
+
+    var id: String { "\(kind.rawValue):\(wordID)" }
+}
+
+struct StudyReviewBatch: Codable, Hashable {
+    enum Kind: String, Codable, Hashable {
+        case letters, meaning, spelling
+
+        var title: String {
+            switch self {
+            case .letters: "字母"
+            case .meaning: "单词词义"
+            case .spelling: "单词拼写"
+            }
+        }
+    }
+
+    static let storageKey = "alef.native.reviewBatch.v1"
+    static let limit = 10
+
+    let kind: Kind
+    let itemIDs: [String]
+
+    var isValid: Bool {
+        !itemIDs.isEmpty && itemIDs.count <= Self.limit
+            && itemIDs.allSatisfy { !$0.isEmpty } && Set(itemIDs).count == itemIDs.count
+    }
+
+    func remaining(in dueIDs: Set<String>) -> Self? {
+        let pending = itemIDs.filter(dueIDs.contains)
+        return pending.isEmpty ? nil : Self(kind: kind, itemIDs: pending)
+    }
+}
+
 @Observable final class StudyProgress {
     struct BackupUndo: Codable {
         let previous: [String: Data]
@@ -328,7 +375,10 @@ struct DailyVocabularyPlan: Codable, Equatable {
     private static let localUpdatedAtKey = "alef.sync.localUpdatedAt.v1"
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
-    static let nonSyncedKeys: Set<String> = [lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1"]
+    static let nonSyncedKeys: Set<String> = [
+        lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1",
+        StudyReviewBatch.storageKey, StudyWordMistake.storageKey
+    ]
     static let appearanceKey = "alef.native.appearance.v1"
     static let themeKey = "alef.theme.v1"
     static let dayThemeKey = "alef.dayTheme.v1"
@@ -454,6 +504,15 @@ struct DailyVocabularyPlan: Codable, Equatable {
         }
     }
 
+    var wordMistakes: [StudyWordMistake] { read(StudyWordMistake.storageKey, default: []) }
+
+    var reviewBatch: StudyReviewBatch? { read(StudyReviewBatch.storageKey, default: nil) }
+
+    func beginReviewBatch(_ batch: StudyReviewBatch) {
+        guard batch.isValid else { return }
+        write(batch, for: StudyReviewBatch.storageKey)
+    }
+
     func setLetter(_ id: String, mastery: Mastery, date: Date = .now) {
         if (letterMastery[id] ?? .unlearned) == mastery,
            (letterSchedule[id] == nil) == (mastery == .unlearned) { return }
@@ -480,15 +539,18 @@ struct DailyVocabularyPlan: Codable, Equatable {
         saveManual(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1", mastery: mastery, date: date)
     }
 
-    func completeReview(_ id: String, grade: ReviewGrade, isRetry: Bool = false, date: Date = .now) {
+    func completeReview(_ id: String, grade: ReviewGrade, mistakeKind: StudyWordMistakeKind = .meaning,
+                        isRetry: Bool = false, date: Date = .now) {
         saveReview(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
-                   base: schedule[id], grade: grade, recordStats: true, date: date, isRetry: isRetry)
+                   base: schedule[id], grade: grade, recordStats: true, date: date,
+                   isRetry: isRetry, mistakeKind: mistakeKind)
     }
 
-    func completeReview(_ id: String, correct: Bool, isRetry: Bool = false, date: Date = .now) {
+    func completeReview(_ id: String, correct: Bool, mistakeKind: StudyWordMistakeKind = .meaning,
+                        isRetry: Bool = false, date: Date = .now) {
         let recovering = schedule[id].map { $0.lapses > 0 && $0.intervalDays == 1 } ?? false
         let grade: ReviewGrade = correct ? (recovering ? .hard : .good) : .again
-        completeReview(id, grade: grade, isRetry: isRetry, date: date)
+        completeReview(id, grade: grade, mistakeKind: mistakeKind, isRetry: isRetry, date: date)
     }
 
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
@@ -543,7 +605,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
         plan.groups[index].feedbackPending = true
         saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
                    base: schedule[word.id], grade: attempt.correct ? .good : .again,
-                   recordStats: true, date: date, dailyPlan: plan)
+                   recordStats: true, date: date, dailyPlan: plan, mistakeKind: .spelling)
         return attempt
     }
 
@@ -567,7 +629,8 @@ struct DailyVocabularyPlan: Codable, Equatable {
 
     private func saveReview(_ id: String, masteryKey: String, scheduleKey: String, base: ReviewSchedule?,
                             grade: ReviewGrade, recordStats: Bool, date: Date,
-                            dailyPlan: DailyVocabularyPlan? = nil, isRetry: Bool = false) {
+                            dailyPlan: DailyVocabularyPlan? = nil, isRetry: Bool = false,
+                            mistakeKind: StudyWordMistakeKind? = nil) {
         if isRetry {
             recordStudy(on: date)
             return
@@ -578,12 +641,34 @@ struct DailyVocabularyPlan: Codable, Equatable {
         dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
         var stats = statistics
         if recordStats { stats.record(on: date) }
+        let mistakes = mistakeKind.map { kind in
+            updatedMistakes(wordID: id, kind: kind, failed: grade == .again, formal: dailyPlan == nil, date: date)
+        }
         update { entries, encoder in
             entries[masteryKey] = try encoder.encode(values)
             entries[scheduleKey] = try encoder.encode(dates)
             if recordStats { entries["alef.studyStats.v1"] = try encoder.encode(stats) }
+            if let mistakes, mistakes != wordMistakes {
+                entries[StudyWordMistake.storageKey] = try encoder.encode(mistakes)
+            }
             if let dailyPlan { entries[DailyVocabularyPlan.storageKey] = try encoder.encode(dailyPlan) }
         }
+    }
+
+    private func updatedMistakes(wordID: String, kind: StudyWordMistakeKind,
+                                 failed: Bool, formal: Bool, date: Date) -> [StudyWordMistake] {
+        var mistakes = wordMistakes
+        if let index = mistakes.firstIndex(where: { $0.wordID == wordID && $0.kind == kind }) {
+            if failed {
+                if mistakes[index].count < Int.max { mistakes[index].count += 1 }
+                mistakes[index].lastMissedAt = date
+            } else if formal {
+                mistakes.remove(at: index)
+            }
+        } else if failed {
+            mistakes.append(StudyWordMistake(wordID: wordID, kind: kind, lastMissedAt: date))
+        }
+        return mistakes
     }
 
     func toggleFavorite(_ id: String) {
@@ -812,6 +897,12 @@ struct DailyVocabularyPlan: Codable, Equatable {
             guard try decoder.decode(ReminderPreferences.self, from: data).isValid else { throw BackupError.invalid }
         case DailyVocabularyPlan.storageKey:
             guard try decoder.decode(DailyVocabularyPlan.self, from: data).isValid else { throw BackupError.invalid }
+        case StudyWordMistake.storageKey:
+            let mistakes = try decoder.decode([StudyWordMistake].self, from: data)
+            guard mistakes.allSatisfy({ !$0.wordID.isEmpty && $0.count > 0 }),
+                  Set(mistakes.map(\.id)).count == mistakes.count else { throw BackupError.invalid }
+        case StudyReviewBatch.storageKey:
+            guard try decoder.decode(StudyReviewBatch.self, from: data).isValid else { throw BackupError.invalid }
         case "alef.studyStats.v1":
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }

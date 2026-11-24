@@ -9,9 +9,7 @@ struct PracticeCenterView: View {
         let letters = content.dueLetters(in: progress)
         StudyPage {
             StudyHeading(title: "今日练习")
-            if !words.isEmpty || !letters.isEmpty {
-                reviewLinks(words: words, letters: letters)
-            }
+            StudyTodayReviewEntry(content: content)
             DailyVocabularyEntry(content: content, emphasized: words.isEmpty && letters.isEmpty)
             LearningPathEntry(content: content, highlighted: false)
 
@@ -57,33 +55,6 @@ struct PracticeCenterView: View {
             .buttonStyle(.plain)
         }
         .studyHome()
-    }
-
-    private func reviewLinks(words: [StudyWord], letters: [StudyLetter]) -> some View {
-        VStack(spacing: 8) {
-            if !words.isEmpty {
-                NavigationLink {
-                    WordReviewView(content: content, words: words)
-                } label: {
-                    StudyRow(title: "复习单词", symbol: "play.fill", subtitle: "\(words.count) 个单词到期", emphasized: true)
-                }
-                .buttonStyle(.plain)
-            }
-            if !letters.isEmpty {
-                NavigationLink {
-                    LetterReviewView(letters: letters, allLetters: content.letters)
-                } label: {
-                    if words.isEmpty {
-                        StudyRow(title: "复习字母", symbol: "play.fill", subtitle: "\(letters.count) 个字母到期", emphasized: true)
-                    } else {
-                        StudyCard(padding: 10) {
-                            StudyRow(title: "复习字母", symbol: "calendar", value: "\(letters.count) 个到期")
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
     }
 
     private var letterExercises: some View {
@@ -442,7 +413,7 @@ private enum LetterQuizKind: String, CaseIterable, Identifiable {
     }
 }
 
-private struct LetterReviewView: View {
+struct LetterReviewView: View {
     let letters: [StudyLetter]
     let allLetters: [StudyLetter]
 

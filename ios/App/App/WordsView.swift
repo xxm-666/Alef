@@ -904,14 +904,16 @@ enum WordQuizKind: String, CaseIterable, Identifiable {
 struct WordReviewView: View {
     let content: StudyContent
     @State private var words: [StudyWord]
+    let kind: WordQuizKind
 
-    init(content: StudyContent, words: [StudyWord]) {
+    init(content: StudyContent, words: [StudyWord], kind: WordQuizKind = .meaning) {
         self.content = content
+        self.kind = kind
         _words = State(initialValue: words)
     }
 
     var body: some View {
-        WordQuizView(content: content, words: words, kind: .meaning, reviewing: true)
+        WordQuizView(content: content, words: words, kind: kind, reviewing: true)
     }
 }
 
@@ -923,6 +925,9 @@ struct WordQuizView: View {
     let words: [StudyWord]
     let kind: WordQuizKind
     var reviewing = false
+    var mistakePractice = false
+
+    private var usesQueue: Bool { reviewing || mistakePractice }
 
     @State private var target: StudyWord?
     @State private var options: [StudyWord] = []
@@ -977,7 +982,7 @@ struct WordQuizView: View {
                 if value != nil { scroll.scrollTo("word-result", anchor: .bottom) }
             }
         }
-        .studyDetail(reviewing ? "到期复习" : "\(kind.title)练习")
+        .studyDetail(reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : "\(kind.title)练习"))
         .toolbar {
             if !reviewing && answered > 0 && !showsSummary {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1004,7 +1009,7 @@ struct WordQuizView: View {
                 VStack(alignment: .leading, spacing: 5) { quizStatus }
             }
             Spacer(minLength: 0)
-            if !reviewing && result == nil {
+            if !usesQueue && result == nil {
                 Button { next(play: true) } label: {
                     Image(systemName: "arrow.clockwise").frame(minWidth: 24)
                 }
@@ -1016,7 +1021,7 @@ struct WordQuizView: View {
     }
 
     @ViewBuilder private var quizStatus: some View {
-        if reviewing {
+        if usesQueue {
             Text("\(reviewIndex + 1) / \(queue.count)").font(.subheadline.weight(.semibold))
             ProgressView(value: Double(reviewIndex + 1), total: Double(max(1, queue.count)))
                 .tint(progress.theme.accent)
@@ -1025,7 +1030,7 @@ struct WordQuizView: View {
         }
         Label("得分 \(correct) / \(answered)", systemImage: "star")
             .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
-        if !reviewing {
+        if !usesQueue {
             Label("连对 \(streak)", systemImage: "flame")
                 .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.reminder)
         }
@@ -1079,11 +1084,11 @@ struct WordQuizView: View {
         } else if target == nil {
             primaryButton("返回", symbol: "chevron.backward") { dismiss() }
         } else if result != nil {
-            let finishing = reviewing && reviewIndex + 1 >= queue.count
-            primaryButton(finishing ? "查看复习结果" : "下一题", symbol: "arrow.right", learningAction: true) {
+            let finishing = usesQueue && reviewIndex + 1 >= queue.count
+            primaryButton(finishing ? "查看本组结果" : "下一题", symbol: "arrow.right", learningAction: true) {
                 if finishing { showsSummary = true }
                 else {
-                    if reviewing { reviewIndex += 1 }
+                    if usesQueue { reviewIndex += 1 }
                     next(play: true)
                 }
             }
@@ -1098,7 +1103,8 @@ struct WordQuizView: View {
 
     private var summary: some View {
         let nextReview = queue.compactMap { progress.schedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
-        return StudyQuizSummary(title: reviewing ? "完成到期复习" : "完成练习", correct: correct, answered: answered,
+        let title = reviewing ? "完成到期复习" : (mistakePractice ? "完成错题练习" : "完成练习")
+        return StudyQuizSummary(title: title, correct: correct, answered: answered,
                                 message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
     }
 
@@ -1125,7 +1131,8 @@ struct WordQuizView: View {
         streak = success ? streak + 1 : 0
         if reviewing {
             isRetryAnswer = requeuedIds.contains(target.id)
-            progress.completeReview(target.id, correct: success, isRetry: isRetryAnswer)
+            progress.completeReview(target.id, correct: success, mistakeKind: kind == .spelling ? .spelling : .meaning,
+                                    isRetry: isRetryAnswer)
             if !success && requeuedIds.insert(target.id).inserted {
                 queue.append(target)
                 requeuedThisTurn = true
@@ -1137,13 +1144,13 @@ struct WordQuizView: View {
     }
 
     private func next(play: Bool) {
-        let source = reviewing ? queue : words
+        let source = usesQueue ? queue : words
         let pool = switch kind {
-        case .spelling: source.filter(\.canPracticeSpelling)
+        case .spelling: usesQueue ? source : source.filter(\.canPracticeSpelling)
         case .listening: source.filter { content.audio[$0.hebrew] != nil }
         case .meaning: source
         }
-        if reviewing {
+        if usesQueue {
             target = pool.indices.contains(reviewIndex) ? pool[reviewIndex] : nil
         } else {
             let others = pool.filter { $0.id != target?.id }

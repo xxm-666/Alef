@@ -200,6 +200,57 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertNil(ReviewSchedule.next(from: nil, grade: .good, on: now, recordsReview: false).lastReview)
     }
 
+    func testTodayReviewBatchResumesAtNextUnansweredWord() throws {
+        let content = try StudyContent.load()
+        let now = makeDate(year: 2026, month: 11, day: 24)
+        let yesterday = makeDate(year: 2026, month: 11, day: 23)
+        progress.setWord("shalom", mastery: .learning, date: yesterday.addingTimeInterval(-60))
+        progress.setWord("todah", mastery: .learning, date: yesterday)
+        let overview = StudyReviewOverview(content: content, progress: progress, at: now, calendar: gregorianUtc)
+        let batch = try XCTUnwrap(overview.nextBatch)
+        XCTAssertEqual(batch.itemIDs, ["shalom", "todah"])
+        XCTAssertEqual(overview.completed, 0)
+        progress.beginReviewBatch(batch)
+        progress.completeReview("shalom", correct: false, date: now)
+
+        let reopened = StudyProgress(defaults: defaults)
+        let resumed = StudyReviewOverview(content: content, progress: reopened, at: now, calendar: gregorianUtc)
+        XCTAssertEqual(resumed.savedBatch?.itemIDs, ["todah"])
+        XCTAssertEqual(resumed.completed, 1)
+        XCTAssertEqual(resumed.words.map(\.id), ["todah"])
+        XCTAssertNotNil(resumed.nextReview)
+    }
+
+    func testMistakeBookSavesTypesAndOnlyClearsMatchingFormalReview() throws {
+        let content = try StudyContent.load()
+        let word = try XCTUnwrap(content.words.first { $0.id == "shalom" })
+        let day1 = makeDate(year: 2026, month: 11, day: 23)
+        let day2 = makeDate(year: 2026, month: 11, day: 24)
+        let day3 = makeDate(year: 2026, month: 11, day: 25)
+        let group = DailyVocabularyGroup(wordIds: [word.id], studied: 1)
+        let day = DailyVocabularyPlan.dayKey(for: day1)
+        progress.write(DailyVocabularyPlan(day: day, groups: [group]), for: DailyVocabularyPlan.storageKey)
+        XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: word, input: "א", date: day1)?.correct, false)
+        progress.completeReview(word.id, correct: false, date: day1)
+        progress.completeReview(word.id, correct: false, date: day2)
+        progress.completeReview(word.id, correct: true, isRetry: true, date: day2)
+
+        let reopened = StudyProgress(defaults: defaults)
+        XCTAssertEqual(reopened.wordMistakes.first { $0.kind == .spelling }?.count, 1)
+        XCTAssertEqual(reopened.wordMistakes.first { $0.kind == .meaning }?.count, 2)
+        XCTAssertEqual(reopened.wordMistakes.first { $0.kind == .meaning }?.lastMissedAt, day2)
+        let overview = StudyReviewOverview(content: content, progress: reopened, at: day3, calendar: gregorianUtc)
+        XCTAssertEqual(overview.nextBatch?.kind, .spelling)
+        let backup = try reopened.exportBackup()
+        XCTAssertNotNil(try reopened.previewBackup(backup)[StudyWordMistake.storageKey])
+        XCTAssertNil(reopened.syncSnapshot()[StudyWordMistake.storageKey])
+
+        reopened.completeReview(word.id, correct: true, mistakeKind: .meaning, date: day3)
+        XCTAssertEqual(reopened.wordMistakes.map(\.kind), [.spelling])
+        reopened.completeReview(word.id, correct: true, mistakeKind: .spelling, date: day3)
+        XCTAssertTrue(reopened.wordMistakes.isEmpty)
+    }
+
     func testDueWordsAndLettersSorting() throws {
         let content = try StudyContent.load()
         XCTAssertEqual(content.letters.count, 22)

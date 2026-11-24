@@ -716,6 +716,8 @@ private struct StudyBackupView: View {
         case "alef.mastery.v1": "book"
         case "alef.wordMastery.v1": "square.stack.3d.up"
         case "alef.wordSrs.v1", StudyProgress.letterScheduleKey: "calendar"
+        case StudyReviewBatch.storageKey: "calendar.badge.clock"
+        case StudyWordMistake.storageKey: "arrow.counterclockwise"
         case ReminderPreferences.storageKey: "bell.badge"
         case StudyProgress.lastBackupAtKey: "clock"
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1": "bookmark"
@@ -732,6 +734,8 @@ private struct StudyBackupView: View {
             return (value as? [String: Any]).map { "\($0.count) 项" }
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
             return (value as? [String]).map { "\($0.count) 项" }
+        case StudyWordMistake.storageKey:
+            return (value as? [[String: Any]]).map { "\($0.count) 项" }
         default:
             return nil
         }
@@ -783,6 +787,8 @@ private struct StudyBackupView: View {
         case StudyProgress.letterScheduleKey: "字母复习排期"
         case ReminderPreferences.storageKey: "学习提醒"
         case DailyVocabularyPlan.storageKey: "今日记词进度"
+        case StudyReviewBatch.storageKey: "本组复习进度"
+        case StudyWordMistake.storageKey: "错题本"
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.native.phraseFavorites.v1": "收藏短语"
         case "alef.native.feedback.v1": "答题与翻卡音效"
