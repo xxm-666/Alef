@@ -156,7 +156,12 @@ struct WordsView: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 46)
-        .studyGlassSurface(cornerRadius: 23, interactive: false)
+        .background(progress.theme.cardSurface, in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(progress.theme.outline.opacity(0.8), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
     }
 
     private var quickTogglesBar: some View {
@@ -265,6 +270,7 @@ struct WordsView: View {
     }
 
     @ViewBuilder private var wordLibrary: some View {
+        let prefs = preferences
         let words = filteredWords
         let favorites = Set(progress.favorites)
         let mastery = progress.wordMastery
@@ -278,37 +284,38 @@ struct WordsView: View {
                 Text("可以更换搜索词或清除筛选。")
             } actions: {
                 Button("清除搜索和筛选") {
-                    var state = preferences
+                    var state = prefs
                     state.resetFilters()
                     state.searchQuery = ""
                     progress.write(state, for: "alef.wordsState.v1")
                 }
                 .buttonStyle(StudyButtonStyle())
             }
-        } else if preferences.usesCards {
+        } else if prefs.usesCards {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 152), spacing: 8)], spacing: 8) {
                 ForEach(words) { word in
-                    wordRow(word, favorite: favorites.contains(word.id), mastery: mastery[word.id] ?? .unlearned, stacked: true)
+                    wordRow(word, favorite: favorites.contains(word.id), mastery: mastery[word.id] ?? .unlearned,
+                            stacked: true, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
                 }
             }
         } else {
             LazyVStack(spacing: 7) {
                 ForEach(words) { word in
                     wordRow(word, favorite: favorites.contains(word.id), mastery: mastery[word.id] ?? .unlearned,
-                            stacked: typeSize.isAccessibilitySize)
+                            stacked: typeSize.isAccessibilitySize, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
                 }
             }
         }
     }
 
-    private func wordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery, stacked: Bool) -> some View {
+    private func wordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery, stacked: Bool, showNiqqud: Bool, showCursive: Bool) -> some View {
         let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
         return StudyCard(padding: 7) {
             layout {
                 if !stacked { wordMasteryMenu(word, mastery: mastery) }
                 NavigationLink {
-                    WordDetailView(word: word, content: content, showNiqqud: preferences.showNiqqud,
-                                   showCursive: preferences.showCursive)
+                    WordDetailView(word: word, content: content, showNiqqud: showNiqqud,
+                                   showCursive: showCursive)
                         .onAppear { setting(\.selectedWordId).wrappedValue = word.id }
                 } label: {
                     let textLayout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5)) : AnyLayout(HStackLayout(spacing: 6))
@@ -318,8 +325,8 @@ struct WordsView: View {
                             Text(word.meaningZh).font(.caption).foregroundStyle(progress.theme.mutedInk)
                         }
                         if !stacked { Spacer(minLength: 4) }
-                        HebrewText(text: preferences.showNiqqud ? word.hebrew : word.hebrewUnpointed,
-                                   cursive: preferences.showCursive, size: 28)
+                        HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed,
+                                   cursive: showCursive, size: 28)
                             .lineLimit(stacked ? nil : 2)
                             .minimumScaleFactor(0.75)
                     }
@@ -413,9 +420,10 @@ struct WordsView: View {
             if phrases.isEmpty {
                 ContentUnavailableView("还没有收藏短语", systemImage: "bookmark")
             }
+            let prefs = preferences
             LazyVStack(spacing: 9) {
                 ForEach(phrases) { phrase in
-                    phraseRow(phrase, favorites: favorites)
+                    phraseRow(phrase, favorites: favorites, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
                 }
             }
         }
@@ -427,13 +435,13 @@ struct WordsView: View {
             .accessibilityAddTraits(phraseCategory == key ? .isSelected : [])
     }
 
-    private func phraseRow(_ phrase: StudyPhrase, favorites: [String]) -> some View {
+    private func phraseRow(_ phrase: StudyPhrase, favorites: [String], showNiqqud: Bool, showCursive: Bool) -> some View {
         let saved = favorites.contains(phrase.id)
         let isShadowing = shadowingPhraseId == phrase.id
         return StudyCard {
             VStack(alignment: .trailing, spacing: 4) {
-                HebrewText(text: preferences.showNiqqud ? phrase.hebrew : phrase.hebrewUnpointed,
-                           cursive: preferences.showCursive, size: 34, style: .title)
+                HebrewText(text: showNiqqud ? phrase.hebrew : phrase.hebrewUnpointed,
+                           cursive: showCursive, size: 34, style: .title)
                 Text(phrase.transliteration).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                 if !hidePhraseTranslation {
                     Text(phrase.meaningZh).font(.headline)

@@ -270,15 +270,7 @@ struct StudyPage<Content: View>: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
         }
-        .background {
-            ZStack(alignment: .top) {
-                progress.theme.canvas.ignoresSafeArea()
-                RadialGradient(colors: [progress.theme.ambientGlow, .clear],
-                               center: .topLeading, startRadius: 10, endRadius: 360)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
-        }
+        .background(progress.theme.canvas.ignoresSafeArea())
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
     }
@@ -335,10 +327,9 @@ struct StudyCard<Content: View>: View {
             .background(highlighted ? progress.theme.highlightedSurface : progress.theme.cardSurface, in: shape)
             .overlay {
                 shape
-                    .strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                    .strokeBorder(progress.theme.outline.opacity(0.75), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            .shadow(color: progress.theme.cardShadow, radius: 12, x: 0, y: 5)
     }
 }
 
@@ -372,7 +363,6 @@ struct StudyHeroCard<Content: View>: View {
                     .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            .shadow(color: (stops.first ?? progress.theme.accent).opacity(0.28), radius: 16, x: 0, y: 8)
     }
 }
 
@@ -390,7 +380,6 @@ struct StudyIconBadge: View {
                 LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
             )
-            .shadow(color: (colors.first ?? .clear).opacity(0.24), radius: 5, x: 0, y: 2)
             .accessibilityHidden(true)
     }
 }
@@ -748,7 +737,6 @@ private struct StudyGlassSurfaceModifier: ViewModifier {
                     shape.strokeBorder(progress.theme.outline, lineWidth: 1)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: progress.theme.cardShadow, radius: 10, x: 0, y: 4)
         } else if #available(iOS 26, *) {
             if interactive {
                 content.glassEffect(.regular.interactive(), in: shape)
@@ -762,7 +750,6 @@ private struct StudyGlassSurfaceModifier: ViewModifier {
                     shape.strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
                         .allowsHitTesting(false)
                 }
-                .shadow(color: progress.theme.cardShadow, radius: 12, x: 0, y: 6)
         }
     }
 }

@@ -269,7 +269,7 @@ struct StudyFlashcardsView: View {
                 ZStack {
                     VStack(spacing: 14) {
                         frontFace(current)
-                        Label("点按翻面 · 左右滑动切卡", systemImage: "hand.tap")
+                        Label("点按翻面", systemImage: "hand.tap")
                             .font(.footnote.weight(.medium))
                             .foregroundStyle(progress.theme.mutedInk)
                     }
@@ -298,15 +298,6 @@ struct StudyFlashcardsView: View {
             .overlay(alignment: .topTrailing) {
                 PronunciationButton(hebrew: current.nameHebrew, iconOnly: true, title: "朗读字母名")
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 28)
-                    .onEnded { value in
-                        guard deck.count >= 2,
-                              abs(value.translation.width) > abs(value.translation.height) * 1.5,
-                              abs(value.translation.width) > 52 else { return }
-                        move(value.translation.width < 0 ? 1 : -1)
-                    }
-            )
         }
     }
 

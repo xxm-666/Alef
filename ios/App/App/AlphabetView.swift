@@ -3,7 +3,6 @@ import SwiftUI
 
 struct AlphabetView: View {
     @Environment(StudyProgress.self) private var progress
-    @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var scope = "all"
@@ -15,6 +14,7 @@ struct AlphabetView: View {
         let mastery = progress.letterMastery
         let letters = content.letters.filter { scope == "all" || mastery[$0.id] != .mastered }
         let masteredCount = content.letters.filter { mastery[$0.id] == .mastered }.count
+        let focusedLetter = continueLetter
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
             HStack(alignment: .bottom) {
                 StudyHeading(title: "认识希伯来字母", eyebrow: "ALEF · 22 字母")
@@ -40,7 +40,7 @@ struct AlphabetView: View {
                             .monospacedDigit()
                     }
                     Spacer(minLength: 0)
-                    if let next = continueLetter {
+                    if let next = focusedLetter {
                         Text(next.hebrew)
                             .font(.system(size: 32, weight: .bold, design: .serif))
                             .foregroundStyle(Color.white)
@@ -53,7 +53,7 @@ struct AlphabetView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                if let next = continueLetter {
+                if let next = focusedLetter {
                     NavigationLink {
                         LetterStudyView(letter: next, content: content)
                     } label: {
@@ -88,7 +88,8 @@ struct AlphabetView: View {
                 LazyVGrid(columns: LetterGridLayout.columns(options: options, typeSize: typeSize, quickActions: quickActions),
                           spacing: LetterGridLayout.spacing) {
                     ForEach(letters) { letter in
-                        letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned)
+                        letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned,
+                                   isFocused: letter.id == focusedLetter?.id)
                     }
                 }
                 .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
@@ -160,9 +161,8 @@ struct AlphabetView: View {
         .buttonStyle(StudyButtonStyle())
     }
 
-    private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
-        let isFocused = letter.id == continueLetter?.id
-        return StudyCard(highlighted: isFocused, padding: 0) {
+    private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery, isFocused: Bool) -> some View {
+        StudyCard(highlighted: isFocused, padding: 0) {
             NavigationLink {
                 LetterStudyView(letter: letter, content: content)
             } label: {
@@ -212,17 +212,6 @@ struct AlphabetView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(progress.theme.accent.opacity(0.65), lineWidth: 1.5)
                     .allowsHitTesting(false)
-            }
-        }
-        .contextMenu {
-            Button("朗读字母名", systemImage: "speaker.wave.2") {
-                audio.speak(letter.nameHebrew, rate: progress.speechRate)
-            }
-            Divider()
-            ForEach(Mastery.allCases) { level in
-                Button(level.title, systemImage: level == mastery ? "checkmark" : level.symbol) {
-                    if level != mastery { progress.setLetter(letter.id, mastery: level) }
-                }
             }
         }
         .environment(\.layoutDirection, .leftToRight)
@@ -461,16 +450,6 @@ struct LetterStudyView: View {
             }
         }
         .id(letter.id)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 28)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5,
-                          abs(value.translation.width) > 52 else { return }
-                    let swipedLeft = value.translation.width < 0
-                    let step = swipedLeft == progress.alphabetFromRight ? -1 : 1
-                    move(step)
-                }
-        )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             StudyActionBar {
                 pager
@@ -510,7 +489,6 @@ struct LetterStudyView: View {
                         LinearGradient(colors: progress.theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
                         in: RoundedRectangle(cornerRadius: 22, style: .continuous)
                     )
-                    .shadow(color: progress.theme.accent.opacity(0.24), radius: 10, x: 0, y: 4)
                     .environment(\.layoutDirection, .rightToLeft)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
