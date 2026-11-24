@@ -485,13 +485,10 @@ struct DailyVocabularyPlan: Codable, Equatable {
                    base: schedule[id], grade: grade, recordStats: true, date: date, isRetry: isRetry)
     }
 
-    func completeReview(_ id: String, correct: Bool, date: Date = .now) {
-        completeReview(id, grade: correct ? .good : .again, date: date)
-    }
-
-    func adjustWordReview(_ id: String, base: ReviewSchedule?, grade: ReviewGrade, date: Date = .now) {
-        saveReview(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
-                   base: base, grade: grade, recordStats: false, date: date)
+    func completeReview(_ id: String, correct: Bool, isRetry: Bool = false, date: Date = .now) {
+        let recovering = schedule[id].map { $0.lapses > 0 && $0.intervalDays == 1 } ?? false
+        let grade: ReviewGrade = correct ? (recovering ? .hard : .good) : .again
+        completeReview(id, grade: grade, isRetry: isRetry, date: date)
     }
 
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {

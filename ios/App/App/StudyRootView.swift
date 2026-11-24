@@ -348,7 +348,14 @@ struct StudyMemoryCurveEntry: View {
         var reviewInstructions: String {
             switch self {
             case .letter: "在「复习字母」提交答案，或翻开字母闪卡后选择自评。闪卡自评和到期题首次作答会更新排程。"
-            case .word: "在「复习单词」首次提交答案会更新排程。完成「今日记词」的单词拼写，也会更新该词的复习安排。"
+            case .word: "在「复习单词」首次提交答案后，系统根据作答结果和以往记录安排下次复习。完成「今日记词」的单词拼写也会更新排程。"
+            }
+        }
+
+        func resultLabel(for grade: ReviewGrade) -> String {
+            switch self {
+            case .letter: grade.title
+            case .word: grade == .again ? "答错" : "答对"
             }
         }
     }
@@ -397,7 +404,7 @@ private struct StudyMemoryCurveView: View {
                     if let lastReview = schedule.lastReview {
                         StudyRow(title: "最近正式复习", symbol: "clock",
                                  subtitle: lastReview.date.formatted(date: .abbreviated, time: .shortened),
-                                 value: lastReview.grade.title, chevron: false)
+                                 value: item.resultLabel(for: lastReview.grade), chevron: false)
                     } else {
                         StudyRow(title: "本轮起点（推算）", symbol: "clock",
                                  subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)

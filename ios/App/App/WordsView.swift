@@ -937,9 +937,6 @@ struct WordQuizView: View {
     @State private var requeuedIds: Set<String> = []
     @State private var requeuedThisTurn = false
     @State private var isRetryAnswer = false
-    @State private var preAnswerSchedule: ReviewSchedule?
-    @State private var selectedGrade: ReviewGrade?
-    @State private var answeredDate: Date = .now
     @State private var showsSummary = false
     @State private var started = false
 
@@ -1072,29 +1069,6 @@ struct WordQuizView: View {
             if reviewing, let schedule = progress.schedule[target.id] {
                 StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "已记录本次复习", symbol: "calendar.badge.checkmark",
                             note: "下次复习 · \(schedule.displayDate)")
-                if correct && !isRetryAnswer {
-                    reviewGradeBar(for: target)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func reviewGradeBar(for target: StudyWord) -> some View {
-        HStack(spacing: 6) {
-            ForEach([ReviewGrade.hard, .good, .easy]) { grade in
-                let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
-                Button {
-                    selectedGrade = grade
-                    audio.playSelectionHaptic()
-                    progress.adjustWordReview(target.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
-                } label: {
-                    VStack(spacing: 2) {
-                        Text(grade.title).font(.caption.weight(.semibold))
-                        Text("\(preview.intervalDays)天").font(.caption2).foregroundStyle(progress.theme.mutedInk)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                }
-                .buttonStyle(StudyButtonStyle(selected: selectedGrade == grade))
             }
         }
     }
@@ -1150,13 +1124,8 @@ struct WordQuizView: View {
         if success { correct += 1 }
         streak = success ? streak + 1 : 0
         if reviewing {
-            let now = Date.now
             isRetryAnswer = requeuedIds.contains(target.id)
-            let grade: ReviewGrade = success ? .good : .again
-            preAnswerSchedule = progress.schedule[target.id]
-            answeredDate = now
-            selectedGrade = grade
-            progress.completeReview(target.id, grade: grade, isRetry: isRetryAnswer, date: now)
+            progress.completeReview(target.id, correct: success, isRetry: isRetryAnswer)
             if !success && requeuedIds.insert(target.id).inserted {
                 queue.append(target)
                 requeuedThisTurn = true
@@ -1185,8 +1154,6 @@ struct WordQuizView: View {
         spelling = ""
         requeuedThisTurn = false
         isRetryAnswer = false
-        preAnswerSchedule = nil
-        selectedGrade = nil
         guard let target else { return }
         if kind != .spelling {
             options = ([target] + content.distractors(for: target, listening: kind == .listening)).shuffled()

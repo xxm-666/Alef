@@ -127,16 +127,10 @@ final class AlefCoreTests: XCTestCase {
         let day2 = makeDate(year: 2026, month: 11, day: 2)
         let day5 = makeDate(year: 2026, month: 11, day: 5)
 
-        let wordBase = progress.schedule["shalom"]
         progress.completeReview("shalom", grade: .good, date: day1)
         XCTAssertEqual(progress.statistics.totalReviews, 1)
         XCTAssertEqual(progress.statistics.streakDays, 1)
         XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 3)
-
-        // Adjusting grade changes schedule without inflating review counters
-        progress.adjustWordReview("shalom", base: wordBase, grade: .easy, date: day1)
-        XCTAssertEqual(progress.statistics.totalReviews, 1)
-        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 5)
 
         // Consecutive day review increments streakDays
         let letterBase = progress.letterSchedule["bet"]
@@ -145,6 +139,7 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.statistics.streakDays, 2)
         XCTAssertEqual(progress.letterSchedule["bet"]?.intervalDays, 3)
 
+        // Adjusting a letter's grade changes its schedule without inflating review counters.
         progress.adjustLetterReview("bet", base: letterBase, grade: .hard, date: day2)
         XCTAssertEqual(progress.statistics.totalReviews, 2)
         XCTAssertEqual(progress.letterSchedule["bet"]?.intervalDays, 1)
@@ -153,6 +148,34 @@ final class AlefCoreTests: XCTestCase {
         progress.completeReview("shalom", grade: .good, date: day5)
         XCTAssertEqual(progress.statistics.totalReviews, 3)
         XCTAssertEqual(progress.statistics.streakDays, 1)
+    }
+
+    func testWordReviewAutomaticallyShortensIntervalsAfterMisses() {
+        let today = makeDate(year: 2026, month: 11, day: 23)
+        let tomorrow = makeDate(year: 2026, month: 11, day: 24)
+        let followingDay = makeDate(year: 2026, month: 11, day: 25)
+        let normalReview = makeDate(year: 2026, month: 11, day: 27)
+
+        progress.completeReview("shalom", correct: true, date: today)
+        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 3)
+        XCTAssertEqual(progress.schedule["shalom"]?.lastReview?.grade, .good)
+        progress.completeReview("todah", correct: false, date: today)
+        let missed = progress.schedule["todah"]
+        XCTAssertEqual(missed?.intervalDays, 1)
+        XCTAssertEqual(missed?.lastReview?.grade, .again)
+
+        progress.completeReview("todah", correct: true, isRetry: true, date: today.addingTimeInterval(60))
+        XCTAssertEqual(progress.schedule["todah"], missed)
+        progress.completeReview("todah", correct: true, date: tomorrow)
+        XCTAssertEqual(progress.schedule["todah"]?.intervalDays, 1)
+        XCTAssertEqual(progress.schedule["todah"]?.lastReview?.grade, .hard)
+        XCTAssertEqual(progress.wordMastery["todah"], .learning)
+        progress.completeReview("todah", correct: true, date: followingDay)
+        XCTAssertEqual(progress.schedule["todah"]?.intervalDays, 2)
+        progress.completeReview("todah", correct: true, date: normalReview)
+        XCTAssertEqual(progress.schedule["todah"]?.lastReview?.grade, .good)
+        XCTAssertEqual(progress.wordMastery["todah"], .mastered)
+        XCTAssertEqual(progress.statistics.totalReviews, 6)
     }
 
     func testSameSessionRetriesKeepFirstReviewAndSchedule() throws {
