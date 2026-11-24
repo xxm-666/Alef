@@ -82,6 +82,7 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(decoded.repetitions, 1)
         XCTAssertEqual(decoded.lapses, 0)
         XCTAssertTrue(decoded.isValid)
+        XCTAssertNil(decoded.lastReview)
 
         let legacyLearningJson = #"{"nextReviewAt":1795392000000,"intervalDays":1}"#
         let decodedLearning = try JSONDecoder().decode(ReviewSchedule.self, from: Data(legacyLearningJson.utf8))
@@ -152,6 +153,28 @@ final class AlefCoreTests: XCTestCase {
         progress.completeReview("shalom", grade: .good, date: day5)
         XCTAssertEqual(progress.statistics.totalReviews, 3)
         XCTAssertEqual(progress.statistics.streakDays, 1)
+    }
+
+    func testSameSessionRetriesKeepFirstReviewAndSchedule() throws {
+        let now = makeDate(year: 2026, month: 11, day: 23)
+        progress.completeReview("shalom", grade: .again, date: now)
+        progress.completeLetterReview("bet", grade: .again, date: now)
+        let word = try XCTUnwrap(progress.schedule["shalom"])
+        let letter = try XCTUnwrap(progress.letterSchedule["bet"])
+
+        progress.completeReview("shalom", grade: .good, isRetry: true, date: now.addingTimeInterval(60))
+        progress.completeLetterReview("bet", grade: .good, isRetry: true, date: now.addingTimeInterval(120))
+
+        XCTAssertEqual(progress.schedule["shalom"], word)
+        XCTAssertEqual(progress.letterSchedule["bet"], letter)
+        XCTAssertEqual(word.lastReview?.date, now)
+        XCTAssertEqual(letter.lastReview?.grade, .again)
+        XCTAssertEqual(progress.wordMastery["shalom"], .learning)
+        XCTAssertEqual(progress.letterMastery["bet"], .learning)
+        XCTAssertEqual(progress.statistics.totalReviews, 4)
+        XCTAssertEqual(ReviewGrade.hard.mastery, .learning)
+        XCTAssertEqual(ReviewGrade.good.mastery, .mastered)
+        XCTAssertNil(ReviewSchedule.next(from: nil, grade: .good, on: now, recordsReview: false).lastReview)
     }
 
     func testDueWordsAndLettersSorting() throws {
@@ -331,6 +354,22 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(round.correct, 2)
         XCTAssertEqual(round.mistakes.count, 1)
         XCTAssertEqual(round.score, 22)
+    }
+
+    func testCurrentStageAndMissedWordsArePrioritized() throws {
+        let content = try StudyContent.load()
+        let stage = try XCTUnwrap(content.recommendedStage(in: progress))
+        let firstWord = try XCTUnwrap(content.dailyVocabularyWords(in: progress).first)
+        XCTAssertTrue(stage.wordIds.contains(firstWord.id))
+
+        let coreWordIDs = Set(content.learningPath.flatMap(\.wordIds))
+        let missedWord = try XCTUnwrap(content.words.first {
+            !coreWordIDs.contains($0.id) && $0.canPracticeSpelling && $0.hebrewUnpointed.count <= 5
+        })
+        progress.completeReview(missedWord.id, grade: .again)
+        let firstQuestion = try XCTUnwrap(StudyGame.spelling.questions(in: content, progress: progress).first)
+        guard case let .word(word, _) = firstQuestion else { return XCTFail("Expected a spelling question") }
+        XCTAssertEqual(word.id, missedWord.id)
     }
 
     func testStudyGameSpellingTilesIncludeEveryRequiredLetter() throws {
@@ -599,66 +638,50 @@ final class AlefCoreTests: XCTestCase {
 
     @MainActor
     func testReminderRequestGenerationAndSync() async {
-        let now = makeDate(year: 2026, month: 11, day: 23, hour: 19, minute: 0)
-
-        // Disabled -> nil
+        let now = makeDate(year: 2026, month: 11, day: 23, hour: 19)
+        let tomorrow = makeDate(year: 2026, month: 11, day: 24, hour: 20)
+        let dayAfter = makeDate(year: 2026, month: 11, day: 25, hour: 20)
+        let reviews = StudyReminderReviews(wordDates: [tomorrow, dayAfter], letterDates: [])
+        let noReviews = StudyReminderReviews(wordDates: [], letterDates: [])
         let disabled = ReminderPreferences(enabled: false, hour: 20, minute: 0, onlyWhenDue: false)
-        XCTAssertNil(StudyReminderManager.makeRequest(
-            preferences: disabled, dueWords: 3, dueLetters: 1, streakDays: 2, todayReviews: 0,
-            now: now, calendar: gregorianUtc
-        ))
-
-        // onlyWhenDue with zero due -> nil
         let dueOnly = ReminderPreferences(enabled: true, hour: 20, minute: 0, onlyWhenDue: true)
-        XCTAssertNil(StudyReminderManager.makeRequest(
-            preferences: dueOnly, dueWords: 0, dueLetters: 0, streakDays: 2, todayReviews: 0,
-            now: now, calendar: gregorianUtc
-        ))
 
-        // onlyWhenDue with due items -> non-repeating request pointing to flashcards tab
-        let dueRequest = StudyReminderManager.makeRequest(
-            preferences: dueOnly, dueWords: 4, dueLetters: 2, streakDays: 3, todayReviews: 1,
-            now: now, calendar: gregorianUtc
-        )
-        XCTAssertNotNil(dueRequest)
-        XCTAssertEqual(dueRequest?.content.title, "Alef · 有 6 项复习已到期")
-        XCTAssertEqual(dueRequest?.content.userInfo["targetTab"] as? String, "flashcards")
-        let dueTrigger = dueRequest?.trigger as? UNCalendarNotificationTrigger
-        XCTAssertEqual(dueTrigger?.repeats, false)
-        XCTAssertEqual(dueTrigger?.dateComponents.day, 23)
-        XCTAssertEqual(dueTrigger?.dateComponents.hour, 20)
+        XCTAssertNil(StudyReminderManager.makeRequest(preferences: disabled, reviews: reviews, now: now, calendar: gregorianUtc))
+        XCTAssertNil(StudyReminderManager.makeRequest(preferences: dueOnly, reviews: noReviews, now: now, calendar: gregorianUtc))
 
-        // Passed hour today -> schedules for tomorrow in onlyWhenDue mode
-        let laterNow = makeDate(year: 2026, month: 11, day: 23, hour: 21, minute: 0)
-        let tomorrowRequest = StudyReminderManager.makeRequest(
-            preferences: dueOnly, dueWords: 1, dueLetters: 0, streakDays: 0, todayReviews: 0,
-            now: laterNow, calendar: gregorianUtc
-        )
-        let tomorrowTrigger = tomorrowRequest?.trigger as? UNCalendarNotificationTrigger
-        XCTAssertEqual(tomorrowTrigger?.dateComponents.day, 24)
+        let request = StudyReminderManager.makeRequest(preferences: dueOnly, reviews: reviews, now: now, calendar: gregorianUtc)
+        let trigger = request?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(trigger?.repeats, false)
+        XCTAssertEqual(trigger?.dateComponents.day, 24)
+        XCTAssertEqual(trigger?.dateComponents.hour, 20)
+        XCTAssertEqual(request?.content.title, "Alef · 有 1 项复习已到期")
+        XCTAssertEqual(request?.content.userInfo["targetTab"] as? String, "flashcards")
 
-        // Daily mode -> repeating trigger
-        let dailyPref = ReminderPreferences(enabled: true, hour: 8, minute: 30, onlyWhenDue: false)
-        let dailyRequest = StudyReminderManager.makeRequest(
-            preferences: dailyPref, dueWords: 0, dueLetters: 0, streakDays: 5, todayReviews: 0,
-            now: now, calendar: gregorianUtc
-        )
-        XCTAssertEqual(dailyRequest?.content.userInfo["targetTab"] as? String, "grid")
+        let late = StudyReminderReviews(wordDates: [tomorrow.addingTimeInterval(60)], letterDates: [])
+        XCTAssertEqual(StudyReminderManager.nextFireDate(preferences: dueOnly, reviews: late, now: now, calendar: gregorianUtc), dayAfter)
+
+        let alreadyDue = StudyReminderReviews(wordDates: [], letterDates: [now])
+        let afterReminder = makeDate(year: 2026, month: 11, day: 23, hour: 21)
+        XCTAssertEqual(StudyReminderManager.nextFireDate(preferences: dueOnly, reviews: alreadyDue,
+                                                          now: afterReminder, calendar: gregorianUtc), tomorrow)
+
+        let daily = ReminderPreferences(enabled: true, hour: 8, minute: 30, onlyWhenDue: false)
+        let dailyRequest = StudyReminderManager.makeRequest(preferences: daily, reviews: noReviews, now: now, calendar: gregorianUtc)
         let dailyTrigger = dailyRequest?.trigger as? UNCalendarNotificationTrigger
+        XCTAssertEqual(dailyRequest?.content.userInfo["targetTab"] as? String, "flashcards")
         XCTAssertEqual(dailyTrigger?.repeats, true)
         XCTAssertEqual(dailyTrigger?.dateComponents.hour, 8)
         XCTAssertEqual(dailyTrigger?.dateComponents.minute, 30)
 
-        // Manager sync with mock center
         let mock = MockStudyNotificationCenter()
         let manager = StudyReminderManager(center: mock)
-        await manager.sync(preferences: dailyPref, dueWords: 2, dueLetters: 0, streakDays: 1, todayReviews: 0, now: now)
-        XCTAssertEqual(mock.removedIdentifiers.count, 1)
+        await manager.sync(preferences: dueOnly, reviews: reviews, now: now, calendar: gregorianUtc)
+        XCTAssertEqual(manager.nextScheduledDate, tomorrow)
         XCTAssertEqual(mock.addedRequests.count, 1)
 
-        // Disabling clears pending without re-adding
-        await manager.sync(preferences: disabled, dueWords: 2, dueLetters: 0, streakDays: 1, todayReviews: 0, now: now)
-        XCTAssertEqual(mock.removedIdentifiers.count, 2)
+        await manager.sync(preferences: disabled, reviews: reviews, now: now, calendar: gregorianUtc)
+        XCTAssertNil(manager.nextScheduledDate)
+        XCTAssertEqual(mock.removedIdentifiers.count, 1)
         XCTAssertEqual(mock.addedRequests.count, 1)
     }
 

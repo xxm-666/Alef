@@ -112,7 +112,8 @@ enum StudyAIKeychain {
 }
 
 enum StudyAIError: LocalizedError {
-    case storage, invalidKey, noKey, invalidGateway, invalidRecording, unauthorized, quota, requestFailed, noSpeech, timedOut
+    case storage, invalidKey, noKey, invalidGateway, invalidRecording, unauthorized, quota
+    case requestFailed, noSpeech, timedOut, offline, serviceNotFound
 
     var errorDescription: String? {
         switch self {
@@ -120,7 +121,9 @@ enum StudyAIError: LocalizedError {
         case .invalidKey: "请输入完整的 API 密钥，密钥中不能包含空格或换行。"
         case .noKey: "请先到「我的 → AI 功能」保存此服务的密钥。"
         case .invalidGateway: "请输入有效的 HTTPS 阿里云测试网关地址。"
-        case .timedOut: "服务没有在测试等待时间内返回结果。阿里云录音任务可能仍在排队。"
+        case .timedOut: "识别服务响应超时，请稍后重试。"
+        case .offline: "当前网络无法连接识别服务，请检查网络后重试。"
+        case .serviceNotFound: "找不到服务或模型，请检查服务地址和模型设置。"
         case .invalidRecording: "无法读取这次录音，请重录后再试。"
         case .unauthorized: "识别服务拒绝了请求，请检查 API 密钥和项目权限。"
         case .quota: "识别服务已达到请求频率或用量上限，请检查账户用量后重试。"
@@ -202,7 +205,18 @@ enum StudyAITranscription {
         configuration.timeoutIntervalForResource = 60
         let session = URLSession(configuration: configuration, delegate: NoRedirect(), delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
-        let (responseData, response) = try await session.upload(for: request, from: body)
+        let result: (Data, URLResponse)
+        do {
+            result = try await session.upload(for: request, from: body)
+        } catch let error as URLError {
+            switch error.code {
+            case .timedOut: throw StudyAIError.timedOut
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                throw StudyAIError.offline
+            default: throw error
+            }
+        }
+        let (responseData, response) = result
         switch (response as? HTTPURLResponse)?.statusCode {
         case 200:
             guard let decoded = try? JSONDecoder().decode(Response.self, from: responseData) else {
@@ -210,6 +224,7 @@ enum StudyAITranscription {
             }
             return try StudyAITranscript(text: decoded.text, expected: expected)
         case 401, 403: throw StudyAIError.unauthorized
+        case 404: throw StudyAIError.serviceNotFound
         case 422 where provider == .aliyun: throw StudyAIError.noSpeech
         case 429: throw StudyAIError.quota
         case 504 where provider == .aliyun: throw StudyAIError.timedOut

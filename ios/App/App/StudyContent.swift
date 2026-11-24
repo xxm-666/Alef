@@ -85,6 +85,30 @@ struct StudyContent: Decodable {
         }
     }
 
+    func recommendedStage(in progress: StudyProgress) -> StudyPathStage? {
+        let letters = progress.letterMastery
+        let words = progress.wordMastery
+        return learningPath.first { stage in
+            stage.letterIds.contains { letters[$0] != .mastered }
+                || stage.wordIds.contains { words[$0] != .mastered }
+        }
+    }
+
+    func dailyVocabularyWords(in progress: StudyProgress) -> [StudyWord] {
+        guard let stage = recommendedStage(in: progress) else { return words }
+        let stageIDs = Set(stage.wordIds)
+        return words.filter { stageIDs.contains($0.id) } + words.filter { !stageIDs.contains($0.id) }
+    }
+
+    func reminderReviews(in progress: StudyProgress) -> StudyReminderReviews {
+        let wordSchedule = progress.schedule
+        let letterSchedule = progress.letterSchedule
+        return StudyReminderReviews(
+            wordDates: words.compactMap { wordSchedule[$0.id]?.reviewDate },
+            letterDates: letters.compactMap { letterSchedule[$0.id]?.reviewDate }
+        )
+    }
+
     func meaningPrompt(for word: StudyWord, showNiqqud: Bool) -> String {
         showNiqqud || ambiguousSpellings.contains(word.hebrewUnpointed) ? word.hebrew : word.hebrewUnpointed
     }

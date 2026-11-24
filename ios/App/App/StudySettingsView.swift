@@ -27,7 +27,7 @@ struct StudySettingsView: View {
                 NavigationLink {
                     StudyWidgetPreview(content: content)
                 } label: {
-                    StudyRow(title: "每日字母小组件", symbol: "square.grid.2x2")
+                    StudyRow(title: "小组件", symbol: "square.grid.2x2")
                 }
                 .buttonStyle(.plain)
             }
@@ -196,15 +196,6 @@ private struct StudyReminderSettingsView: View {
     }
 
     var body: some View {
-        let dueWords = content.dueWords(in: progress).count
-        let dueLetters = content.dueLetters(in: progress).count
-        let preview = StudyReminderManager.makeRequest(
-            preferences: pref,
-            dueWords: dueWords,
-            dueLetters: dueLetters,
-            streakDays: progress.statistics.streakDays,
-            todayReviews: progress.statistics.reviewsToday
-        )
         StudyPage {
             StudyCard {
                 Toggle(isOn: enabledBinding) {
@@ -241,15 +232,15 @@ private struct StudyReminderSettingsView: View {
                 StudyNotice(title: "提醒安排失败", symbol: "exclamationmark.triangle", note: error, reminder: true)
             }
 
-            if let preview {
-                StudySectionTitle("下一次提醒预览")
-                StudyCard(highlighted: true) {
-                    Text(preview.content.title).font(.headline).foregroundStyle(progress.theme.ink)
-                    Text(preview.content.body).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+            if pref.enabled, StudyReminderManager.isAuthorized(reminders.authorizationStatus) {
+                if let date = reminders.nextScheduledDate {
+                    StudyNotice(title: "下次提醒", symbol: "calendar.badge.clock",
+                                note: date.formatted(.dateTime.month().day().hour().minute()))
+                } else if pref.onlyWhenDue, reminders.lastError == nil,
+                          content.reminderReviews(in: progress).earliest == nil {
+                    StudyNotice(title: "暂无复习排程", symbol: "calendar",
+                                note: "加入学习内容后，将按下次到期时间安排提醒。")
                 }
-            } else if pref.enabled && pref.onlyWhenDue {
-                StudyNotice(title: "当前没有到期复习项目", symbol: "checkmark.circle",
-                            note: "有单词或字母到期后，将在 \(pref.timeText) 提醒你。")
             }
         }
         .studyDetail("学习提醒")
@@ -430,8 +421,20 @@ private struct StudyWidgetPreview: View {
                     }
                     .buttonStyle(.plain)
                 }
-                StudyNotice(title: "每天一个字母", symbol: "calendar",
-                            note: "小组件按手机本地日期轮换，无需联网。点按小组件可打开对应的字母详情。")
+                StudySectionTitle("可添加的小组件")
+                StudyCard(padding: 10, spacing: 2) {
+                    StudyRow(title: "每日字母", symbol: "textformat.abc",
+                             subtitle: "主屏幕小号 · 锁屏圆形、矩形、行内", chevron: false)
+                    Divider()
+                    StudyRow(title: "每日单词", symbol: "calendar",
+                             subtitle: "主屏幕小号、中号 · 点击打开单词详情", chevron: false)
+                    Divider()
+                    StudyRow(title: "字母速查", symbol: "rectangle.grid.3x2",
+                             subtitle: "主屏幕中号 · 查看全部 22 个字母", chevron: false)
+                    Divider()
+                    StudyRow(title: "学习快捷入口", symbol: "pencil",
+                             subtitle: "主屏幕小号、中号 · 快速进入练习", chevron: false)
+                }
                 StudyCard {
                     StudySectionTitle("添加方式")
                     Text("主屏幕：长按主屏幕，点左上角「编辑 → 添加小组件」，搜索「Alef」。")
@@ -442,7 +445,7 @@ private struct StudyWidgetPreview: View {
                 }
             }
         }
-        .studyDetail("每日字母小组件")
+        .studyDetail("小组件")
     }
 }
 
@@ -965,6 +968,13 @@ private struct StudyBackupDocument: FileDocument {
 }
 
 private struct StudyAISettingsView: View {
+    private struct ConfigurationTest: Equatable {
+        let id = UUID()
+        let provider: StudyAIProvider
+        let model: StudyOpenRouterModel
+        let gateway: String
+    }
+
     @Environment(StudyProgress.self) private var progress
     @AppStorage(StudyAIKeychain.enabledKey) private var enabled = false
     @AppStorage(StudyAIKeychain.providerKey) private var provider = StudyAIProvider.openAI
@@ -975,6 +985,8 @@ private struct StudyAISettingsView: View {
     @State private var draft = ""
     @State private var hasKey = false
     @State private var message: String?
+    @State private var configurationTest: ConfigurationTest?
+    @State private var testResult: (message: String, success: Bool)?
 
     var body: some View {
         StudyPage {
@@ -1020,6 +1032,22 @@ private struct StudyAISettingsView: View {
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
                               !(provider == .aliyun && hasKey && gatewayDraft != gateway))
                 if hasKey {
+                    Button("测试已保存的配置", systemImage: "waveform") {
+                        testResult = nil
+                        configurationTest = ConfigurationTest(provider: provider, model: openRouterModel, gateway: gateway)
+                    }
+                    .buttonStyle(StudyButtonStyle())
+                    .disabled(configurationTest != nil)
+                    Text("测试会向所选服务发送内置的「שלום」示例音频，可能产生用量。")
+                        .font(.footnote)
+                        .foregroundStyle(progress.theme.mutedInk)
+                    if configurationTest != nil {
+                        ProgressView("正在测试识别服务…")
+                    } else if let testResult {
+                        Text(testResult.message)
+                            .font(.footnote)
+                            .foregroundStyle(testResult.success ? progress.theme.success : progress.theme.error)
+                    }
                     Button("移除密钥", role: .destructive) { removeKey() }
                 }
                 Text("各服务单独保存密钥，不随 iCloud 同步或学习备份迁移。")
@@ -1031,7 +1059,13 @@ private struct StudyAISettingsView: View {
             }
         }
         .studyDetail("AI 功能")
+        .task(id: configurationTest) {
+            if let configurationTest { await runConfigurationTest(configurationTest) }
+        }
+        .onChange(of: openRouterModel) { _, _ in clearConfigurationTest() }
+        .onDisappear { clearConfigurationTest() }
         .onChange(of: provider, initial: true) { _, _ in
+            clearConfigurationTest()
             draft = ""
             gatewayDraft = gateway
             message = nil
@@ -1041,6 +1075,33 @@ private struct StudyAISettingsView: View {
                 message = error.localizedDescription
             }
         }
+    }
+
+    private func clearConfigurationTest() {
+        configurationTest = nil
+        testResult = nil
+    }
+
+    private func runConfigurationTest(_ test: ConfigurationTest) async {
+        let sampleURL = FileManager.default.temporaryDirectory.appendingPathComponent("alef-ai-\(test.id).m4a")
+        defer { try? FileManager.default.removeItem(at: sampleURL) }
+        let result: (String, Bool)
+        do {
+            guard let asset = NSDataAsset(name: "AIConfigurationSample") else {
+                throw StudyAIError.invalidRecording
+            }
+            try asset.data.write(to: sampleURL, options: .atomic)
+            let transcript = try await StudyAITranscription.analyze(
+                recording: sampleURL, expected: "שָׁלוֹם", provider: test.provider,
+                openRouterModel: test.model, gateway: test.gateway
+            )
+            result = ("连接成功 · 识别结果：\(transcript.text)", true)
+        } catch {
+            result = ((error as? StudyAIError ?? .requestFailed).localizedDescription, false)
+        }
+        guard !Task.isCancelled, configurationTest == test else { return }
+        testResult = result
+        configurationTest = nil
     }
 
     private var aliyunKeyInstructions: some View {
@@ -1065,6 +1126,7 @@ private struct StudyAISettingsView: View {
                 hasKey = true
             }
             if provider == .aliyun { gateway = gatewayDraft }
+            clearConfigurationTest()
             revision += 1
             draft = ""
             message = nil
@@ -1077,6 +1139,7 @@ private struct StudyAISettingsView: View {
         do {
             try StudyAIKeychain.remove(for: provider)
             hasKey = false
+            clearConfigurationTest()
             revision += 1
             draft = ""
             message = nil

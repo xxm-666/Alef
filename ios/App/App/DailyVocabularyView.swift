@@ -7,7 +7,7 @@ struct DailyVocabularyEntry: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let plan = progress.dailyVocabularyPlan(words: content.words, date: timeline.date)
+            let plan = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress), date: timeline.date)
             let status = plan.groups.isEmpty ? "暂无待学新词" : "已完成 \(plan.completedCount) / \(plan.groups.count) 组"
             NavigationLink {
                 DailyVocabularyView(content: content)
@@ -71,7 +71,7 @@ private struct DailyVocabularyView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active && group == nil {
-                    progress.prepareDailyVocabulary(words: content.words)
+                    progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
                 }
             }
             .onDisappear { audio.stop() }
@@ -111,10 +111,10 @@ private struct DailyVocabularyView: View {
 
     private var planTimeline: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let today = progress.dailyVocabularyPlan(words: content.words, date: timeline.date)
+            let today = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress), date: timeline.date)
             planContent(today)
                 .onChange(of: today.day, initial: true) { _, _ in
-                    progress.prepareDailyVocabulary(words: content.words)
+                    progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
                 }
         }
     }
@@ -151,7 +151,7 @@ private struct DailyVocabularyView: View {
 
     private var groupsPerDay: Binding<Int> {
         Binding(get: { progress.dailyVocabulary.groupsPerDay },
-                set: { progress.setDailyVocabularyLimit($0, words: content.words) })
+                set: { progress.setDailyVocabularyLimit($0, words: content.dailyVocabularyWords(in: progress)) })
     }
 
     private func groupRow(_ group: DailyVocabularyGroup, index: Int, completed: Int) -> some View {
@@ -183,7 +183,7 @@ private struct DailyVocabularyView: View {
     @ViewBuilder private func groupRowAction(_ group: DailyVocabularyGroup, index: Int, completed: Int, action: String) -> some View {
         if index <= completed {
             Button(action) {
-                progress.prepareDailyVocabulary(words: content.words)
+                progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
                 openGroup(group.id)
             }
             .buttonStyle(StudyButtonStyle(prominent: index == completed))
@@ -322,7 +322,7 @@ private struct DailyVocabularyView: View {
     }
 
     private func openGroup(_ id: String?) {
-        if id == nil { progress.prepareDailyVocabulary(words: content.words) }
+        if id == nil { progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress)) }
         audio.stop()
         activeId = id
         revealed = false

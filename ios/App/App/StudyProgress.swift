@@ -62,11 +62,16 @@ enum ReviewGrade: String, Codable, CaseIterable, Identifiable {
     }
 
     var mastery: Mastery {
-        self == .again ? .learning : .mastered
+        self == .again || self == .hard ? .learning : .mastered
     }
 }
 
 struct ReviewSchedule: Codable, Equatable {
+    struct Attempt: Codable, Equatable {
+        let date: Date
+        let grade: ReviewGrade
+    }
+
     static let defaultEase = 2.5
     static let minEase = 1.3
     static let maxEase = 3.0
@@ -77,17 +82,20 @@ struct ReviewSchedule: Codable, Equatable {
     let easeFactor: Double
     let repetitions: Int
     let lapses: Int
+    let lastReview: Attempt?
 
     enum CodingKeys: String, CodingKey {
-        case nextReviewAt, intervalDays, easeFactor, repetitions, lapses
+        case nextReviewAt, intervalDays, easeFactor, repetitions, lapses, lastReview
     }
 
-    init(nextReviewAt: Int64, intervalDays: Int, easeFactor: Double = defaultEase, repetitions: Int = 0, lapses: Int = 0) {
+    init(nextReviewAt: Int64, intervalDays: Int, easeFactor: Double = defaultEase,
+         repetitions: Int = 0, lapses: Int = 0, lastReview: Attempt? = nil) {
         self.nextReviewAt = nextReviewAt
         self.intervalDays = intervalDays
         self.easeFactor = easeFactor
         self.repetitions = repetitions
         self.lapses = lapses
+        self.lastReview = lastReview
     }
 
     init(from decoder: Decoder) throws {
@@ -99,6 +107,7 @@ struct ReviewSchedule: Codable, Equatable {
         self.easeFactor = try container.decodeIfPresent(Double.self, forKey: .easeFactor) ?? Self.defaultEase
         self.repetitions = try container.decodeIfPresent(Int.self, forKey: .repetitions) ?? (intervalDays >= 3 ? 1 : 0)
         self.lapses = try container.decodeIfPresent(Int.self, forKey: .lapses) ?? 0
+        self.lastReview = try container.decodeIfPresent(Attempt.self, forKey: .lastReview)
     }
 
     var reviewDate: Date { Date(timeIntervalSince1970: Double(nextReviewAt) / 1_000) }
@@ -125,7 +134,7 @@ struct ReviewSchedule: Codable, Equatable {
     }
 
     static func next(from current: ReviewSchedule?, grade: ReviewGrade, on date: Date,
-                     calendar: Calendar = .current) -> ReviewSchedule {
+                     calendar: Calendar = .current, recordsReview: Bool = true) -> ReviewSchedule {
         let ease = min(maxEase, max(minEase, current?.easeFactor ?? defaultEase))
         let reps = max(0, current?.repetitions ?? 0)
         let lapses = max(0, current?.lapses ?? 0)
@@ -160,7 +169,8 @@ struct ReviewSchedule: Codable, Equatable {
             intervalDays: outcome.interval,
             easeFactor: outcome.newEase,
             repetitions: outcome.newReps,
-            lapses: outcome.newLapses
+            lapses: outcome.newLapses,
+            lastReview: recordsReview ? Attempt(date: date, grade: grade) : current?.lastReview
         )
     }
 
@@ -176,7 +186,8 @@ struct ReviewSchedule: Codable, Equatable {
                 intervalDays: 1,
                 easeFactor: existing?.easeFactor ?? defaultEase,
                 repetitions: 0,
-                lapses: existing?.lapses ?? 0
+                lapses: existing?.lapses ?? 0,
+                lastReview: existing?.lastReview
             )
         case .mastered:
             if let existing, !existing.isDue(at: date), existing.repetitions >= 1 {
@@ -188,7 +199,8 @@ struct ReviewSchedule: Codable, Equatable {
                 intervalDays: 3,
                 easeFactor: existing?.easeFactor ?? defaultEase,
                 repetitions: 1,
-                lapses: existing?.lapses ?? 0
+                lapses: existing?.lapses ?? 0,
+                lastReview: existing?.lastReview
             )
         }
     }
@@ -448,9 +460,9 @@ struct DailyVocabularyPlan: Codable, Equatable {
         saveManual(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey, mastery: mastery, date: date)
     }
 
-    func completeLetterReview(_ id: String, grade: ReviewGrade, date: Date = .now) {
+    func completeLetterReview(_ id: String, grade: ReviewGrade, isRetry: Bool = false, date: Date = .now) {
         saveReview(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey,
-                   base: letterSchedule[id], grade: grade, recordStats: true, date: date)
+                   base: letterSchedule[id], grade: grade, recordStats: true, date: date, isRetry: isRetry)
     }
 
     func completeLetterReview(_ id: String, correct: Bool, date: Date = .now) {
@@ -468,9 +480,9 @@ struct DailyVocabularyPlan: Codable, Equatable {
         saveManual(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1", mastery: mastery, date: date)
     }
 
-    func completeReview(_ id: String, grade: ReviewGrade, date: Date = .now) {
+    func completeReview(_ id: String, grade: ReviewGrade, isRetry: Bool = false, date: Date = .now) {
         saveReview(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
-                   base: schedule[id], grade: grade, recordStats: true, date: date)
+                   base: schedule[id], grade: grade, recordStats: true, date: date, isRetry: isRetry)
     }
 
     func completeReview(_ id: String, correct: Bool, date: Date = .now) {
@@ -557,11 +569,16 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     private func saveReview(_ id: String, masteryKey: String, scheduleKey: String, base: ReviewSchedule?,
-                            grade: ReviewGrade, recordStats: Bool, date: Date, dailyPlan: DailyVocabularyPlan? = nil) {
+                            grade: ReviewGrade, recordStats: Bool, date: Date,
+                            dailyPlan: DailyVocabularyPlan? = nil, isRetry: Bool = false) {
+        if isRetry {
+            recordStudy(on: date)
+            return
+        }
         var values: [String: Mastery] = read(masteryKey, default: [:])
         var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
         values[id] = grade.mastery
-        dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date)
+        dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
         var stats = statistics
         if recordStats { stats.record(on: date) }
         update { entries, encoder in

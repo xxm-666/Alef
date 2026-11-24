@@ -33,6 +33,19 @@ struct ReminderPreferences: Codable, Equatable, Hashable {
     }
 }
 
+struct StudyReminderReviews: Equatable {
+    let wordDates: [Date]
+    let letterDates: [Date]
+
+    var earliest: Date? {
+        [wordDates.min(), letterDates.min()].compactMap { $0 }.min()
+    }
+
+    func counts(dueAt date: Date) -> (words: Int, letters: Int) {
+        (wordDates.filter { $0 <= date }.count, letterDates.filter { $0 <= date }.count)
+    }
+}
+
 protocol StudyNotificationCenter {
     func authorizationStatus() async -> UNAuthorizationStatus
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
@@ -67,6 +80,8 @@ final class StudyReminderManager {
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var lastError: String?
+    private(set) var nextScheduledDate: Date?
+    @ObservationIgnored private var schedulingTask: Task<Void, Never>?
     private let center: any StudyNotificationCenter
 
     init(center: any StudyNotificationCenter = SystemStudyNotificationCenter()) {
@@ -90,23 +105,39 @@ final class StudyReminderManager {
         }
     }
 
-    func sync(preferences: ReminderPreferences, dueWords: Int, dueLetters: Int,
-              streakDays: Int, todayReviews: Int, now: Date = .now) async {
-        center.removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])
+    func sync(preferences: ReminderPreferences, reviews: StudyReminderReviews,
+              now: Date = .now, calendar: Calendar = .current) async {
+        let previous = schedulingTask
+        previous?.cancel()
+        let task = Task {
+            await previous?.value
+            guard !Task.isCancelled else { return }
+            await updateSchedule(preferences: preferences, reviews: reviews, now: now, calendar: calendar)
+        }
+        schedulingTask = task
+        await task.value
+    }
+
+    private func updateSchedule(preferences: ReminderPreferences, reviews: StudyReminderReviews,
+                                now: Date, calendar: Calendar) async {
         await refreshAuthorizationStatus()
+        guard !Task.isCancelled else { return }
         guard Self.isAuthorized(authorizationStatus),
-              let request = Self.makeRequest(
-                  preferences: preferences,
-                  dueWords: dueWords,
-                  dueLetters: dueLetters,
-                  streakDays: streakDays,
-                  todayReviews: todayReviews,
-                  now: now
-              ) else { return }
+              let request = Self.makeRequest(preferences: preferences, reviews: reviews, now: now, calendar: calendar)
+        else {
+            center.removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])
+            nextScheduledDate = nil
+            lastError = nil
+            return
+        }
         do {
+            // Adding the same identifier replaces the old request.
             try await center.add(request)
+            nextScheduledDate = Self.nextFireDate(preferences: preferences, reviews: reviews, now: now, calendar: calendar)
             lastError = nil
         } catch {
+            center.removePendingNotificationRequests(withIdentifiers: [Self.dailyReminderIdentifier])
+            nextScheduledDate = nil
             lastError = error.localizedDescription
         }
     }
@@ -118,52 +149,54 @@ final class StudyReminderManager {
         }
     }
 
-    static func makeRequest(preferences: ReminderPreferences, dueWords: Int, dueLetters: Int,
-                            streakDays: Int, todayReviews: Int, now: Date = .now,
-                            calendar: Calendar = .current) -> UNNotificationRequest? {
+    static func nextFireDate(preferences: ReminderPreferences, reviews: StudyReminderReviews,
+                             now: Date, calendar: Calendar) -> Date? {
         guard preferences.enabled, preferences.isValid else { return nil }
-        let safeWords = max(0, dueWords)
-        let safeLetters = max(0, dueLetters)
-        let totalDue = safeWords + safeLetters
-        if preferences.onlyWhenDue && totalDue == 0 { return nil }
+        let time = DateComponents(hour: preferences.hour, minute: preferences.minute, second: 0)
+        let nextTime = calendar.nextDate(after: now, matching: time, matchingPolicy: .nextTime)
+        guard preferences.onlyWhenDue else { return nextTime }
+        guard let earliest = reviews.earliest, let nextTime else { return nil }
+        if nextTime >= earliest { return nextTime }
+
+        // Allow a review due at exactly the preferred notification time.
+        let beforeDue = earliest.addingTimeInterval(-1)
+        let candidate = calendar.nextDate(after: beforeDue, matching: time, matchingPolicy: .nextTime)
+        if let candidate, candidate >= earliest { return candidate }
+        return calendar.nextDate(after: earliest, matching: time, matchingPolicy: .nextTime)
+    }
+
+    static func makeRequest(preferences: ReminderPreferences, reviews: StudyReminderReviews,
+                            now: Date = .now, calendar: Calendar = .current) -> UNNotificationRequest? {
+        guard let fireDate = nextFireDate(preferences: preferences, reviews: reviews, now: now, calendar: calendar) else {
+            return nil
+        }
 
         let content = UNMutableNotificationContent()
         content.sound = .default
-        if totalDue > 0 {
-            content.title = "Alef · 有 \(totalDue) 项复习已到期"
-            if safeWords > 0 && safeLetters > 0 {
-                content.body = "包含 \(safeWords) 个单词和 \(safeLetters) 个字母，趁热打铁巩固记忆。"
-            } else if safeWords > 0 {
-                content.body = "有 \(safeWords) 个到期单词等你回顾。"
-            } else {
-                content.body = "有 \(safeLetters) 个到期字母等你回顾。"
+        if preferences.onlyWhenDue {
+            let counts = reviews.counts(dueAt: fireDate)
+            content.title = "Alef · 有 \(counts.words + counts.letters) 项复习已到期"
+            switch (counts.words, counts.letters) {
+            case (0, let letters): content.body = "有 \(letters) 个到期字母等你回顾。"
+            case (let words, 0): content.body = "有 \(words) 个到期单词等你回顾。"
+            case (let words, let letters): content.body = "有 \(words) 个单词和 \(letters) 个字母等你回顾。"
             }
-            content.userInfo = ["targetTab": "flashcards"]
         } else {
             content.title = "Alef · 每日希伯来语时间"
-            if todayReviews > 0 {
-                content.body = "今天已完成 \(todayReviews) 次练习，继续保持手感或学几个新词吧。"
-            } else if streakDays > 0 {
-                content.body = "已连续学习 \(streakDays) 天，花几分钟保持今日学习记录吧。"
-            } else {
-                content.body = "花几分钟拼读几个希伯来字母和常用词吧。"
-            }
-            content.userInfo = ["targetTab": "grid"]
+            content.body = "可以复习到期内容，或继续学习新词。"
         }
+        content.userInfo = ["targetTab": "flashcards"]
 
         let trigger: UNCalendarNotificationTrigger
         if preferences.onlyWhenDue {
-            let todayTarget = preferences.date(on: now, calendar: calendar)
-            let fireDate = todayTarget > now
-                ? todayTarget
-                : (calendar.date(byAdding: .day, value: 1, to: todayTarget) ?? todayTarget)
-            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+            var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+            components.calendar = calendar
+            components.timeZone = calendar.timeZone
             trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         } else {
             let components = DateComponents(hour: preferences.hour, minute: preferences.minute)
             trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         }
-
         return UNNotificationRequest(identifier: dailyReminderIdentifier, content: content, trigger: trigger)
     }
 }

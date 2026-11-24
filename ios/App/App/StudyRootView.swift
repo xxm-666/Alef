@@ -6,10 +6,7 @@ struct StudyRootView: View {
     private struct ReminderSyncKey: Equatable {
         let active: Bool
         let preferences: ReminderPreferences
-        let dueWords: Int
-        let dueLetters: Int
-        let streakDays: Int
-        let todayReviews: Int
+        let reviews: StudyReminderReviews
     }
 
     @Environment(StudyProgress.self) private var progress
@@ -23,6 +20,7 @@ struct StudyRootView: View {
     @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
 
     var body: some View {
+        let reminderKey = reminderSyncKey
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
             NavigationStack(path: $letterPath) {
                 AlphabetView(content: content)
@@ -74,16 +72,8 @@ struct StudyRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openTabNotification)) { _ in
             handlePendingReminderTab()
         }
-        .task(id: reminderSyncKey) {
-            let dueWords = content.dueWords(in: progress).count
-            let dueLetters = content.dueLetters(in: progress).count
-            await reminders.sync(
-                preferences: progress.reminderPreferences,
-                dueWords: dueWords,
-                dueLetters: dueLetters,
-                streakDays: progress.statistics.streakDays,
-                todayReviews: progress.statistics.reviewsToday
-            )
+        .task(id: reminderKey) {
+            await reminders.sync(preferences: reminderKey.preferences, reviews: reminderKey.reviews)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard (phase == .active || phase == .background) && folderSync.isConfigured else { return }
@@ -111,10 +101,7 @@ struct StudyRootView: View {
         ReminderSyncKey(
             active: scenePhase == .active,
             preferences: progress.reminderPreferences,
-            dueWords: content.dueWords(in: progress).count,
-            dueLetters: content.dueLetters(in: progress).count,
-            streakDays: progress.statistics.streakDays,
-            todayReviews: progress.statistics.reviewsToday
+            reviews: content.reminderReviews(in: progress)
         )
     }
 
@@ -360,8 +347,8 @@ struct StudyMemoryCurveEntry: View {
 
         var reviewInstructions: String {
             switch self {
-            case .letter: "在「复习字母」提交答案，或翻开字母闪卡后选择自评。每次提交或自评都会记录一次复习，并更新下次复习时间。"
-            case .word: "在「复习单词」提交答案，每题记录一次复习。完成「今日记词」的单词拼写，也会更新该词的复习安排。"
+            case .letter: "在「复习字母」提交答案，或翻开字母闪卡后选择自评。闪卡自评和到期题首次作答会更新排程。"
+            case .word: "在「复习单词」首次提交答案会更新排程。完成「今日记词」的单词拼写，也会更新该词的复习安排。"
             }
         }
     }
@@ -407,8 +394,14 @@ private struct StudyMemoryCurveView: View {
                         .foregroundStyle(progress.theme.mutedInk)
                 }
                 StudyCard {
-                    StudyRow(title: "本轮起点（推算）", symbol: "clock",
-                             subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
+                    if let lastReview = schedule.lastReview {
+                        StudyRow(title: "最近正式复习", symbol: "clock",
+                                 subtitle: lastReview.date.formatted(date: .abbreviated, time: .shortened),
+                                 value: lastReview.grade.title, chevron: false)
+                    } else {
+                        StudyRow(title: "本轮起点（推算）", symbol: "clock",
+                                 subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
+                    }
                     scheduleRow(schedule)
                     StudyRow(title: "当前间隔", symbol: "arrow.left.and.right",
                              value: schedule.intervalLabel, chevron: false)
@@ -424,7 +417,7 @@ private struct StudyMemoryCurveView: View {
             StudyCard {
                 StudySectionTitle("怎样算一次复习")
                 Text(item.reviewInstructions)
-                Text("答错也会记录，并安排更早再练。浏览和试听不会记录复习。")
+                Text("首次答错会安排更早再练。同轮补练计入练习次数，沿用首次作答安排的复习时间。")
                     .foregroundStyle(progress.theme.mutedInk)
             }
             .font(.subheadline)

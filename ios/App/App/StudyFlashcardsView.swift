@@ -470,6 +470,7 @@ private struct FlashQuizView: View {
     @State private var reviewIndex = 0
     @State private var requeuedIds: Set<String> = []
     @State private var requeuedThisTurn = false
+    @State private var isRetryAnswer = false
     @State private var preAnswerSchedule: ReviewSchedule?
     @State private var selectedGrade: ReviewGrade?
     @State private var answeredDate: Date = .now
@@ -589,9 +590,9 @@ private struct FlashQuizView: View {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
             if reviewing, let schedule = progress.letterSchedule[question.letter.id] {
-                StudyNotice(title: "已记录本次复习", symbol: "calendar.badge.checkmark",
+                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "已记录本次复习", symbol: "calendar.badge.checkmark",
                             note: "下次复习 · \(schedule.displayDate)")
-                if success {
+                if success && !isRetryAnswer {
                     reviewGradeBar(for: question.letter)
                 }
             }
@@ -648,7 +649,8 @@ private struct FlashQuizView: View {
                     Button {
                         if let selection { grade(selection, solution: question.solution) }
                     } label: {
-                        Label(reviewing ? "提交并记录复习" : "确认答案", systemImage: "checkmark")
+                        let buttonTitle = requeuedIds.contains(question.letter.id) ? "提交补练" : "提交并记录复习"
+                        Label(reviewing ? buttonTitle : "确认答案", systemImage: "checkmark")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(StudyButtonStyle(learningAction: true))
@@ -672,11 +674,12 @@ private struct FlashQuizView: View {
         streak = success ? streak + 1 : 0
         if reviewing {
             let now = Date.now
+            isRetryAnswer = requeuedIds.contains(question.letter.id)
             let grade: ReviewGrade = success ? .good : .again
             preAnswerSchedule = progress.letterSchedule[question.letter.id]
             answeredDate = now
             selectedGrade = grade
-            progress.completeLetterReview(question.letter.id, grade: grade, date: now)
+            progress.completeLetterReview(question.letter.id, grade: grade, isRetry: isRetryAnswer, date: now)
             if !success && requeuedIds.insert(question.letter.id).inserted {
                 queue.append(question.letter)
                 requeuedThisTurn = true
@@ -767,6 +770,7 @@ private struct FlashQuizView: View {
         answer = nil
         selection = nil
         requeuedThisTurn = false
+        isRetryAnswer = false
         preAnswerSchedule = nil
         selectedGrade = nil
     }

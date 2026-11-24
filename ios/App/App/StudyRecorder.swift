@@ -20,6 +20,7 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     private(set) var errorMessage: String?
 
     private var recorder: AVAudioRecorder?
+    @ObservationIgnored private var pendingCapture: UUID?
     private var player: AVAudioPlayer?
     private var segmentPlayback: Task<Void, Never>?
     private(set) var playingSegment: Int?
@@ -43,6 +44,12 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     }
 
     func startRecording() async {
+        guard pendingCapture == nil else { return }
+        let capture = UUID()
+        pendingCapture = capture
+        defer {
+            if pendingCapture == capture { pendingCapture = nil }
+        }
         stopPlayback()
         errorMessage = nil
 
@@ -58,6 +65,7 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
             granted = false
         }
 
+        guard pendingCapture == capture else { return }
         permissionDenied = !granted
         guard granted else { return }
 
@@ -194,10 +202,23 @@ final class StudyVoiceRecorder: NSObject, AVAudioRecorderDelegate, AVAudioPlayer
     }
 
     func cleanup() {
+        pendingCapture = nil
         if state == .recording { stopRecording() }
         stopPlayback()
         deleteRecordingFile()
         state = .idle
+    }
+
+    func interrupt() {
+        pendingCapture = nil
+        if state == .recording {
+            stopRecording()
+            if hasRecording {
+                errorMessage = "录音已中断，可回放已有片段或重录。"
+            }
+        } else {
+            stopPlayback()
+        }
     }
 
     private func deleteRecordingFile() {
@@ -608,6 +629,7 @@ struct ShadowingPracticeCard: View {
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     let hebrew: String
     var title = "跟读对比"
     var recordingState: Binding<Bool>? = nil
@@ -688,6 +710,15 @@ struct ShadowingPracticeCard: View {
         }
         .onChange(of: recorder.state, initial: true) { _, state in
             recordingState?.wrappedValue = state == .recording
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { recorder.interrupt() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)) { notice in
+            if notice.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue {
+                recorder.interrupt()
+            }
         }
         .onChange(of: recorder.completedRecordingURL) { _, _ in
             showsComparisonDetails = false

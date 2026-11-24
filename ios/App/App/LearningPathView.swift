@@ -7,7 +7,7 @@ struct LearningPathEntry: View {
 
     var body: some View {
         let completedStages = content.learningPath.filter { isComplete($0) }.count
-        let currentStage = content.learningPath.first { !isComplete($0) } ?? content.learningPath.last
+        let currentStage = content.recommendedStage(in: progress)
         NavigationLink {
             LearningPathView(content: content)
         } label: {
@@ -40,7 +40,7 @@ struct LearningPathView: View {
 
     var body: some View {
         let summary = overallProgress
-        let recommended = content.learningPath.first { !stageProgress($0).isComplete }
+        let recommended = content.recommendedStage(in: progress)
         StudyPage {
             StudyCard(highlighted: true) {
                 HStack {

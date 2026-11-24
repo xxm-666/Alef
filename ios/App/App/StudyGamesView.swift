@@ -32,10 +32,11 @@ enum StudyGame: String, CaseIterable, Identifiable {
         }
     }
 
-    func questions(in content: StudyContent) -> [StudyGameQuestion] {
+    func questions(in content: StudyContent, progress: StudyProgress? = nil) -> [StudyGameQuestion] {
+        let selection = StudyGameSelection(content: content, progress: progress)
         switch self {
         case .letters:
-            return content.letters.shuffled().prefix(6).enumerated().map { index, letter in
+            return selection.letters(content.letters).prefix(6).enumerated().map { index, letter in
                 let otherLetters = content.letters.filter { $0.id != letter.id }.shuffled()
                 let similar = otherLetters.filter { letter.confusableWith.contains($0.id) }
                 let remaining = otherLetters.filter { !letter.confusableWith.contains($0.id) }
@@ -43,11 +44,8 @@ enum StudyGame: String, CaseIterable, Identifiable {
                 return .letter(letter, options: options, showCursive: index >= 3)
             }
         case .spelling:
-            let coreIDs = Set(content.learningPath.flatMap(\.wordIds))
             let candidates = content.words.filter { $0.canPracticeSpelling && $0.hebrewUnpointed.count <= 5 }
-            let coreWords = candidates.filter { coreIDs.contains($0.id) }.shuffled()
-            let otherWords = candidates.filter { !coreIDs.contains($0.id) }.shuffled()
-            return (coreWords + otherWords).prefix(6).map { word in
+            return selection.words(candidates).prefix(6).map { word in
                 let answer = Array(word.hebrewUnpointed)
                 let distractors = content.letters.map(\.hebrew)
                     .filter { glyph in !answer.contains { String($0) == glyph } }
@@ -56,15 +54,14 @@ enum StudyGame: String, CaseIterable, Identifiable {
             }
         case .listening:
             let letters = content.letters.filter { content.audio[$0.nameHebrew] != nil }.shuffled()
-            let wordIDs = Set(content.learningPath.flatMap(\.wordIds))
-            let words = content.words.filter { wordIDs.contains($0.id) && content.audio[$0.hebrew] != nil }.shuffled()
-            let letterQuestions = letters.prefix(3).compactMap { letter -> StudyGameQuestion? in
+            let words = content.words.filter { selection.includesWord($0.id) && content.audio[$0.hebrew] != nil }.shuffled()
+            let letterQuestions = selection.letters(letters).prefix(3).compactMap { letter -> StudyGameQuestion? in
                 let options = letters.filter { $0.id != letter.id && $0.hebrew != letter.hebrew }.prefix(3)
                 guard !options.isEmpty else { return nil }
                 return .listening(.init(letter), options: ([letter] + Array(options)).map(StudyGameChoice.init).shuffled(),
                                   prompt: "听字母名称，选出对应字母")
             }
-            let wordQuestions = words.prefix(3).compactMap { word -> StudyGameQuestion? in
+            let wordQuestions = selection.words(words).prefix(3).compactMap { word -> StudyGameQuestion? in
                 var spellings: Set<String> = [word.hebrewUnpointed]
                 var pronunciations: Set<String> = [word.ipa]
                 var alternatives: [StudyWord] = []
@@ -82,6 +79,47 @@ enum StudyGame: String, CaseIterable, Identifiable {
         case .matching:
             return []
         }
+    }
+}
+
+private struct StudyGameSelection {
+    let stageWordIDs: Set<String>
+    let stageLetterIDs: Set<String>
+    let coreWordIDs: Set<String>
+    let wordSchedule: [String: ReviewSchedule]
+    let letterSchedule: [String: ReviewSchedule]
+
+    init(content: StudyContent, progress: StudyProgress?) {
+        let stage = progress.flatMap { content.recommendedStage(in: $0) }
+        stageWordIDs = Set(stage?.wordIds ?? [])
+        stageLetterIDs = Set(stage?.letterIds ?? [])
+        coreWordIDs = Set(content.learningPath.flatMap(\.wordIds))
+        wordSchedule = progress?.schedule ?? [:]
+        letterSchedule = progress?.letterSchedule ?? [:]
+    }
+
+    func includesWord(_ id: String) -> Bool {
+        coreWordIDs.contains(id) || (wordSchedule[id]?.lapses ?? 0) > 0
+    }
+
+    func letters(_ items: [StudyLetter]) -> [StudyLetter] {
+        items.shuffled().sorted {
+            rank($0.id, stageIDs: stageLetterIDs, schedule: letterSchedule)
+                > rank($1.id, stageIDs: stageLetterIDs, schedule: letterSchedule)
+        }
+    }
+
+    func words(_ items: [StudyWord]) -> [StudyWord] {
+        items.shuffled().sorted {
+            let first = rank($0.id, stageIDs: stageWordIDs, schedule: wordSchedule)
+            let second = rank($1.id, stageIDs: stageWordIDs, schedule: wordSchedule)
+            if first != second { return first > second }
+            return coreWordIDs.contains($0.id) && !coreWordIDs.contains($1.id)
+        }
+    }
+
+    private func rank(_ id: String, stageIDs: Set<String>, schedule: [String: ReviewSchedule]) -> (Int, Int) {
+        (schedule[id]?.lapses ?? 0, stageIDs.contains(id) ? 1 : 0)
     }
 }
 
@@ -209,7 +247,7 @@ struct StudyGameView: View {
             }
         }
         .onAppear {
-            if round == nil { start(game.questions(in: content)) }
+            if round == nil { start(game.questions(in: content, progress: progress)) }
         }
         .onDisappear { audio.stop() }
     }
@@ -444,7 +482,7 @@ struct StudyGameView: View {
             }
 
             Button {
-                start(game.questions(in: content))
+                start(game.questions(in: content, progress: progress))
             } label: {
                 Label("再玩一局", systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
             }
@@ -474,14 +512,14 @@ struct StudyGameView: View {
 enum StudyMatchingDeck: String {
     case letters, words
 
-    func cards(in content: StudyContent) -> [StudyMatchingCard] {
+    func cards(in content: StudyContent, progress: StudyProgress? = nil) -> [StudyMatchingCard] {
+        let selection = StudyGameSelection(content: content, progress: progress)
         let pairs: [(StudyMatchingCard.Face, StudyMatchingCard.Face)]
         switch self {
         case .letters:
-            pairs = content.letters.shuffled().prefix(4).map { (.hebrew($0.hebrew), .cursive($0)) }
+            pairs = selection.letters(content.letters).prefix(4).map { (.hebrew($0.hebrew), .cursive($0)) }
         case .words:
-            let coreIDs = Set(content.learningPath.flatMap(\.wordIds))
-            let words = content.words.filter { coreIDs.contains($0.id) }.shuffled()
+            let words = selection.words(content.words.filter { selection.includesWord($0.id) })
             var hebrew: Set<String> = []
             var meanings: Set<String> = []
             var selected: [StudyWord] = []
@@ -659,7 +697,7 @@ struct StudyMatchingGameView: View {
 
     private func start() {
         audio.stop()
-        round = StudyMatchingRound(cards: deck.cards(in: content))
+        round = StudyMatchingRound(cards: deck.cards(in: content, progress: progress))
         started = true
     }
 }
