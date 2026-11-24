@@ -50,7 +50,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         do {
             let content = try StudyContent.load()
-            let progress = StudyProgress()
+            let progress = StudyProgress(letterIDs: Set(content.letters.map(\.id)),
+                                         wordIDs: Set(content.words.map(\.id)))
             self.progress = progress
             progress.widgetRequest = connectionOptions.urlContexts.lazy
                 .compactMap { StudyWidgetRoute(url: $0.url) }.first

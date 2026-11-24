@@ -342,6 +342,78 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertFalse(word.acceptsSpelling("שלום"))
     }
 
+    func testAchievementsPersistAfterMasteryAndStreakDrop() throws {
+        let letters = Set(DailyLetter.alphabet.map(\.id))
+        let words = Set((1...50).map { "w\($0)" })
+        let progress = StudyProgress(defaults: defaults, letterIDs: letters, wordIDs: words)
+        let start = makeDate(year: 2026, month: 11, day: 1)
+        XCTAssertTrue(progress.earnedAchievements.isEmpty)
+
+        progress.write(Dictionary(uniqueKeysWithValues: letters.map { ($0, Mastery.mastered) }),
+                       for: "alef.mastery.v1")
+        var mastery = Dictionary(uniqueKeysWithValues: words.subtracting(["w50"]).map { ($0, Mastery.mastered) })
+        mastery["obsolete-word"] = .mastered
+        progress.write(mastery, for: "alef.wordMastery.v1")
+        XCTAssertEqual(progress.achievementProgress.masteredWords, 49)
+        XCTAssertFalse(progress.earnedAchievements.contains(.fiftyWords))
+        progress.setWord("w50", mastery: .mastered, date: start)
+
+        for offset in 1...6 {
+            progress.recordStudy(on: try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: offset, to: start)))
+        }
+        XCTAssertEqual(progress.earnedAchievements,
+                       [.firstPractice, .tenLetters, .alphabet, .twentyWords, .fiftyWords, .threeDays, .sevenDays])
+
+        let afterBreak = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 9, to: start))
+        XCTAssertEqual(progress.statistics.activeStreakDays(on: afterBreak), 0)
+        progress.setLetter(try XCTUnwrap(letters.first), mastery: .learning, date: afterBreak)
+        progress.setWord("w50", mastery: .learning, date: afterBreak)
+        let reopened = StudyProgress(defaults: defaults, letterIDs: letters, wordIDs: words)
+        XCTAssertEqual(reopened.achievementProgress.masteredLetters, 21)
+        XCTAssertEqual(reopened.achievementProgress.masteredWords, 49)
+        XCTAssertEqual(reopened.statistics.streakDays, 1)
+        XCTAssertEqual(reopened.earnedAchievements, progress.earnedAchievements)
+        XCTAssertNil(reopened.syncSnapshot()[StudyAchievement.storageKey])
+    }
+
+    func testVocabularyAchievementUnlocksOnGroupCompletionAndSurvivesRollover() throws {
+        let word = makeWord(id: "shalom", hebrew: "שָׁלוֹם", unpointed: "שלום")
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        let day = DailyVocabularyPlan.dayKey(for: today)
+        progress.prepareDailyVocabulary(words: [word], date: today)
+        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: word, input: "שלום",
+                                                      date: today)?.correct, true)
+        XCTAssertFalse(progress.earnedAchievements.contains(.firstVocabularyGroup))
+        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        XCTAssertTrue(progress.earnedAchievements.contains(.firstVocabularyGroup))
+
+        let tomorrow = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 1, to: today))
+        progress.prepareDailyVocabulary(words: [word], date: tomorrow)
+        XCTAssertEqual(progress.dailyVocabulary.completedCount, 0)
+        XCTAssertTrue(StudyProgress(defaults: defaults).earnedAchievements.contains(.firstVocabularyGroup))
+    }
+
+    func testAchievementBackfillAndBackupUndo() throws {
+        let oldBackup = Data(#"{"app":"Alef","version":1,"data":{"alef.studyStats.v1":{"streakDays":3,"lastActiveDate":"2026-11-01","todayReviews":1,"totalReviews":3}}}"#.utf8)
+        let legacy = try progress.previewBackup(oldBackup)
+        let key = StudyAchievement.storageKey
+
+        progress.applyBackup(legacy)
+        XCTAssertEqual(progress.earnedAchievements, [.firstPractice, .threeDays])
+        let newBackup = try progress.exportBackup()
+        XCTAssertNotNil(try progress.previewBackup(newBackup)[key])
+        progress.undoBackup()
+        XCTAssertTrue(progress.earnedAchievements.isEmpty)
+
+        defaults.set(legacy, forKey: "alef.native.progress.v1")
+        let upgraded = StudyProgress(defaults: defaults)
+        XCTAssertEqual(upgraded.earnedAchievements, [.firstPractice, .threeDays])
+        upgraded.recordStudy(on: makeDate(year: 2026, month: 11, day: 20))
+        XCTAssertEqual(StudyProgress(defaults: defaults).earnedAchievements, [.firstPractice, .threeDays])
+    }
+
     func testBackupExportPreviewApplyUndoAndLegacyCompatibility() throws {
         let day1 = makeDate(year: 2026, month: 11, day: 1)
         progress.setWord("shalom", mastery: .mastered, date: day1)

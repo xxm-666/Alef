@@ -36,6 +36,7 @@
 		A1EF20000000000000000023 /* StudyGamesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000024 /* StudyGamesView.swift */; };
 		A1EF20000000000000000025 /* StudyComicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000026 /* StudyComicView.swift */; };
 		A1EF20000000000000000027 /* StudyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000028 /* StudyReviewView.swift */; };
+		A1EF20000000000000000029 /* StudyAchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000002A /* StudyAchievementsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +103,7 @@
 		A1EF20000000000000000024 /* StudyGamesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyGamesView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000026 /* StudyComicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyComicView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000028 /* StudyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyReviewView.swift; sourceTree = "<group>"; };
+		A1EF2000000000000000002A /* StudyAchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyAchievementsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,6 +153,7 @@
 				A1EF20000000000000000013 /* WordsView.swift */,
 				A1EF20000000000000000017 /* DailyVocabularyView.swift */,
 				A1EF20000000000000000011 /* StudySettingsView.swift */,
+				A1EF2000000000000000002A /* StudyAchievementsView.swift */,
 				A1EF20000000000000000019 /* StudyReminders.swift */,
 				A1EF2000000000000000001B /* StudyRecorder.swift */,
 				A1EF20000000000000000022 /* StudyAI.swift */,
@@ -314,6 +317,7 @@
 				A1EF20000000000000000014 /* WordsView.swift in Sources */,
 				A1EF20000000000000000018 /* DailyVocabularyView.swift in Sources */,
 				A1EF20000000000000000012 /* StudySettingsView.swift in Sources */,
+				A1EF20000000000000000029 /* StudyAchievementsView.swift in Sources */,
 				A1EF2000000000000000001A /* StudyReminders.swift in Sources */,
 				A1EF2000000000000000001C /* StudyRecorder.swift in Sources */,
 				A1EF20000000000000000021 /* StudyAI.swift in Sources */,

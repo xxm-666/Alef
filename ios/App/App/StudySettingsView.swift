@@ -14,6 +14,15 @@ struct StudySettingsView: View {
         StudyPage {
             StudyHeading(title: "学习与设置", eyebrow: "PROFILE & SYNC")
             statistics
+            StudyCard(padding: 10) {
+                NavigationLink {
+                    StudyAchievementsView()
+                } label: {
+                    StudyRow(title: "学习成就", symbol: "trophy",
+                             subtitle: "已解锁 \(progress.earnedAchievements.count) / \(StudyAchievement.allCases.count)")
+                }
+                .buttonStyle(.plain)
+            }
 
             StudySectionTitle("学习偏好")
             learningSettings
@@ -77,16 +86,14 @@ struct StudySettingsView: View {
     private var recordingCount: Int { Set(content.audio.values).count }
 
     private var statistics: some View {
-        let letterMastery = progress.letterMastery
-        let wordMastery = progress.wordMastery
-        let masteredLetters = content.letters.filter { letterMastery[$0.id] == .mastered }.count
-        let masteredWords = content.words.filter { wordMastery[$0.id] == .mastered }.count
+        let masteredLetters = progress.achievementProgress.masteredLetters
+        let masteredWords = progress.achievementProgress.masteredWords
         let dueCount = content.dueWords(in: progress).count + content.dueLetters(in: progress).count
         let stats = progress.statistics
         let columns = Array(repeating: GridItem(.flexible(), spacing: 10),
                             count: typeSize.isAccessibilitySize ? 1 : 2)
         return LazyVGrid(columns: columns, spacing: 10) {
-            bentoStatCard(title: "连续学习", value: "\(stats.streakDays) 天",
+            bentoStatCard(title: "连续学习", value: "\(stats.activeStreakDays()) 天",
                           detail: "今日练习 \(stats.reviewsToday) 次",
                           symbol: "flame.fill", tint: progress.theme.reminder)
             bentoStatCard(title: "掌握字母", value: "\(masteredLetters) / \(content.letters.count)",
@@ -760,6 +767,7 @@ private struct StudyBackupView: View {
         case "alef.wordSrs.v1", StudyProgress.letterScheduleKey: "calendar"
         case StudyReviewBatch.storageKey: "calendar.badge.clock"
         case StudyWordMistake.storageKey: "arrow.counterclockwise"
+        case StudyAchievement.storageKey: "trophy"
         case ReminderPreferences.storageKey: "bell.badge"
         case StudyProgress.lastBackupAtKey: "clock"
         case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1": "bookmark"
@@ -774,7 +782,7 @@ private struct StudyBackupView: View {
         case "alef.mastery.v1", "alef.wordMastery.v1", "alef.wordSrs.v1", StudyProgress.letterScheduleKey,
              "alef.studyStats.v1", "alef.displayConfig.v1":
             return (value as? [String: Any]).map { "\($0.count) 项" }
-        case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1":
+        case "alef.favoriteWords.v1", "alef.native.phraseFavorites.v1", StudyAchievement.storageKey:
             return (value as? [String]).map { "\($0.count) 项" }
         case StudyWordMistake.storageKey:
             return (value as? [[String: Any]]).map { "\($0.count) 项" }
@@ -831,6 +839,7 @@ private struct StudyBackupView: View {
         case DailyVocabularyPlan.storageKey: "今日记词进度"
         case StudyReviewBatch.storageKey: "本组复习进度"
         case StudyWordMistake.storageKey: "错题本"
+        case StudyAchievement.storageKey: "学习成就"
         case "alef.favoriteWords.v1": "收藏单词"
         case "alef.native.phraseFavorites.v1": "收藏短语"
         case "alef.native.feedback.v1": "答题与翻卡音效"

@@ -222,6 +222,12 @@ struct StudyStatistics: Codable, Equatable {
 
     var reviewsToday: Int { lastActiveDate == Self.dateFormatter.string(from: .now) ? todayReviews : 0 }
 
+    func activeStreakDays(on date: Date = .now) -> Int {
+        let today = Self.dateFormatter.string(from: date)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date).map(Self.dateFormatter.string(from:))
+        return lastActiveDate == today || lastActiveDate == yesterday ? streakDays : 0
+    }
+
     mutating func record(on date: Date) {
         let today = Self.dateFormatter.string(from: date)
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date).map(Self.dateFormatter.string(from:))
@@ -234,6 +240,45 @@ struct StudyStatistics: Codable, Equatable {
         }
         lastActiveDate = today
         totalReviews += 1
+    }
+}
+
+enum StudyAchievement: String, CaseIterable, Hashable, Identifiable {
+    case firstPractice, tenLetters, alphabet, firstVocabularyGroup
+    case twentyWords, fiftyWords, threeDays, sevenDays
+
+    static let storageKey = "alef.native.achievements.v1"
+
+    var id: String { rawValue }
+
+    var goal: Int {
+        switch self {
+        case .firstPractice, .firstVocabularyGroup: 1
+        case .tenLetters: 10
+        case .alphabet: 22
+        case .twentyWords: 20
+        case .fiftyWords: 50
+        case .threeDays: 3
+        case .sevenDays: 7
+        }
+    }
+}
+
+struct StudyAchievementProgress: Equatable {
+    var practiceCount = 0
+    var masteredLetters = 0
+    var masteredWords = 0
+    var completedVocabularyGroups = 0
+    var streakDays = 0
+
+    func value(for achievement: StudyAchievement) -> Int {
+        switch achievement {
+        case .firstPractice: practiceCount
+        case .tenLetters, .alphabet: masteredLetters
+        case .firstVocabularyGroup: completedVocabularyGroups
+        case .twentyWords, .fiftyWords: masteredWords
+        case .threeDays, .sevenDays: streakDays
+        }
     }
 }
 
@@ -373,11 +418,14 @@ struct StudyReviewBatch: Codable, Hashable {
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
     private static let localUpdatedAtKey = "alef.sync.localUpdatedAt.v1"
+    private static let achievementInputKeys: Set<String> = [
+        "alef.mastery.v1", "alef.wordMastery.v1", "alef.studyStats.v1", DailyVocabularyPlan.storageKey
+    ]
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
     static let nonSyncedKeys: Set<String> = [
         lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1",
-        StudyReviewBatch.storageKey, StudyWordMistake.storageKey
+        StudyReviewBatch.storageKey, StudyWordMistake.storageKey, StudyAchievement.storageKey
     ]
     static let appearanceKey = "alef.native.appearance.v1"
     static let themeKey = "alef.theme.v1"
@@ -387,11 +435,15 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     private let defaults: UserDefaults
+    private let letterIDs: Set<String>
+    private let wordIDs: Set<String>
     @ObservationIgnored private var entries: [String: Data]
     @ObservationIgnored private var readCache: [String: (Data, Any)] = [:]
     private(set) var restorePoint: BackupUndo?
     private(set) var syncRevision: Int = 0
     private(set) var localUpdatedAt: Int64 = 0
+    private(set) var achievementProgress = StudyAchievementProgress()
+    private(set) var earnedAchievements: Set<StudyAchievement> = []
     var widgetRequest: StudyWidgetRoute?
 
     private var cachedTheme: StudyTheme = .system
@@ -420,12 +472,16 @@ struct StudyReviewBatch: Codable, Hashable {
     private var phraseFavoritesVersion = 0
     private var otherKeyVersion = 0
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, letterIDs: Set<String> = [], wordIDs: Set<String> = []) {
         self.defaults = defaults
+        self.letterIDs = letterIDs
+        self.wordIDs = wordIDs
         entries = defaults.dictionary(forKey: Self.storageKey) as? [String: Data] ?? [:]
         restorePoint = defaults.data(forKey: Self.restoreKey).flatMap { try? JSONDecoder().decode(BackupUndo.self, from: $0) }
         localUpdatedAt = (defaults.object(forKey: Self.localUpdatedAtKey) as? NSNumber)?.int64Value ?? 0
+        let storedAchievements = entries[StudyAchievement.storageKey]
         refreshCachedState(changedKeys: nil)
+        if entries[StudyAchievement.storageKey] != storedAchievements { save() }
     }
 
     var letterMastery: [String: Mastery] { cachedLetterMastery }
@@ -802,8 +858,13 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func applyBackup(_ backup: [String: Data]) {
         let restored = backup.filter { $0.key != StudySyncMerger.itemVersionsKey }
-        let previous = entries.filter { restored[$0.key] != nil }
-        let absent = restored.keys.filter { entries[$0] == nil }
+        var affectedKeys = Set(restored.keys)
+        // Restored study records can unlock achievements that were absent from older backups.
+        if !affectedKeys.isDisjoint(with: Self.achievementInputKeys) {
+            affectedKeys.insert(StudyAchievement.storageKey)
+        }
+        let previous = entries.filter { affectedKeys.contains($0.key) }
+        let absent = affectedKeys.filter { entries[$0] == nil }.sorted()
         let undo = BackupUndo(previous: previous, absent: absent)
         guard let backupData = try? JSONEncoder().encode(undo) else { return }
         restorePoint = undo
@@ -1027,12 +1088,47 @@ struct StudyReviewBatch: Codable, Hashable {
                      "alef.studyStats.v1", DailyVocabularyPlan.storageKey, Self.lastBackupAtKey,
                      "alef.speechRate.v1", "alef.native.feedback.v1", "alef.native.haptics.v1",
                      "alef.native.recordings.v1", "alef.order.v1", ReminderPreferences.storageKey,
-                     StudyWordMistake.storageKey, StudyReviewBatch.storageKey:
+                     StudyWordMistake.storageKey, StudyReviewBatch.storageKey, StudyAchievement.storageKey:
                     break
                 default:
                     otherKeyVersion &+= 1
                 }
             }
+        }
+
+        if touches(StudyAchievement.storageKey)
+            || changedKeys?.isDisjoint(with: Self.achievementInputKeys) == false {
+            var measured = achievementProgress
+            if touches("alef.mastery.v1") {
+                measured.masteredLetters = cachedLetterMastery.lazy.filter {
+                    $0.value == .mastered && letterIDs.contains($0.key)
+                }.count
+            }
+            if touches("alef.wordMastery.v1") {
+                measured.masteredWords = cachedWordMastery.lazy.filter {
+                    $0.value == .mastered && wordIDs.contains($0.key)
+                }.count
+            }
+            measured.practiceCount = cachedStatistics.totalReviews
+            // A stored streak can qualify even if it has ended by the time the app is updated.
+            measured.streakDays = cachedStatistics.streakDays
+            measured.completedVocabularyGroups = cachedDailyVocabulary.completedCount
+            if achievementProgress != measured { achievementProgress = measured }
+            unlockAchievements(using: measured)
+        }
+    }
+
+    private func unlockAchievements(using measured: StudyAchievementProgress) {
+        let key = StudyAchievement.storageKey
+        let stored = decodeEntry(key, default: [String]())
+        var unlocked = Set(stored)
+        for achievement in StudyAchievement.allCases where measured.value(for: achievement) >= achievement.goal {
+            unlocked.insert(achievement.rawValue)
+        }
+        let known = Set(unlocked.compactMap(StudyAchievement.init(rawValue:)))
+        if earnedAchievements != known { earnedAchievements = known }
+        if unlocked.count > stored.count, let data = try? JSONEncoder().encode(unlocked.sorted()) {
+            entries[key] = data
         }
     }
 
@@ -1056,6 +1152,9 @@ struct StudyReviewBatch: Codable, Hashable {
                   Set(mistakes.map(\.id)).count == mistakes.count else { throw BackupError.invalid }
         case StudyReviewBatch.storageKey:
             guard try decoder.decode(StudyReviewBatch.self, from: data).isValid else { throw BackupError.invalid }
+        case StudyAchievement.storageKey:
+            let ids = try decoder.decode([String].self, from: data)
+            guard ids.allSatisfy({ !$0.isEmpty }), Set(ids).count == ids.count else { throw BackupError.invalid }
         case "alef.studyStats.v1":
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }

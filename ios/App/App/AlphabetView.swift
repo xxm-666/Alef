@@ -14,18 +14,19 @@ struct AlphabetView: View {
         let mastery = progress.letterMastery
         let letters = content.letters.filter { scope == "all" || mastery[$0.id] != .mastered }
         let masteredCount = content.letters.filter { mastery[$0.id] == .mastered }.count
+        let streakDays = progress.statistics.activeStreakDays()
         let focusedLetter = continueLetter
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
             HStack(alignment: .bottom) {
                 StudyHeading(title: "认识希伯来字母", eyebrow: "ALEF · 22 字母")
-                if progress.statistics.streakDays > 0 {
-                    Label("\(progress.statistics.streakDays) 天", systemImage: "flame.fill")
+                if streakDays > 0 {
+                    Label("\(streakDays) 天", systemImage: "flame.fill")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(progress.theme.reminder)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(progress.theme.reminderSurface, in: Capsule())
-                        .accessibilityLabel("连续学习 \(progress.statistics.streakDays) 天")
+                        .accessibilityLabel("连续学习 \(streakDays) 天")
                 }
             }
             StudyHeroCard {
