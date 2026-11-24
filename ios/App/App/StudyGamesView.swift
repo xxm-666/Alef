@@ -215,6 +215,7 @@ struct StudyGameView: View {
     let content: StudyContent
 
     @State private var round: StudyGameRound?
+    @State private var answerRun = StudyAnswerRun()
     @State private var selectedChoice: String?
     @State private var selectedTiles: [Int] = []
 
@@ -241,6 +242,7 @@ struct StudyGameView: View {
             .onChange(of: round?.index) { _, _ in scroll.scrollTo("game-top", anchor: .top) }
         }
         .studyDetail(game.title)
+        .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if round?.answer != nil {
                 StudyActionBar { nextButton }
@@ -259,9 +261,9 @@ struct StudyGameView: View {
             }
             .tint(progress.theme.learningAction)
             ViewThatFits(in: .horizontal) {
-                HStack { scoreLabel(round); Spacer(minLength: 12); streakLabel(round) }
+                HStack { scoreLabel(round); Spacer(minLength: 12); comboLabel }
                     .fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .leading, spacing: 4) { scoreLabel(round); streakLabel(round) }
+                VStack(alignment: .leading, spacing: 4) { scoreLabel(round); comboLabel }
             }
             .font(.subheadline.monospacedDigit())
         }
@@ -272,8 +274,8 @@ struct StudyGameView: View {
             .foregroundStyle(progress.theme.reminder)
     }
 
-    private func streakLabel(_ round: StudyGameRound) -> some View {
-        Label("连对 \(round.streak) 题", systemImage: "bolt.fill")
+    private var comboLabel: some View {
+        Label("连击 \(answerRun.combo)", systemImage: "bolt.fill")
             .foregroundStyle(progress.theme.mutedInk)
     }
 
@@ -456,6 +458,7 @@ struct StudyGameView: View {
     private var nextButton: some View {
         Button {
             audio.stop()
+            answerRun.clearCelebration()
             resetInput()
             round?.advance()
         } label: {
@@ -491,14 +494,16 @@ struct StudyGameView: View {
     }
 
     private func submit(_ correct: Bool) {
-        guard round?.current != nil, round?.answer == nil else { return }
+        guard let turn = round?.current, round?.answer == nil else { return }
         round?.submit(correct: correct)
+        answerRun.record(correct: correct, in: progress, isRetry: turn.isRetry)
         audio.stop()
         audio.playFeedback(correct ? .correct : .wrong)
     }
 
     private func start(_ questions: [StudyGameQuestion]) {
         audio.stop()
+        answerRun = StudyAnswerRun()
         resetInput()
         round = StudyGameRound(questions: questions)
     }
@@ -590,6 +595,7 @@ struct StudyMatchingGameView: View {
     let content: StudyContent
     @State private var deck = StudyMatchingDeck.letters
     @State private var round = StudyMatchingRound(cards: [])
+    @State private var answerRun = StudyAnswerRun()
     @State private var started = false
 
     var body: some View {
@@ -598,7 +604,9 @@ struct StudyMatchingGameView: View {
             if !round.cards.isEmpty {
                 StudyCard(padding: 10) {
                     StudySectionTitle("已配对 \(round.matched.count / 2) / \(round.cards.count / 2) 对")
-                    Text("尝试 \(round.attempts) 次")
+                    Text(answerRun.combo > 1
+                         ? "尝试 \(round.attempts) 次 · \(answerRun.combo) 连击"
+                         : "尝试 \(round.attempts) 次")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(progress.theme.mutedInk)
                 }
@@ -625,6 +633,7 @@ struct StudyMatchingGameView: View {
             }
         }
         .studyDetail(StudyGame.matching.title)
+        .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if round.hasMismatch {
                 StudyActionBar {
@@ -646,6 +655,7 @@ struct StudyMatchingGameView: View {
         let revealed = matched || round.revealedIDs.contains(card.id)
         return Button {
             let result = round.flip(card)
+            if let result { answerRun.record(correct: result, in: progress) }
             audio.playFeedback(result.map { $0 ? .correct : .wrong } ?? .flip)
         } label: {
             ZStack {
@@ -697,6 +707,7 @@ struct StudyMatchingGameView: View {
 
     private func start() {
         audio.stop()
+        answerRun = StudyAnswerRun()
         round = StudyMatchingRound(cards: deck.cards(in: content, progress: progress))
         started = true
     }

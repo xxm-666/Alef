@@ -376,6 +376,64 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertNil(reopened.syncSnapshot()[StudyAchievement.storageKey])
     }
 
+    func testAnswerComboBreaksOnWrongAnswerAndPersistsMilestones() throws {
+        var run = StudyAnswerRun()
+        for _ in 1...2 { run.record(correct: true, in: progress) }
+        run.record(correct: true, in: progress, isRetry: true)
+        XCTAssertEqual(run.combo, 2)
+        XCTAssertEqual(run.celebration?.combo, 0)
+        XCTAssertEqual(progress.achievementProgress.bestAnswerCombo, 2)
+        XCTAssertFalse(progress.earnedAchievements.contains(.comboThree))
+
+        run.record(correct: false, in: progress, isRetry: true)
+        XCTAssertEqual(run.combo, 0)
+        XCTAssertNil(run.celebration)
+        for count in 1...11 {
+            run.record(correct: true, in: progress)
+            XCTAssertEqual(run.combo, count)
+            XCTAssertEqual(run.celebration?.isMilestone, [3, 5, 10].contains(count))
+        }
+        run.clearCelebration()
+        XCTAssertNil(run.celebration)
+        XCTAssertEqual(run.combo, 11)
+        run.record(correct: false, in: progress)
+        XCTAssertEqual(run.combo, 0)
+
+        let reopened = StudyProgress(defaults: defaults)
+        XCTAssertEqual(reopened.achievementProgress.bestAnswerCombo, 11)
+        XCTAssertEqual(reopened.earnedAchievements, [.comboThree, .comboFive, .comboTen])
+        let backup = try reopened.previewBackup(reopened.exportBackup())
+        XCTAssertNotNil(backup[StudyProgress.bestAnswerComboKey])
+        XCTAssertNil(reopened.syncSnapshot()[StudyProgress.bestAnswerComboKey])
+    }
+
+    func testDailyVocabularyComboKeepsAcceptedAnswersAndResetsOnMistake() throws {
+        let words = (1...5).map { makeWord(id: "w\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        let day = DailyVocabularyPlan.dayKey(for: today)
+        progress.prepareDailyVocabulary(words: words, date: today)
+        for _ in words {
+            let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+            XCTAssertTrue(progress.advanceDailyVocabulary(group, day: day))
+        }
+        for (index, word) in words.enumerated() {
+            let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+            let correct = index != 3
+            let input = correct ? "שלום" : "תודה"
+            XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: word, input: input,
+                                                          date: today)?.correct, correct)
+            XCTAssertNil(progress.answerDailyVocabulary(group, day: day, word: word, input: input, date: today))
+            let pending = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+            XCTAssertEqual(pending.answerCombo, [1, 2, 3, 0, 1][index])
+            XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: day))
+        }
+
+        let reopened = StudyProgress(defaults: defaults)
+        XCTAssertEqual(reopened.achievementProgress.bestAnswerCombo, 3)
+        XCTAssertTrue(reopened.earnedAchievements.contains(.comboThree))
+        XCTAssertFalse(reopened.earnedAchievements.contains(.comboFive))
+    }
+
     func testVocabularyAchievementUnlocksOnGroupCompletionAndSurvivesRollover() throws {
         let word = makeWord(id: "shalom", hebrew: "שָׁלוֹם", unpointed: "שלום")
         let today = makeDate(year: 2026, month: 11, day: 1)

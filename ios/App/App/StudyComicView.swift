@@ -38,6 +38,7 @@ struct StudyCafeComicView: View {
     @State private var skippedChoices: Set<String> = []
     @State private var showsTranslation = false
     @State private var completed = false
+    @State private var celebration: StudyAnswerCelebration?
 
     var body: some View {
         let choices = order.compactMap { id in content.phrases.first { $0.id == id } }
@@ -88,6 +89,7 @@ struct StudyCafeComicView: View {
             }
         }
         .studyDetail("咖啡馆点单")
+        .studyAnswerCelebration(celebration)
         .onDisappear { audio.stop() }
     }
 
@@ -177,6 +179,7 @@ struct StudyCafeComicView: View {
                 skippedChoices = []
                 showsTranslation = false
                 completed = false
+                celebration = nil
             } label: {
                 Label("再读一次", systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
             }
@@ -189,6 +192,7 @@ struct StudyCafeComicView: View {
         audio.stop()
         if phrase.id == CafeComicAction.menu.rawValue {
             completed = true
+            celebration = StudyAnswerCelebration(combo: 0)
             audio.playFeedback(.correct)
         } else {
             wrongChoice = phrase

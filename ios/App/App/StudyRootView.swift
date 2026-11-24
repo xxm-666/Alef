@@ -1015,10 +1015,11 @@ struct StudyQuizFeedback: View {
     let solution: String
     var response: String?
     var explanation: String?
+    var combo = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(correct ? "回答正确" : "答案有误",
+            Label(correct ? (combo > 1 ? "回答正确 · \(combo) 连击" : "回答正确") : "答案有误",
                   systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.headline)
                 .foregroundStyle(correct ? progress.theme.success : progress.theme.error)
@@ -1041,6 +1042,89 @@ struct StudyQuizFeedback: View {
             guard !didFocus else { return }
             focused = true
             didFocus = true
+        }
+    }
+}
+
+extension View {
+    func studyAnswerCelebration(_ celebration: StudyAnswerCelebration?) -> some View {
+        overlay(alignment: .top) {
+            StudyAnswerCelebrationOverlay(celebration: celebration)
+                .padding(.top, 16)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct StudyAnswerCelebrationOverlay: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visible: StudyAnswerCelebration?
+    let celebration: StudyAnswerCelebration?
+
+    var body: some View {
+        ZStack {
+            if let visible {
+                StudyAnswerToast(celebration: visible)
+                    .id(visible.id)
+                    .transition(reduceMotion ? .identity : .opacity)
+            }
+        }
+        .task(id: celebration) {
+            visible = celebration
+            guard let celebration else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(celebration.isMilestone ? 1_200 : 850))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { visible = nil }
+        }
+    }
+}
+
+private struct StudyAnswerToast: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded = false
+    let celebration: StudyAnswerCelebration
+
+    var body: some View {
+        let theme = progress.theme
+        let tint = celebration.isMilestone ? theme.reminder : theme.success
+        ZStack {
+            if celebration.isMilestone && !reduceMotion {
+                fireworks(colors: [theme.reminder, theme.success, theme.accent])
+            }
+            Label(celebration.combo > 1 ? "\(celebration.combo) 连击" : "回答正确",
+                  systemImage: celebration.isMilestone ? "sparkles" : "hand.thumbsup.fill")
+                .font(.subheadline.weight(.bold).monospacedDigit())
+                .foregroundStyle(tint)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(celebration.isMilestone ? theme.reminderSurface : theme.successSurface, in: Capsule())
+                .overlay { Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1) }
+                .shadow(color: theme.cardShadow, radius: 4, y: 2)
+                .scaleEffect(expanded || reduceMotion ? 1 : 0.74)
+                .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: expanded)
+        }
+        .onAppear { expanded = true }
+    }
+
+    private func fireworks(colors: [Color]) -> some View {
+        ForEach(0..<12, id: \.self) { index in
+            let angle = Double(index) * Double.pi / 6
+            let radius = index.isMultiple(of: 2) ? 1.0 : 0.78
+            let size: CGFloat = index.isMultiple(of: 3) ? 6 : 4
+            Circle()
+                .fill(colors[index % colors.count])
+                .frame(width: size, height: size)
+                .offset(x: expanded ? CGFloat(cos(angle) * 96 * radius) : 0,
+                        y: expanded ? CGFloat(sin(angle) * 30 * radius) : 0)
+                .animation(.easeOut(duration: 0.54), value: expanded)
+                .opacity(expanded ? 0 : 1)
+                .animation(.easeOut(duration: 0.45).delay(0.22), value: expanded)
         }
     }
 }

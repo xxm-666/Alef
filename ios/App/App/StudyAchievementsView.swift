@@ -11,7 +11,7 @@ struct StudyAchievementsView: View {
         let locked = StudyAchievement.allCases.filter { !earned.contains($0) }
         let measured = currentProgress
         StudyPage {
-            overview(unlocked: unlocked.count)
+            overview(unlocked: unlocked.count, bestCombo: measured.bestAnswerCombo)
             if !unlocked.isEmpty {
                 StudySectionTitle("已解锁")
                 achievementGrid(unlocked, unlocked: true, measured: measured)
@@ -30,7 +30,7 @@ struct StudyAchievementsView: View {
         return measured
     }
 
-    private func overview(unlocked: Int) -> some View {
+    private func overview(unlocked: Int, bestCombo: Int) -> some View {
         let total = StudyAchievement.allCases.count
         let theme = progress.theme
         return StudyHeroCard(colors: [theme.primaryButton, theme.heroGradient.first ?? theme.primaryButton],
@@ -53,6 +53,11 @@ struct StudyAchievementsView: View {
             ProgressView(value: Double(unlocked), total: Double(total))
                 .tint(.white)
                 .accessibilityHidden(true)
+            if bestCombo > 0 {
+                Label("最高 \(bestCombo) 连击", systemImage: "bolt.fill")
+                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .accessibilityLabel("最高答题连击 \(bestCombo) 题")
+            }
         }
     }
 
@@ -125,6 +130,9 @@ private extension StudyAchievement {
         case .fiftyWords: "词汇进阶"
         case .threeDays: "三日坚持"
         case .sevenDays: "一周坚持"
+        case .comboThree: "三连击"
+        case .comboFive: "五连击"
+        case .comboTen: "十连击"
         }
     }
 
@@ -135,6 +143,7 @@ private extension StudyAchievement {
         case .firstVocabularyGroup: "完成一组「今日记词」"
         case .twentyWords, .fiftyWords: "掌握 \(goal) 个单词"
         case .threeDays, .sevenDays: "连续学习 \(goal) 天"
+        case .comboThree, .comboFive, .comboTen: "单轮连续答对 \(goal) 题"
         }
     }
 
@@ -148,6 +157,9 @@ private extension StudyAchievement {
         case .fiftyWords: "books.vertical.fill"
         case .threeDays: "flame.fill"
         case .sevenDays: "calendar.badge.checkmark"
+        case .comboThree: "hand.thumbsup.fill"
+        case .comboFive: "bolt.fill"
+        case .comboTen: "trophy.fill"
         }
     }
 
@@ -156,6 +168,7 @@ private extension StudyAchievement {
         case .firstPractice, .tenLetters, .alphabet: theme.accent
         case .firstVocabularyGroup, .twentyWords, .fiftyWords: theme.success
         case .threeDays, .sevenDays: theme.reminder
+        case .comboThree, .comboFive, .comboTen: theme.accent
         }
     }
 }

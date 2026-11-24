@@ -504,6 +504,7 @@ private struct StudySyllablesView: View {
     @State private var answer: String?
     @State private var correct = 0
     @State private var total = 0
+    @State private var answerRun = StudyAnswerRun()
 
     private struct Question {
         let consonant: StudyConsonant
@@ -530,6 +531,7 @@ private struct StudySyllablesView: View {
             }
         }
         .studyDetail("拼读实验室")
+        .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if quizzing, let question {
                 StudyActionBar {
@@ -546,6 +548,7 @@ private struct StudySyllablesView: View {
             }
         }
         .onChange(of: quizzing) { _, active in
+            answerRun = StudyAnswerRun()
             if active { next() }
             else { audio.stop() }
         }
@@ -639,7 +642,7 @@ private struct StudySyllablesView: View {
             StudyQuizFeedback(correct: answer == question.solution.id,
                               solution: word(question.consonant, question.solution),
                               response: selected.map { word(question.consonant, $0) },
-                              explanation: question.solution.tip)
+                              explanation: question.solution.tip, combo: answerRun.combo)
                 .id("syllable-result")
         }
     }
@@ -652,6 +655,7 @@ private struct StudySyllablesView: View {
         if success { correct += 1 }
         audio.playFeedback(success ? .correct : .wrong)
         progress.recordStudy()
+        answerRun.record(correct: success, in: progress)
     }
 
     private func word(_ consonant: StudyConsonant, _ vowel: StudyVowel) -> String {
@@ -669,6 +673,7 @@ private struct StudySyllablesView: View {
     }
 
     private func next() {
+        answerRun.clearCelebration()
         let core = ["kamatz", "tzere", "chirik", "cholam", "shuruk"]
         let choices = Array(vowels.filter { core.contains($0.id) }.shuffled().prefix(4))
         guard let consonant = consonants.filter({ $0.isSilent != true }).randomElement(),

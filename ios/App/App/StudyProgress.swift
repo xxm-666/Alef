@@ -246,8 +246,10 @@ struct StudyStatistics: Codable, Equatable {
 enum StudyAchievement: String, CaseIterable, Hashable, Identifiable {
     case firstPractice, tenLetters, alphabet, firstVocabularyGroup
     case twentyWords, fiftyWords, threeDays, sevenDays
+    case comboThree, comboFive, comboTen
 
     static let storageKey = "alef.native.achievements.v1"
+    static let comboGoals = Set([Self.comboThree, .comboFive, .comboTen].map(\.goal))
 
     var id: String { rawValue }
 
@@ -260,6 +262,9 @@ enum StudyAchievement: String, CaseIterable, Hashable, Identifiable {
         case .fiftyWords: 50
         case .threeDays: 3
         case .sevenDays: 7
+        case .comboThree: 3
+        case .comboFive: 5
+        case .comboTen: 10
         }
     }
 }
@@ -270,6 +275,7 @@ struct StudyAchievementProgress: Equatable {
     var masteredWords = 0
     var completedVocabularyGroups = 0
     var streakDays = 0
+    var bestAnswerCombo = 0
 
     func value(for achievement: StudyAchievement) -> Int {
         switch achievement {
@@ -278,7 +284,37 @@ struct StudyAchievementProgress: Equatable {
         case .firstVocabularyGroup: completedVocabularyGroups
         case .twentyWords, .fiftyWords: masteredWords
         case .threeDays, .sevenDays: streakDays
+        case .comboThree, .comboFive, .comboTen: bestAnswerCombo
         }
+    }
+}
+
+struct StudyAnswerCelebration: Equatable, Identifiable {
+    let id = UUID()
+    let combo: Int
+
+    var isMilestone: Bool { StudyAchievement.comboGoals.contains(combo) }
+}
+
+struct StudyAnswerRun {
+    private(set) var combo = 0
+    private(set) var celebration: StudyAnswerCelebration?
+
+    mutating func record(correct: Bool, in progress: StudyProgress, isRetry: Bool = false) {
+        guard correct else {
+            combo = 0
+            celebration = nil
+            return
+        }
+        if !isRetry {
+            combo += 1
+            progress.recordBestAnswerCombo(combo)
+        }
+        celebration = StudyAnswerCelebration(combo: isRetry ? 0 : combo)
+    }
+
+    mutating func clearCelebration() {
+        celebration = nil
     }
 }
 
@@ -297,6 +333,7 @@ struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
     var hasStarted: Bool { studied > 0 }
     var isComplete: Bool { answers.count == wordIds.count && !feedbackPending }
     var correctCount: Int { answers.filter(\.correct).count }
+    var answerCombo: Int { answers.reversed().prefix(while: \.correct).count }
     var status: String {
         if isComplete { return "拼对 \(correctCount) / \(wordIds.count)" }
         if studied == wordIds.count { return "拼写 \(answers.count) / \(wordIds.count)" }
@@ -418,14 +455,15 @@ struct StudyReviewBatch: Codable, Hashable {
     private static let restoreKey = "alef.native.restore.v1"
     private static let migrationKey = "alef.native.didReadWebStorage.v1"
     private static let localUpdatedAtKey = "alef.sync.localUpdatedAt.v1"
+    static let bestAnswerComboKey = "alef.native.bestAnswerCombo.v1"
     private static let achievementInputKeys: Set<String> = [
-        "alef.mastery.v1", "alef.wordMastery.v1", "alef.studyStats.v1", DailyVocabularyPlan.storageKey
+        "alef.mastery.v1", "alef.wordMastery.v1", "alef.studyStats.v1", DailyVocabularyPlan.storageKey, bestAnswerComboKey
     ]
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
     static let nonSyncedKeys: Set<String> = [
         lastBackupAtKey, "alef.activeView.v1", "alef.selectedLetterId.v1",
-        StudyReviewBatch.storageKey, StudyWordMistake.storageKey, StudyAchievement.storageKey
+        StudyReviewBatch.storageKey, StudyWordMistake.storageKey, StudyAchievement.storageKey, bestAnswerComboKey
     ]
     static let appearanceKey = "alef.native.appearance.v1"
     static let themeKey = "alef.theme.v1"
@@ -675,7 +713,8 @@ struct StudyReviewBatch: Codable, Hashable {
         plan.groups[index].feedbackPending = true
         saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
                    base: schedule[word.id], grade: attempt.correct ? .good : .again,
-                   recordStats: true, date: date, dailyPlan: plan, mistakeKind: .spelling)
+                   recordStats: true, date: date, dailyPlan: plan, mistakeKind: .spelling,
+                   answerCombo: plan.groups[index].answerCombo)
         return attempt
     }
 
@@ -700,7 +739,7 @@ struct StudyReviewBatch: Codable, Hashable {
     private func saveReview(_ id: String, masteryKey: String, scheduleKey: String, base: ReviewSchedule?,
                             grade: ReviewGrade, recordStats: Bool, date: Date,
                             dailyPlan: DailyVocabularyPlan? = nil, isRetry: Bool = false,
-                            mistakeKind: StudyWordMistakeKind? = nil) {
+                            mistakeKind: StudyWordMistakeKind? = nil, answerCombo: Int = 0) {
         if isRetry {
             recordStudy(on: date)
             return
@@ -722,6 +761,9 @@ struct StudyReviewBatch: Codable, Hashable {
                 entries[StudyWordMistake.storageKey] = try encoder.encode(mistakes)
             }
             if let dailyPlan { entries[DailyVocabularyPlan.storageKey] = try encoder.encode(dailyPlan) }
+            if answerCombo > achievementProgress.bestAnswerCombo {
+                entries[Self.bestAnswerComboKey] = try encoder.encode(answerCombo)
+            }
         }
     }
 
@@ -755,6 +797,11 @@ struct StudyReviewBatch: Codable, Hashable {
         var stats = statistics
         stats.record(on: date)
         write(stats, for: "alef.studyStats.v1")
+    }
+
+    func recordBestAnswerCombo(_ combo: Int) {
+        guard combo > achievementProgress.bestAnswerCombo else { return }
+        write(combo, for: Self.bestAnswerComboKey)
     }
 
     func read<Value: Decodable>(_ key: String, default defaultValue: Value) -> Value {
@@ -1088,7 +1135,8 @@ struct StudyReviewBatch: Codable, Hashable {
                      "alef.studyStats.v1", DailyVocabularyPlan.storageKey, Self.lastBackupAtKey,
                      "alef.speechRate.v1", "alef.native.feedback.v1", "alef.native.haptics.v1",
                      "alef.native.recordings.v1", "alef.order.v1", ReminderPreferences.storageKey,
-                     StudyWordMistake.storageKey, StudyReviewBatch.storageKey, StudyAchievement.storageKey:
+                     StudyWordMistake.storageKey, StudyReviewBatch.storageKey, StudyAchievement.storageKey,
+                     Self.bestAnswerComboKey:
                     break
                 default:
                     otherKeyVersion &+= 1
@@ -1113,6 +1161,9 @@ struct StudyReviewBatch: Codable, Hashable {
             // A stored streak can qualify even if it has ended by the time the app is updated.
             measured.streakDays = cachedStatistics.streakDays
             measured.completedVocabularyGroups = cachedDailyVocabulary.completedCount
+            if touches(Self.bestAnswerComboKey) {
+                measured.bestAnswerCombo = max(0, decodeEntry(Self.bestAnswerComboKey, default: 0))
+            }
             if achievementProgress != measured { achievementProgress = measured }
             unlockAchievements(using: measured)
         }
@@ -1155,6 +1206,8 @@ struct StudyReviewBatch: Codable, Hashable {
         case StudyAchievement.storageKey:
             let ids = try decoder.decode([String].self, from: data)
             guard ids.allSatisfy({ !$0.isEmpty }), Set(ids).count == ids.count else { throw BackupError.invalid }
+        case Self.bestAnswerComboKey:
+            guard try decoder.decode(Int.self, from: data) >= 0 else { throw BackupError.invalid }
         case "alef.studyStats.v1":
             let stats = try decoder.decode(StudyStatistics.self, from: data)
             guard stats.streakDays >= 0, stats.todayReviews >= 0, stats.totalReviews >= 0 else { throw BackupError.invalid }

@@ -515,7 +515,7 @@ private struct FlashQuizView: View {
     @State private var showsSummary = false
     @State private var correct = 0
     @State private var total = 0
-    @State private var streak = 0
+    @State private var answerRun = StudyAnswerRun()
     @State private var queue: [StudyLetter] = []
     @State private var reviewIndex = 0
     @State private var requeuedIds: Set<String> = []
@@ -572,6 +572,7 @@ private struct FlashQuizView: View {
             }
         }
         .studyDetail(reviewing ? "到期字母复习" : kind.title)
+        .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if !reviewing && total > 0 && !showsSummary {
                 ToolbarItem(placement: .topBarTrailing) { Button("结束") { showsSummary = true } }
@@ -601,7 +602,7 @@ private struct FlashQuizView: View {
             Label("得分 \(correct) / \(total)", systemImage: "star")
             Spacer()
             if !reviewing {
-                Label("连对 \(streak)", systemImage: "flame")
+                Label("连击 \(answerRun.combo)", systemImage: "bolt.fill")
                     .foregroundStyle(progress.theme.reminder)
             }
         }
@@ -635,7 +636,8 @@ private struct FlashQuizView: View {
         let success = answer == question.solution
         VStack(alignment: .leading, spacing: 8) {
             StudyQuizFeedback(correct: success, solution: question.solution,
-                              response: answer, explanation: question.explanation)
+                              response: answer, explanation: question.explanation,
+                              combo: reviewing && !isRetryAnswer ? answerRun.combo : 0)
             if reviewing && !success && requeuedThisTurn {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
@@ -721,7 +723,6 @@ private struct FlashQuizView: View {
         total += 1
         let success = choice == solution
         if success { correct += 1 }
-        streak = success ? streak + 1 : 0
         if reviewing {
             let now = Date.now
             isRetryAnswer = requeuedIds.contains(question.letter.id)
@@ -737,6 +738,7 @@ private struct FlashQuizView: View {
         } else {
             progress.recordStudy()
         }
+        answerRun.record(correct: success, in: progress, isRetry: isRetryAnswer)
         audio.playFeedback(success ? .correct : .wrong)
     }
 
@@ -758,6 +760,7 @@ private struct FlashQuizView: View {
     }
 
     private func next() {
+        answerRun.clearCelebration()
         let target: StudyLetter
         if reviewing {
             guard queue.indices.contains(reviewIndex) else {
@@ -846,7 +849,7 @@ private struct MinimalPairQuizView: View {
     @State private var submittedId: String?
     @State private var correct = 0
     @State private var total = 0
-    @State private var streak = 0
+    @State private var answerRun = StudyAnswerRun()
     @State private var showsSummary = false
 
     private var wordsById: [String: StudyWord] {
@@ -884,6 +887,7 @@ private struct MinimalPairQuizView: View {
             }
         }
         .studyDetail("易混音辨析")
+        .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if total > 0 && !showsSummary {
                 ToolbarItem(placement: .topBarTrailing) { Button("结束") { showsSummary = true } }
@@ -902,7 +906,7 @@ private struct MinimalPairQuizView: View {
         HStack {
             Label("得分 \(correct) / \(total)", systemImage: "star")
             Spacer()
-            Label("连对 \(streak)", systemImage: "flame")
+            Label("连击 \(answerRun.combo)", systemImage: "bolt.fill")
                 .foregroundStyle(progress.theme.reminder)
             if submittedId == nil {
                 Button { next(play: true) } label: {
@@ -1003,12 +1007,13 @@ private struct MinimalPairQuizView: View {
         total += 1
         let success = selectedId == question.target.id
         if success { correct += 1 }
-        streak = success ? streak + 1 : 0
         progress.recordStudy()
+        answerRun.record(correct: success, in: progress)
         audio.playFeedback(success ? .correct : .wrong)
     }
 
     private func next(play: Bool) {
+        answerRun.clearCelebration()
         let lookup = wordsById
         let validPairs = content.minimalPairs.filter {
             lookup[$0.firstWordId] != nil && lookup[$0.secondWordId] != nil

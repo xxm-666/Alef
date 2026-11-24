@@ -64,6 +64,7 @@ private struct DailyVocabularyView: View {
     @State private var activeId: String?
     @State private var revealed = false
     @State private var spelling = ""
+    @State private var celebration: StudyAnswerCelebration?
 
     private var plan: DailyVocabularyPlan { progress.dailyVocabulary }
     var body: some View {
@@ -73,6 +74,7 @@ private struct DailyVocabularyView: View {
 
         scrollingPage(group: group, index: index, day: current.day)
             .studyDetail("今日记词")
+            .studyAnswerCelebration(celebration)
             .toolbar {
                 if group != nil {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -269,7 +271,8 @@ private struct DailyVocabularyView: View {
         if let answer {
             let solution = "\(word.hebrew) · \(word.hebrewUnpointed)"
             VStack(alignment: .leading, spacing: 8) {
-                StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input)
+                StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input,
+                                  combo: group.answerCombo)
                 if let schedule = progress.schedule[word.id] {
                     StudyNotice(title: "已安排下次复习", symbol: "calendar.badge.checkmark",
                                 note: schedule.displayDate)
@@ -350,6 +353,7 @@ private struct DailyVocabularyView: View {
         if id == nil { progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress)) }
         audio.stop()
         activeId = id
+        celebration = nil
         revealed = false
         spelling = ""
     }
@@ -357,12 +361,14 @@ private struct DailyVocabularyView: View {
     private func advance(_ group: DailyVocabularyGroup, day: String) {
         guard progress.advanceDailyVocabulary(group, day: day) else { return }
         audio.stop()
+        celebration = nil
         revealed = false
         spelling = ""
     }
 
     private func submit(_ group: DailyVocabularyGroup, word: StudyWord, day: String) {
         guard let answer = progress.answerDailyVocabulary(group, day: day, word: word, input: spelling) else { return }
+        celebration = answer.correct ? StudyAnswerCelebration(combo: group.answerCombo + 1) : nil
         audio.playFeedback(answer.correct ? .correct : .wrong)
     }
 }

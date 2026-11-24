@@ -793,6 +793,7 @@ struct StudyReadingView: View {
     @State private var niqqudMode: ReadingNiqqudMode
     @State private var showTranslation = false
     @State private var answer: Int?
+    @State private var celebration: StudyAnswerCelebration?
     @State private var selectedGloss: GlossSelection?
     @State private var revealedPointed: Set<Int> = []
     @State private var activeSentence: Int?
@@ -834,7 +835,10 @@ struct StudyReadingView: View {
                                   selected: answer == index, correct: index == reading.question.correctIndex,
                                   optionLabel: studyOptionLabel(index)) {
                     answer = index
-                    if index == reading.question.correctIndex { progress.recordStudy() }
+                    if index == reading.question.correctIndex {
+                        progress.recordStudy()
+                        celebration = StudyAnswerCelebration(combo: 0)
+                    }
                 }
             }
             if let answer {
@@ -844,6 +848,7 @@ struct StudyReadingView: View {
             }
         }
         .studyDetail(reading.title)
+        .studyAnswerCelebration(celebration)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("阅读选项", systemImage: "slider.horizontal.3") {
@@ -1025,7 +1030,7 @@ struct WordQuizView: View {
     @State private var selectedOption: String?
     @State private var correct = 0
     @State private var answered = 0
-    @State private var streak = 0
+    @State private var answerRun = StudyAnswerRun()
     @State private var reviewIndex = 0
     @State private var queue: [StudyWord] = []
     @State private var requeuedIds: Set<String> = []
@@ -1072,6 +1077,7 @@ struct WordQuizView: View {
             }
         }
         .studyDetail(reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : "\(kind.title)练习"))
+        .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if !reviewing && answered > 0 && !showsSummary {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1120,7 +1126,7 @@ struct WordQuizView: View {
         Label("得分 \(correct) / \(answered)", systemImage: "star")
             .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
         if !usesQueue {
-            Label("连对 \(streak)", systemImage: "flame")
+            Label("连击 \(answerRun.combo)", systemImage: "bolt.fill")
                 .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.reminder)
         }
     }
@@ -1153,7 +1159,8 @@ struct WordQuizView: View {
             StudyQuizFeedback(correct: correct,
                               solution: kind == .spelling ? "\(target.hebrew) · \(target.hebrewUnpointed)" : "\(target.hebrew) · \(target.meaningZh)",
                               response: kind == .spelling ? spelling : options.first { $0.id == selectedOption }?.meaningZh,
-                              explanation: "\(target.transliteration) · \(target.partOfSpeech)")
+                              explanation: "\(target.transliteration) · \(target.partOfSpeech)",
+                              combo: usesQueue && !isRetryAnswer ? answerRun.combo : 0)
             if kind == .spelling {
                 PronunciationButton(hebrew: target.hebrew, title: "听正确发音")
             }
@@ -1217,7 +1224,6 @@ struct WordQuizView: View {
         result = success
         answered += 1
         if success { correct += 1 }
-        streak = success ? streak + 1 : 0
         if reviewing {
             isRetryAnswer = requeuedIds.contains(target.id)
             progress.completeReview(target.id, correct: success, mistakeKind: kind == .spelling ? .spelling : .meaning,
@@ -1229,10 +1235,12 @@ struct WordQuizView: View {
         } else {
             progress.recordStudy()
         }
+        answerRun.record(correct: success, in: progress, isRetry: isRetryAnswer)
         audio.playFeedback(success ? .correct : .wrong)
     }
 
     private func next(play: Bool) {
+        answerRun.clearCelebration()
         let source = usesQueue ? queue : words
         let pool = switch kind {
         case .spelling: usesQueue ? source : source.filter(\.canPracticeSpelling)
