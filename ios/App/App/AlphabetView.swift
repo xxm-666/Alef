@@ -356,7 +356,6 @@ struct LetterTileContent: View {
 struct LetterStudyView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: StudyContent
     private let showsFinalForm: Bool
     @State private var letter: StudyLetter
@@ -450,31 +449,29 @@ struct LetterStudyView: View {
             }
         }
         .id(letter.id)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            StudyActionBar {
-                pager
-            }
-        }
         .studyDetail("\(displayGlyph) · \(letter.studyName)")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    move(progress.alphabetFromRight ? 1 : -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .accessibilityLabel(progress.alphabetFromRight ? "下一个字母" : "上一个字母")
+
+                Button {
+                    move(progress.alphabetFromRight ? -1 : 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .accessibilityLabel(progress.alphabetFromRight ? "上一个字母" : "下一个字母")
+
                 StudyMemoryCurveEntry(schedule: progress.letterSchedule[letter.id], item: .letter)
             }
         }
         .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }
-    }
-
-    private var pager: some View {
-        HStack {
-            letterNavigation(-1)
-            Spacer(minLength: 4)
-            Text(letterPositionLabel)
-                .font(.caption.weight(.bold).monospacedDigit())
-                .foregroundStyle(progress.theme.mutedInk)
-            Spacer(minLength: 4)
-            letterNavigation(1)
-        }
-        .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
     }
 
     private var letterHeader: some View {
@@ -496,6 +493,15 @@ struct LetterStudyView: View {
                         Text(letter.nameHebrew)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(progress.theme.mutedInk)
+                        Spacer(minLength: 4)
+                        if !letterPositionLabel.isEmpty {
+                            Text(letterPositionLabel)
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .foregroundStyle(progress.theme.mutedInk)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(progress.theme.insetSurface, in: Capsule())
+                        }
                     }
                     Text(letter.nameChinese).font(.headline)
                     Text("现代读音 \(letter.modernIpa)")
@@ -516,17 +522,6 @@ struct LetterStudyView: View {
                                     rate: 0.68, title: "慢速字母名")
             }
         }
-    }
-
-    private func letterNavigation(_ offset: Int) -> some View {
-        let previous = offset < 0
-        let left = previous != progress.alphabetFromRight
-        return Button { move(offset) } label: {
-            Label(previous ? "上一个" : "下一个", systemImage: left ? "chevron.left" : "chevron.right")
-                .environment(\.layoutDirection, .leftToRight)
-        }
-        .buttonStyle(StudyButtonStyle(prominent: !previous))
-        .keyboardShortcut(left ? .leftArrow : .rightArrow, modifiers: [])
     }
 
     private func letterForm(cursive: Bool) -> some View {
