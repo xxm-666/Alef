@@ -5,29 +5,34 @@ import UniformTypeIdentifiers
 struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(StudyFolderSyncManager.self) private var folderSync
+    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var showsDisplay = false
     @State private var showsThemes = false
 
     var body: some View {
         StudyPage {
-            StudyHeading(title: "学习与设置")
+            StudyHeading(title: "学习与设置", eyebrow: "PROFILE & SYNC")
             statistics
 
             StudySectionTitle("学习偏好")
             learningSettings
 
             StudySectionTitle("外观与设备")
-            StudyCard(padding: 10, spacing: 2) {
+            StudyCard(padding: 10, spacing: 6) {
                 Button { showsThemes = true } label: {
-                    StudyRow(title: "外观主题", symbol: "sun.max", value: progress.theme.title)
+                    StudyRow(title: "外观主题", symbol: "sun.max", value: progress.theme.title,
+                             badgeColors: progress.theme.warmGradient)
                 }
                 .buttonStyle(.plain)
+                StudyThemeChoices()
+                    .padding(.vertical, 4)
                 Divider()
                 NavigationLink {
                     StudyWidgetPreview(content: content)
                 } label: {
-                    StudyRow(title: "小组件", symbol: "square.grid.2x2")
+                    StudyRow(title: "小组件", symbol: "square.grid.2x2",
+                             badgeColors: progress.theme.indigoGradient)
                 }
                 .buttonStyle(.plain)
             }
@@ -37,7 +42,8 @@ struct StudySettingsView: View {
                 NavigationLink {
                     StudySpeechView(content: content)
                 } label: {
-                    StudyRow(title: "发音与音效", symbol: "headphones", subtitle: "\(recordingCount) 段离线录音")
+                    StudyRow(title: "发音与音效", symbol: "headphones", subtitle: "\(recordingCount) 段离线录音",
+                             badgeColors: progress.theme.heroGradient)
                 }
                 .buttonStyle(.plain)
                 Divider()
@@ -45,14 +51,16 @@ struct StudySettingsView: View {
                     StudyAISettingsView()
                 } label: {
                     StudyRow(title: "AI 功能", symbol: "waveform.badge.magnifyingglass",
-                             subtitle: "跟读识别服务")
+                             subtitle: "跟读识别服务",
+                             badgeColors: progress.theme.indigoGradient)
                 }
                 .buttonStyle(.plain)
                 Divider()
                 NavigationLink {
                     StudyBackupView()
                 } label: {
-                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive", subtitle: backupSubtitle)
+                    StudyRow(title: "数据备份与恢复", symbol: "externaldrive", subtitle: backupSubtitle,
+                             badgeColors: [progress.theme.success, progress.theme.accent])
                 }
                 .buttonStyle(.plain)
             }
@@ -75,42 +83,76 @@ struct StudySettingsView: View {
         let masteredWords = content.words.filter { wordMastery[$0.id] == .mastered }.count
         let dueCount = content.dueWords(in: progress).count + content.dueLetters(in: progress).count
         let stats = progress.statistics
-        return StudyCard(padding: 10) {
-            DisclosureGroup {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("掌握字母", value: "\(masteredLetters) / \(content.letters.count)")
-                    LabeledContent("掌握单词", value: "\(masteredWords)")
-                    LabeledContent("到期复习", value: "\(dueCount)")
-                    LabeledContent("累计练习", value: "\(stats.totalReviews)")
-                }
-                .font(.subheadline)
-                .foregroundStyle(progress.theme.mutedInk)
-                .padding(.top, 4)
-            } label: {
-                StudyRow(title: "学习进度", symbol: "chart.bar",
-                         subtitle: "今日练习 \(stats.reviewsToday) 次 · 连续 \(stats.streakDays) 天", chevron: false)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 10),
+                            count: typeSize.isAccessibilitySize ? 1 : 2)
+        return LazyVGrid(columns: columns, spacing: 10) {
+            bentoStatCard(title: "连续学习", value: "\(stats.streakDays) 天",
+                          detail: "今日练习 \(stats.reviewsToday) 次",
+                          symbol: "flame.fill", tint: progress.theme.reminder)
+            bentoStatCard(title: "掌握字母", value: "\(masteredLetters) / \(content.letters.count)",
+                          detail: "基础字形与发音",
+                          symbol: "character.book.closed.fill", tint: progress.theme.accent,
+                          progressValue: Double(masteredLetters), progressTotal: Double(max(1, content.letters.count)))
+            bentoStatCard(title: "掌握单词", value: "\(masteredWords)",
+                          detail: "词库共 \(content.words.count) 词",
+                          symbol: "checkmark.seal.fill", tint: progress.theme.success)
+            bentoStatCard(title: "到期与累计", value: "\(dueCount) 待练",
+                          detail: "累计练习 \(stats.totalReviews) 次",
+                          symbol: "chart.bar.fill", tint: progress.theme.learningAction)
+        }
+    }
+
+    private func bentoStatCard(title: String, value: String, detail: String, symbol: String, tint: Color,
+                               progressValue: Double? = nil, progressTotal: Double? = nil) -> some View {
+        StudyCard(padding: 13, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(progress.theme.mutedInk)
+                Spacer(minLength: 0)
+                Image(systemName: symbol)
+                    .font(.subheadline)
+                    .foregroundStyle(tint)
+                    .accessibilityHidden(true)
+            }
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(progress.theme.ink)
+            if let progressValue, let progressTotal {
+                ProgressView(value: progressValue, total: progressTotal)
+                    .tint(tint)
+                    .accessibilityHidden(true)
+            } else {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(progress.theme.mutedInk)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title) \(value)，\(detail)")
     }
 
     private var learningSettings: some View {
         @Bindable var progress = progress
-        return StudyCard(padding: 9, spacing: 2) {
+        return StudyCard(padding: 10, spacing: 2) {
             Toggle(isOn: $progress.alphabetFromRight) {
                 StudyRow(title: "字母从右向左排列", symbol: "arrow.left.arrow.right",
-                         subtitle: progress.alphabetFromRight ? "RTL" : "LTR", chevron: false)
+                         subtitle: progress.alphabetFromRight ? "RTL" : "LTR", chevron: false,
+                         badgeColors: progress.theme.heroGradient)
             }
             .tint(progress.theme.primaryButton)
             Divider()
             Button { showsDisplay = true } label: {
-                StudyRow(title: "字母卡片显示项", symbol: "rectangle.3.group")
+                StudyRow(title: "字母卡片显示项", symbol: "rectangle.3.group",
+                         badgeColors: progress.theme.indigoGradient)
             }
             .buttonStyle(.plain)
             Divider()
             NavigationLink {
                 StudyReminderSettingsView(content: content)
             } label: {
-                StudyRow(title: "学习提醒", symbol: "bell.badge", value: reminderSummary)
+                StudyRow(title: "学习提醒", symbol: "bell.badge", value: reminderSummary,
+                         badgeColors: progress.theme.warmGradient)
             }
             .buttonStyle(.plain)
         }

@@ -50,7 +50,7 @@ struct WordsView: View {
 
     var body: some View {
         StudyPage {
-            StudyHeading(title: "词库")
+            StudyHeading(title: "词库", eyebrow: "VOCABULARY · \(content.words.count) 词")
             StudySegments(title: "词库内容",
                           options: [("browse", "单词"), ("phrases", "情景短语"), ("reading", "阅读")],
                           selection: Binding(get: { libraryMode }, set: {
@@ -65,6 +65,7 @@ struct WordsView: View {
                 StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud))
             default:
                 searchControls
+                quickTogglesBar
                 if hasFilters { activeFilters }
                 wordLibrary
             }
@@ -153,9 +154,61 @@ struct WordsView: View {
                 .accessibilityLabel("清除搜索")
             }
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 45)
-        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 14)
+        .frame(minHeight: 46)
+        .studyGlassSurface(cornerRadius: 23, interactive: false)
+    }
+
+    private var quickTogglesBar: some View {
+        let favoritesOnly = preferences.scope == "favorites"
+        return ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                quickPill(preferences.showNiqqud ? "● 元音点" : "○ 元音点", active: preferences.showNiqqud) {
+                    var state = preferences
+                    state.showNiqqud.toggle()
+                    progress.write(state, for: "alef.wordsState.v1")
+                }
+                quickPill("手写体", symbol: "pencil.tip", active: preferences.showCursive) {
+                    var state = preferences
+                    state.showCursive.toggle()
+                    progress.write(state, for: "alef.wordsState.v1")
+                }
+                quickPill("仅看收藏", symbol: favoritesOnly ? "bookmark.fill" : "bookmark", active: favoritesOnly) {
+                    var state = preferences
+                    state.topic = state.selectedTopic
+                    state.activeFilter = favoritesOnly ? "all" : "favorites"
+                    progress.write(state, for: "alef.wordsState.v1")
+                }
+                quickPill(preferences.usesCards ? "卡片布局" : "列表布局",
+                          symbol: preferences.usesCards ? "square.grid.2x2" : "list.bullet",
+                          active: preferences.usesCards) {
+                    var state = preferences
+                    state.setCardLayout(!state.usesCards)
+                    progress.write(state, for: "alef.wordsState.v1")
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func quickPill(_ title: String, symbol: String? = nil, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if let symbol {
+                    Label(title, systemImage: symbol)
+                } else {
+                    Text(title)
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(active ? Color.white : progress.theme.ink)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .background(active ? progress.theme.primaryButton : progress.theme.insetSurface, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private var hasFilters: Bool {
@@ -301,17 +354,34 @@ struct WordsView: View {
                 }
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: mastery.symbol).font(.subheadline)
-                Text(mastery.title).font(.caption2)
+                Text(mastery.title).font(.caption2.weight(.semibold))
             }
-            .foregroundStyle(mastery == .unlearned ? progress.theme.mutedInk : progress.theme.accent)
-            .padding(.horizontal, 4)
-            .frame(minWidth: 44, minHeight: 44)
+            .foregroundStyle(masteryTint(mastery))
+            .padding(.horizontal, 6)
+            .frame(minWidth: 46, minHeight: 46)
+            .background(masterySurface(mastery), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(Rectangle())
         }
         .accessibilityLabel("\(word.meaningZh)的掌握度")
         .accessibilityValue(mastery.title)
+    }
+
+    private func masteryTint(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.success
+        case .learning: progress.theme.learningAction
+        case .unlearned: progress.theme.mutedInk
+        }
+    }
+
+    private func masterySurface(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.successSurface
+        case .learning: progress.theme.highlightedSurface
+        case .unlearned: progress.theme.insetSurface
+        }
     }
 
     private var phraseLibrary: some View {
@@ -545,13 +615,25 @@ struct WordDetailView: View {
     var body: some View {
         StudyPage {
             StudyCard {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        let tag = [content.wordCategories[word.category]?.label, word.partOfSpeech, word.grammarTag]
+                            .compactMap { $0 }
+                            .filter { !$0.isEmpty }
+                            .joined(separator: " · ")
+                        if !tag.isEmpty {
+                            Text(tag)
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(progress.theme.accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(progress.theme.highlightedSurface, in: Capsule())
+                        }
                         HebrewText(text: displayedWord, cursive: showCursive,
                                    size: 56, style: .largeTitle)
                         Text("\(word.transliteration)  \(word.ipa)")
                             .font(.subheadline.weight(.medium)).foregroundStyle(progress.theme.mutedInk)
-                        Text(word.meaningZh).font(.title3.weight(.semibold)).foregroundStyle(progress.theme.ink)
+                        Text(word.meaningZh).font(.title3.weight(.bold)).foregroundStyle(progress.theme.ink)
                     }
                     Spacer(minLength: 0)
                     PronunciationButton(hebrew: word.hebrew, iconOnly: true,

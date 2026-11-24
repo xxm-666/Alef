@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StudyRulesView: View {
     @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     let topic: String?
@@ -33,37 +34,74 @@ struct StudyRulesView: View {
     }
 
     private var overview: some View {
-        StudyPage {
-            StudyHeading(title: "规则")
-            NavigationLink {
-                StudySyllablesView(consonants: content.consonants, vowels: content.vowels)
-            } label: {
-                StudyCard(highlighted: true) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 8) {
-                            StudySectionTitle("拼读实验室")
-                            HStack(spacing: 12) {
-                                HebrewText(text: "בַּ", size: 33)
-                                HebrewText(text: "בִּ", size: 33)
-                                HebrewText(text: "בֶּ", size: 33)
-                            }
-                            .accessibilityHidden(true)
-                            Text("探索辅音与元音的组合").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                        }
-                        Spacer(minLength: 4)
-                        Image(systemName: "waveform")
-                            .font(.largeTitle)
-                            .foregroundStyle(progress.theme.accent)
-                            .accessibilityHidden(true)
+        let quickSyllables = [("בַּ", "ba"), ("בִּ", "bi"), ("בֶּ", "be"), ("בֹּ", "bo"), ("בֻּ", "bu")]
+        return StudyPage {
+            StudyHeading(title: "规则", eyebrow: "RULES & LAB")
+            StudyHeroCard(colors: progress.theme.indigoGradient, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("音节合成与听辨")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.20), in: Capsule())
+                        Text("拼读实验室")
+                            .font(.title3.weight(.bold))
+                        Text("点击音节直接试听，或进入完整实验室自由组合")
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.88))
                     }
-                    Label("进入实验室", systemImage: "chevron.right")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(progress.theme.primaryButton, in: Capsule())
+                    Spacer(minLength: 8)
+                    Image(systemName: "waveform")
+                        .font(.title)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .accessibilityHidden(true)
                 }
+
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(quickSyllables, id: \.0) { syllable, sound in
+                            Button {
+                                audio.speak(syllable, rate: progress.speechRate, bundledOnly: true)
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(syllable)
+                                        .font(.system(size: 24, weight: .bold, design: .serif))
+                                        .environment(\.layoutDirection, .rightToLeft)
+                                    Text(sound)
+                                        .font(.caption2.weight(.semibold))
+                                        .opacity(0.88)
+                                }
+                                .foregroundStyle(Color.white)
+                                .frame(minWidth: 50, minHeight: 50)
+                                .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.24), lineWidth: 1)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("试听音节 \(sound)")
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+
+                NavigationLink {
+                    StudySyllablesView(consonants: content.consonants, vowels: content.vowels)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("进入完整拼读实验室")
+                            .font(.subheadline.weight(.bold))
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(progress.theme.primaryButton)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Color.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             let groups = [("字形与发音", categories.prefix(5)), ("构词与语法", categories.dropFirst(5))]
             ForEach(groups, id: \.0) { title, rules in
@@ -74,7 +112,9 @@ struct StudyRulesView: View {
                         NavigationLink {
                             StudyRulesView(content: content, topic: key)
                         } label: {
-                            StudyRow(title: title, symbol: symbol, subtitle: subtitle, value: count.isEmpty ? nil : count)
+                            StudyRow(title: title, symbol: symbol, subtitle: subtitle,
+                                     value: count.isEmpty ? nil : count,
+                                     badgeColors: ruleBadgeColors(for: key))
                         }
                         .buttonStyle(.plain)
                     }
@@ -82,6 +122,15 @@ struct StudyRulesView: View {
             }
         }
         .studyHome()
+    }
+
+    private func ruleBadgeColors(for key: String) -> [Color] {
+        switch key {
+        case "sofit", "niqqud": progress.theme.heroGradient
+        case "begadkefat", "binyanim": progress.theme.indigoGradient
+        case "confusable", "guttural": progress.theme.warmGradient
+        default: [progress.theme.success, progress.theme.accent]
+        }
     }
 
     @ViewBuilder private func ruleDetails(_ category: String, title: String) -> some View {

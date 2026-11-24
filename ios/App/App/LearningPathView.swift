@@ -11,12 +11,13 @@ struct LearningPathEntry: View {
         NavigationLink {
             LearningPathView(content: content)
         } label: {
-            StudyCard(highlighted: highlighted, padding: 10) {
+            StudyCard(highlighted: highlighted, padding: 12) {
                 StudyRow(
                     title: "零基础入门路线",
                     symbol: "map",
                     subtitle: currentStage.map { "第 \($0.stage) 关 · \(shortTitle($0.title))" } ?? "全部阶段已掌握",
-                    value: "\(completedStages) / \(content.learningPath.count)"
+                    value: "\(completedStages) / \(content.learningPath.count)",
+                    badgeColors: [progress.theme.success, progress.theme.accent]
                 )
             }
         }

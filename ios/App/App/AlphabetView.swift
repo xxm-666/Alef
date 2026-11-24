@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AlphabetView: View {
     @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var scope = "all"
@@ -13,16 +14,68 @@ struct AlphabetView: View {
         let options = content.letterDisplay(in: progress)
         let mastery = progress.letterMastery
         let letters = content.letters.filter { scope == "all" || mastery[$0.id] != .mastered }
+        let masteredCount = content.letters.filter { mastery[$0.id] == .mastered }.count
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
-            StudyHeading(title: "认识希伯来字母")
-            StudyCard(padding: 10) {
-                learningProgress
+            HStack(alignment: .bottom) {
+                StudyHeading(title: "认识希伯来字母", eyebrow: "ALEF · 22 字母")
+                if progress.statistics.streakDays > 0 {
+                    Label("\(progress.statistics.streakDays) 天", systemImage: "flame.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(progress.theme.reminder)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(progress.theme.reminderSurface, in: Capsule())
+                        .accessibilityLabel("连续学习 \(progress.statistics.streakDays) 天")
+                }
+            }
+            StudyHeroCard {
+                HStack(spacing: 14) {
+                    StudyProgressRing(value: Double(masteredCount), total: Double(max(1, content.letters.count)))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("字母掌握进度")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.white.opacity(0.82))
+                        Text("已掌握 \(masteredCount) / \(content.letters.count)")
+                            .font(.title3.weight(.bold))
+                            .monospacedDigit()
+                    }
+                    Spacer(minLength: 0)
+                    if let next = continueLetter {
+                        Text(next.hebrew)
+                            .font(.system(size: 32, weight: .bold, design: .serif))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 52, height: 52)
+                            .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                            }
+                            .accessibilityHidden(true)
+                    }
+                }
                 if let next = continueLetter {
-                    Divider()
                     NavigationLink {
                         LetterStudyView(letter: next, content: content)
                     } label: {
-                        StudyRow(title: "继续学习 \(next.nameEnglish)", symbol: "book")
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.body.weight(.semibold))
+                            Text("继续学习 \(next.nameEnglish) · \(next.nameChinese)")
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .opacity(0.85)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .background(Color.white.opacity(0.20), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.26), lineWidth: 1)
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -45,8 +98,9 @@ struct AlphabetView: View {
             NavigationLink {
                 StudySofitView(content: content)
             } label: {
-                StudyCard(padding: 10) {
-                    StudyRow(title: "词尾变形", symbol: "textformat.abc", subtitle: "普通形与词尾形对照", value: "5 组")
+                StudyCard(padding: 12) {
+                    StudyRow(title: "词尾变形", symbol: "textformat.abc", subtitle: "普通形与词尾形对照", value: "5 组",
+                             badgeColors: progress.theme.indigoGradient)
                 }
             }
             .buttonStyle(.plain)
@@ -65,42 +119,31 @@ struct AlphabetView: View {
             ?? content.letters.first
     }
 
-    private var learningProgress: some View {
-        let mastered = content.letters.filter { progress.letterMastery[$0.id] == .mastered }.count
-        return HStack(spacing: 14) {
-            Text("已掌握 \(mastered) / \(content.letters.count)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(progress.theme.mutedInk)
-                .fixedSize(horizontal: false, vertical: true)
-            ProgressView(value: Double(mastered), total: Double(max(1, content.letters.count)))
-                .tint(progress.theme.accent)
-                .accessibilityHidden(true)
-        }
-    }
-
     private var controls: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 5) {
-                scopeButton("全部", value: "all")
-                scopeButton("需复习", value: "review")
+        let directionButton = Button {
+            progress.alphabetFromRight.toggle()
+        } label: {
+            Label(progress.alphabetFromRight ? "RTL" : "LTR", systemImage: "arrow.left.arrow.right")
+        }
+        .buttonStyle(StudyButtonStyle())
+        .accessibilityLabel(progress.alphabetFromRight ? "当前从右向左排列，点按改为从左向右" : "当前从左向右排列，点按改为从右向左")
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                StudySegments(title: "字母范围", options: [("all", "全部"), ("review", "需复习")], selection: $scope)
+                    .frame(maxWidth: 180)
                 Spacer(minLength: 0)
+                directionButton
                 displayButton
             }
-            .fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    scopeButton("全部", value: "all")
-                    scopeButton("需复习", value: "review")
+            VStack(alignment: .leading, spacing: 8) {
+                StudySegments(title: "字母范围", options: [("all", "全部"), ("review", "需复习")], selection: $scope)
+                HStack(spacing: 6) {
+                    directionButton
+                    displayButton
                 }
-                displayButton
             }
         }
-    }
-
-    private func scopeButton(_ title: String, value: String) -> some View {
-        Button(title) { scope = value }
-            .buttonStyle(StudyButtonStyle(selected: scope == value))
-            .accessibilityAddTraits(scope == value ? .isSelected : [])
     }
 
     private var displayButton: some View {
@@ -118,7 +161,8 @@ struct AlphabetView: View {
     }
 
     private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery) -> some View {
-        StudyCard(highlighted: letter.id == continueLetter?.id, padding: 0) {
+        let isFocused = letter.id == continueLetter?.id
+        return StudyCard(highlighted: isFocused, padding: 0) {
             NavigationLink {
                 LetterStudyView(letter: letter, content: content)
             } label: {
@@ -126,8 +170,11 @@ struct AlphabetView: View {
                     LetterTileContent(letter: letter, options: options)
                     if options["showMastery"] == true && !quickActions {
                         Image(systemName: mastery.symbol)
-                            .font(.caption)
-                            .foregroundStyle(mastery == .unlearned ? progress.theme.mutedInk : progress.theme.accent)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(masteryColor(mastery))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(masteryBadgeSurface(mastery), in: Capsule())
                             .accessibilityLabel(mastery.title)
                     }
                 }
@@ -151,6 +198,7 @@ struct AlphabetView: View {
                         }
                     } label: {
                         Image(systemName: mastery.symbol)
+                            .foregroundStyle(masteryColor(mastery))
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
@@ -159,7 +207,41 @@ struct AlphabetView: View {
                 }
             }
         }
+        .overlay {
+            if isFocused {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(progress.theme.accent.opacity(0.65), lineWidth: 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .contextMenu {
+            Button("朗读字母名", systemImage: "speaker.wave.2") {
+                audio.speak(letter.nameHebrew, rate: progress.speechRate)
+            }
+            Divider()
+            ForEach(Mastery.allCases) { level in
+                Button(level.title, systemImage: level == mastery ? "checkmark" : level.symbol) {
+                    if level != mastery { progress.setLetter(letter.id, mastery: level) }
+                }
+            }
+        }
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func masteryColor(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.success
+        case .learning: progress.theme.learningAction
+        case .unlearned: progress.theme.mutedInk
+        }
+    }
+
+    private func masteryBadgeSurface(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.successSurface
+        case .learning: progress.theme.highlightedSurface
+        case .unlearned: progress.theme.insetSurface
+        }
     }
 
 }
@@ -285,6 +367,7 @@ struct LetterTileContent: View {
 struct LetterStudyView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: StudyContent
     private let showsFinalForm: Bool
     @State private var letter: StudyLetter
@@ -300,15 +383,25 @@ struct LetterStudyView: View {
         (showsFinalForm ? letter.sofitInfo?.finalGlyph : nil) ?? letter.hebrew
     }
 
+    private var activeLetters: [StudyLetter] {
+        showsFinalForm ? content.letters.filter { $0.sofitInfo != nil } : content.letters
+    }
+
+    private var letterPositionLabel: String {
+        let list = activeLetters
+        guard let idx = list.firstIndex(where: { $0.id == letter.id }) else { return "" }
+        return "\(idx + 1) / \(list.count)"
+    }
+
     var body: some View {
         StudyPage {
-            pager
             letterHeader
             NavigationLink {
                 LetterWritingView(guide: letter.strokeGuide, startsWithFinalForm: showsFinalForm)
             } label: {
-                StudyCard(padding: 10) {
-                    StudyRow(title: "笔顺与手写练习", symbol: "pencil.and.outline")
+                StudyCard(padding: 12) {
+                    StudyRow(title: "笔顺与手写练习", symbol: "pencil.and.outline",
+                             subtitle: "分步矢量笔顺动画与描红", badgeColors: progress.theme.indigoGradient)
                 }
             }
             .buttonStyle(.plain)
@@ -368,6 +461,21 @@ struct LetterStudyView: View {
             }
         }
         .id(letter.id)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 28)
+                .onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                          abs(value.translation.width) > 52 else { return }
+                    let swipedLeft = value.translation.width < 0
+                    let step = swipedLeft == progress.alphabetFromRight ? -1 : 1
+                    move(step)
+                }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            StudyActionBar {
+                pager
+            }
+        }
         .studyDetail("\(displayGlyph) · \(letter.studyName)")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -380,7 +488,11 @@ struct LetterStudyView: View {
     private var pager: some View {
         HStack {
             letterNavigation(-1)
-            Spacer()
+            Spacer(minLength: 4)
+            Text(letterPositionLabel)
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(progress.theme.mutedInk)
+            Spacer(minLength: 4)
             letterNavigation(1)
         }
         .environment(\.layoutDirection, progress.alphabetFromRight ? .rightToLeft : .leftToRight)
@@ -389,13 +501,28 @@ struct LetterStudyView: View {
     private var letterHeader: some View {
         let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
         return StudyCard {
-            HStack {
-                HebrewText(text: displayGlyph, size: 76, style: .largeTitle)
-                    .padding(.trailing, 6)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(letter.studyName).font(.title2.bold())
+            HStack(spacing: 14) {
+                Text(displayGlyph)
+                    .font(.system(size: 56, weight: .bold, design: .serif))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 82, height: 82)
+                    .background(
+                        LinearGradient(colors: progress.theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    )
+                    .shadow(color: progress.theme.accent.opacity(0.24), radius: 10, x: 0, y: 4)
+                    .environment(\.layoutDirection, .rightToLeft)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(letter.studyName).font(.title2.bold())
+                        Text(letter.nameHebrew)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
                     Text(letter.nameChinese).font(.headline)
-                    Text(letter.modernIpa).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                    Text("现代读音 \(letter.modernIpa)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(progress.theme.accent)
                 }
                 Spacer(minLength: 0)
             }
@@ -420,7 +547,7 @@ struct LetterStudyView: View {
             Label(previous ? "上一个" : "下一个", systemImage: left ? "chevron.left" : "chevron.right")
                 .environment(\.layoutDirection, .leftToRight)
         }
-        .buttonStyle(StudyButtonStyle())
+        .buttonStyle(StudyButtonStyle(prominent: !previous))
         .keyboardShortcut(left ? .leftArrow : .rightArrow, modifiers: [])
     }
 

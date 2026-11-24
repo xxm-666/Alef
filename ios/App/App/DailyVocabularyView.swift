@@ -14,10 +14,35 @@ struct DailyVocabularyEntry: View {
             } label: {
                 let summary = plan.nextGroup.map { "\(status) · \($0.status)" } ?? status
                 if emphasized {
-                    StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark", subtitle: summary, emphasized: true)
+                    StudyHeroCard(colors: progress.theme.warmGradient, padding: 14, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("今日记词")
+                                    .font(.headline.weight(.bold))
+                                Text(summary)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.white.opacity(0.9))
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "calendar.badge.checkmark")
+                                .font(.title2)
+                                .accessibilityHidden(true)
+                        }
+                        if !plan.groups.isEmpty {
+                            HStack(spacing: 5) {
+                                ForEach(Array(plan.groups.enumerated()), id: \.element.id) { _, group in
+                                    Capsule()
+                                        .fill(group.isComplete ? Color.white : Color.white.opacity(0.28))
+                                        .frame(height: 5)
+                                }
+                            }
+                            .accessibilityHidden(true)
+                        }
+                    }
                 } else {
-                    StudyCard(padding: 10) {
-                        StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark", subtitle: summary)
+                    StudyCard(padding: 12) {
+                        StudyRow(title: "今日记词", symbol: "calendar.badge.checkmark", subtitle: summary,
+                                 badgeColors: progress.theme.warmGradient)
                     }
                 }
             }

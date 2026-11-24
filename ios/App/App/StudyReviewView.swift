@@ -11,11 +11,40 @@ struct StudyTodayReviewEntry: View {
                 StudyTodayReviewView(content: content)
             } label: {
                 if overview.hasDueItems {
-                    StudyRow(title: overview.savedBatch == nil ? "今日复习" : "继续复习",
-                             symbol: "calendar.badge.clock", subtitle: overview.summary, emphasized: true)
+                    StudyHeroCard {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("SM-2 智能队列")
+                                    .font(.caption2.weight(.bold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Color.white.opacity(0.20), in: Capsule())
+                                Text(overview.savedBatch == nil ? "今日复习" : "继续复习")
+                                    .font(.title3.weight(.bold))
+                                Text(overview.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.white.opacity(0.88))
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "bolt.circle.fill")
+                                .font(.title)
+                                .foregroundStyle(Color.white.opacity(0.92))
+                                .accessibilityHidden(true)
+                        }
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.fill")
+                                .font(.caption.weight(.bold))
+                            Text(overview.savedBatch == nil ? "立即开始本组复习" : "继续本组复习")
+                                .font(.subheadline.weight(.bold))
+                        }
+                        .foregroundStyle(progress.theme.primaryButton)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(Color.white, in: Capsule())
+                    }
                 } else {
-                    StudyCard(padding: 10) {
-                        StudyRow(title: "今日复习", symbol: "calendar.badge.checkmark", subtitle: overview.summary)
+                    StudyCard(padding: 12) {
+                        StudyRow(title: "今日复习", symbol: "calendar.badge.checkmark", subtitle: overview.summary,
+                                 badgeColors: [progress.theme.success, progress.theme.accent])
                     }
                 }
             }

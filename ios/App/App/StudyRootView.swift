@@ -56,6 +56,7 @@ struct StudyRootView: View {
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
                 .tag("settings")
         }
+        .modifier(StudyTabBarMinimization())
         .background(progress.theme.canvas)
         .tint(progress.theme.accent)
         .preferredColorScheme(progress.theme.preferredScheme)
@@ -208,6 +209,44 @@ extension StudyTheme {
         }
     }
 
+    var heroGradient: [Color] {
+        switch self {
+        case .white:
+            return [palette(light: 0x155E75, dark: 0x0F766E), palette(light: 0x0D9488, dark: 0x0284C7)]
+        case .parchment:
+            return [palette(light: 0x0F766E, dark: 0x0F766E), palette(light: 0xB45309, dark: 0xD97706)]
+        case .rose:
+            return [palette(light: 0x9D174D, dark: 0x9D174D), palette(light: 0xE11D48, dark: 0xBE185D)]
+        case .violet:
+            return [palette(light: 0x5B21B6, dark: 0x5B21B6), palette(light: 0x4F46E5, dark: 0x4338CA)]
+        case .dark:
+            return [palette(light: 0x0F766E, dark: 0x0F766E), palette(light: 0x1D4ED8, dark: 0x1D4ED8)]
+        case .system:
+            return [palette(light: 0x0E7490, dark: 0x0F766E), palette(light: 0x2563EB, dark: 0x1D4ED8)]
+        }
+    }
+
+    var warmGradient: [Color] {
+        [palette(light: 0xD97706, dark: 0xB45309), palette(light: 0xEA580C, dark: 0xC2410C)]
+    }
+
+    var indigoGradient: [Color] {
+        [palette(light: 0x4F46E5, dark: 0x4338CA), palette(light: 0x0E7490, dark: 0x0F766E)]
+    }
+
+    var ambientGlow: Color {
+        switch self {
+        case .parchment: palette(light: 0xD97706, dark: 0xF59E0B).opacity(0.14)
+        case .rose: palette(light: 0xF43F5E, dark: 0xFB7185).opacity(0.14)
+        case .violet: palette(light: 0x8B5CF6, dark: 0xA78BFA).opacity(0.16)
+        default: palette(light: 0x0EA5E9, dark: 0x2DD4BF).opacity(0.15)
+        }
+    }
+
+    var cardShadow: Color {
+        palette(light: 0x0F172A, dark: 0x000000).opacity(0.08)
+    }
+
     private func palette(light: UInt32, dark: UInt32) -> Color {
         Color(uiColor: UIColor { traits in
             let hex = traits.userInterfaceStyle == .dark ? dark : light
@@ -231,7 +270,15 @@ struct StudyPage<Content: View>: View {
                 .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
         }
-        .background(progress.theme.canvas.ignoresSafeArea())
+        .background {
+            ZStack(alignment: .top) {
+                progress.theme.canvas.ignoresSafeArea()
+                RadialGradient(colors: [progress.theme.ambientGlow, .clear],
+                               center: .topLeading, startRadius: 10, endRadius: 360)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+        }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
     }
@@ -240,13 +287,23 @@ struct StudyPage<Content: View>: View {
 struct StudyHeading: View {
     @Environment(StudyProgress.self) private var progress
     let title: String
+    var eyebrow: String? = nil
 
     var body: some View {
-        Text(title)
-            .font(.largeTitle.weight(.bold))
-            .foregroundStyle(progress.theme.ink)
-            .accessibilityAddTraits(.isHeader)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
+            if let eyebrow {
+                Text(eyebrow)
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(progress.theme.accent)
+            }
+            Text(title)
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(progress.theme.ink)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -271,16 +328,99 @@ struct StudyCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         VStack(alignment: .leading, spacing: spacing, content: content)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
-            .background(highlighted ? progress.theme.highlightedSurface : progress.theme.cardSurface,
-                        in: RoundedRectangle(cornerRadius: 16))
+            .background(highlighted ? progress.theme.highlightedSurface : progress.theme.cardSurface, in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(progress.theme.outline, lineWidth: 1)
+                shape
+                    .strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .shadow(color: progress.theme.cardShadow, radius: 12, x: 0, y: 5)
+    }
+}
+
+struct StudyHeroCard<Content: View>: View {
+    @Environment(StudyProgress.self) private var progress
+    var colors: [Color]? = nil
+    var padding: CGFloat = 16
+    var spacing: CGFloat = 12
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        let stops = colors ?? progress.theme.heroGradient
+        VStack(alignment: .leading, spacing: spacing, content: content)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(padding)
+            .foregroundStyle(Color.white)
+            .background {
+                ZStack(alignment: .topTrailing) {
+                    LinearGradient(colors: stops, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Circle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(width: 140, height: 140)
+                        .offset(x: 42, y: -48)
+                        .allowsHitTesting(false)
+                }
+                .clipShape(shape)
+            }
+            .overlay {
+                shape
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: (stops.first ?? progress.theme.accent).opacity(0.28), radius: 16, x: 0, y: 8)
+    }
+}
+
+struct StudyIconBadge: View {
+    let symbol: String
+    var colors: [Color]
+    var size: CGFloat = 34
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(Color.white)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
+            )
+            .shadow(color: (colors.first ?? .clear).opacity(0.24), radius: 5, x: 0, y: 2)
+            .accessibilityHidden(true)
+    }
+}
+
+struct StudyProgressRing: View {
+    let value: Double
+    let total: Double
+    var lineWidth: CGFloat = 5
+    var size: CGFloat = 52
+    var tint: Color = .white
+
+    private var fraction: Double {
+        guard total > 0 else { return 0 }
+        return min(1, max(0, value / total))
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(tint.opacity(0.24), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(Int((fraction * 100).rounded()))%")
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(tint)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
@@ -292,18 +432,23 @@ struct StudyRow: View {
     var value: String? = nil
     var chevron = true
     var emphasized = false
+    var badgeColors: [Color]? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.body.weight(.medium))
-                .foregroundStyle(emphasized ? Color.white : progress.theme.accent)
-                .frame(minWidth: 27)
-                .accessibilityHidden(true)
+        HStack(spacing: 11) {
+            if let badgeColors, !emphasized {
+                StudyIconBadge(symbol: symbol, colors: badgeColors)
+            } else {
+                Image(systemName: symbol)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(emphasized ? Color.white : progress.theme.accent)
+                    .frame(minWidth: 27)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(emphasized ? Color.white : progress.theme.ink)
                 if let subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(emphasized ? Color.white : progress.theme.mutedInk)
+                    Text(subtitle).font(.caption).foregroundStyle(emphasized ? Color.white.opacity(0.9) : progress.theme.mutedInk)
                 }
             }
             Spacer(minLength: 0)
@@ -318,9 +463,13 @@ struct StudyRow: View {
             }
         }
         .frame(minHeight: 44)
-        .padding(emphasized ? 12 : 0)
-        .background(emphasized ? progress.theme.learningAction : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 16))
+        .padding(emphasized ? 14 : 0)
+        .background {
+            if emphasized {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(colors: progress.theme.heroGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -477,6 +626,7 @@ private struct StudyMemoryCurveView: View {
 struct StudyButtonStyle: ButtonStyle {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var prominent = false
     var selected = false
     var learningAction = false
@@ -487,11 +637,13 @@ struct StudyButtonStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(filled ? Color.white : progress.theme.accent)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.vertical, 4)
             .frame(minHeight: 44)
             .background(filled ? fill : progress.theme.insetSurface, in: Capsule())
-            .opacity(enabled ? (configuration.isPressed ? 0.78 : 1) : 0.58)
+            .opacity(enabled ? (configuration.isPressed ? 0.84 : 1) : 0.58)
+            .scaleEffect(reduceMotion || !enabled ? 1 : (configuration.isPressed ? 0.96 : 1))
+            .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.72), value: configuration.isPressed)
             .contentShape(Capsule())
     }
 }
@@ -499,6 +651,8 @@ struct StudyButtonStyle: ButtonStyle {
 struct StudySegments<Value: Hashable>: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var segmentNamespace
     let title: String
     let options: [(value: Value, title: String)]
     @Binding var selection: Value
@@ -514,21 +668,34 @@ struct StudySegments<Value: Hashable>: View {
         } else {
             HStack(spacing: 3) {
                 ForEach(options, id: \.value) { option in
+                    let isSelected = selection == option.value
                     Button {
-                        selection = option.value
+                        if reduceMotion {
+                            selection = option.value
+                        } else {
+                            withAnimation(.spring(response: 0.30, dampingFraction: 0.78)) {
+                                selection = option.value
+                            }
+                        }
                     } label: {
                         Text(option.title)
                             .font(.subheadline.weight(.semibold))
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(selection == option.value ? Color.white : progress.theme.ink)
+                            .foregroundStyle(isSelected ? Color.white : progress.theme.ink)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.horizontal, 3)
-                            .background(selection == option.value ? progress.theme.primaryButton : Color.clear, in: Capsule())
+                            .padding(.horizontal, 4)
+                            .background {
+                                if isSelected {
+                                    Capsule()
+                                        .fill(progress.theme.primaryButton)
+                                        .matchedGeometryEffect(id: "activeSegment", in: segmentNamespace)
+                                }
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityAddTraits(selection == option.value ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .padding(3)
@@ -549,6 +716,54 @@ extension View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
+    }
+
+    func studyGlassSurface(cornerRadius: CGFloat = 22, interactive: Bool = false) -> some View {
+        modifier(StudyGlassSurfaceModifier(cornerRadius: cornerRadius, interactive: interactive))
+    }
+}
+
+private struct StudyTabBarMinimization: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
+        }
+    }
+}
+
+private struct StudyGlassSurfaceModifier: ViewModifier {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let cornerRadius: CGFloat
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if reduceTransparency {
+            content
+                .background(progress.theme.cardSurface, in: shape)
+                .overlay {
+                    shape.strokeBorder(progress.theme.outline, lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: progress.theme.cardShadow, radius: 10, x: 0, y: 4)
+        } else if #available(iOS 26, *) {
+            if interactive {
+                content.glassEffect(.regular.interactive(), in: shape)
+            } else {
+                content.glassEffect(.regular, in: shape)
+            }
+        } else {
+            content
+                .background(.regularMaterial, in: shape)
+                .overlay {
+                    shape.strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: progress.theme.cardShadow, radius: 12, x: 0, y: 6)
+        }
     }
 }
 
@@ -577,6 +792,7 @@ private struct StudyHomeBars: ViewModifier {
 struct PronunciationButton: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let hebrew: String
     var iconOnly = false
     var rate: Double?
@@ -585,22 +801,40 @@ struct PronunciationButton: View {
     var prominent = false
     var bundledOnly = false
 
+    private var isPlaying: Bool {
+        audio.playingPronunciation == hebrew
+    }
+
     var body: some View {
         Group {
             if iconOnly {
                 Button(action: play) {
-                    Image(systemName: "speaker.wave.2")
+                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.wave.2")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(progress.theme.accent)
-                        .frame(width: 32, height: 32)
-                        .background(progress.theme.highlightedSurface, in: Circle())
+                        .foregroundStyle(isPlaying ? Color.white : progress.theme.accent)
+                        .symbolEffect(.variableColor, isActive: isPlaying && !reduceMotion)
+                        .frame(width: 34, height: 34)
+                        .background(isPlaying ? progress.theme.accent : progress.theme.highlightedSurface, in: Circle())
+                        .overlay {
+                            if isPlaying {
+                                Circle()
+                                    .strokeBorder(progress.theme.accent.opacity(0.45), lineWidth: 2)
+                                    .scaleEffect(1.18)
+                            }
+                        }
                         .frame(minWidth: minimumHitSize ?? 44, minHeight: minimumHitSize ?? 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             } else {
                 Button(action: play) {
-                    Label(title, systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label {
+                        Text(title)
+                    } icon: {
+                        Image(systemName: isPlaying ? "waveform" : "play.fill")
+                            .symbolEffect(.variableColor, isActive: isPlaying && !reduceMotion)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(StudyButtonStyle(prominent: prominent))
             }
@@ -635,50 +869,81 @@ struct HebrewText: View {
 struct MasteryPicker: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var masteryNamespace
     @Binding var value: Mastery
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("掌握度").font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 6))
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 6)) : AnyLayout(HStackLayout(spacing: 4))
             layout {
                 ForEach(Mastery.allCases) { level in
+                    let isSelected = level == value
                     Button {
-                        value = level
+                        if progress.hapticsEnabled {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        }
+                        if reduceMotion {
+                            value = level
+                        } else {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                value = level
+                            }
+                        }
                     } label: {
                         Label(level.title, systemImage: level.symbol)
                             .font(.caption.weight(.semibold))
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .foregroundStyle(level == value ? progress.theme.accent : progress.theme.ink)
-                            .background(level == value ? progress.theme.highlightedSurface : progress.theme.insetSurface,
-                                        in: RoundedRectangle(cornerRadius: 11))
+                            .foregroundStyle(isSelected ? selectedForeground(for: level) : progress.theme.ink)
+                            .background {
+                                if isSelected {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(selectedBackground(for: level))
+                                        .matchedGeometryEffect(id: "masteryPill", in: masteryNamespace)
+                                }
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityAddTraits(level == value ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
+            .padding(4)
+            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        }
+    }
+
+    private func selectedForeground(for level: Mastery) -> Color {
+        switch level {
+        case .mastered: progress.theme.success
+        case .learning: progress.theme.learningAction
+        case .unlearned: progress.theme.ink
+        }
+    }
+
+    private func selectedBackground(for level: Mastery) -> Color {
+        switch level {
+        case .mastered: progress.theme.successSurface
+        case .learning: progress.theme.highlightedSurface
+        case .unlearned: progress.theme.cardSurface
         }
     }
 }
 
 struct StudyActionBar<Content: View>: View {
-    @Environment(StudyProgress.self) private var progress
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         content()
             .frame(maxWidth: 620)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .studyGlassSurface(cornerRadius: 26, interactive: false)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 6)
             .frame(maxWidth: .infinity)
-            .background {
-                if reduceTransparency { progress.theme.canvas.ignoresSafeArea(edges: .bottom) }
-                else { Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom) }
-            }
-            .overlay(alignment: .top) { Rectangle().fill(progress.theme.outline).frame(height: 1) }
     }
 }
 

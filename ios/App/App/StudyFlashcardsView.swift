@@ -2,44 +2,51 @@ import SwiftUI
 
 struct PracticeCenterView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
 
     var body: some View {
         let words = content.dueWords(in: progress)
         let letters = content.dueLetters(in: progress)
+        let tileColumns = Array(repeating: GridItem(.flexible(), spacing: 10),
+                                count: typeSize.isAccessibilitySize ? 1 : 2)
         StudyPage {
-            StudyHeading(title: "今日练习")
+            StudyHeading(title: "今日练习", eyebrow: "PRACTICE · 今日巩固")
             StudyTodayReviewEntry(content: content)
             DailyVocabularyEntry(content: content, emphasized: words.isEmpty && letters.isEmpty)
             LearningPathEntry(content: content, highlighted: false)
 
             StudySectionTitle("专项练习")
-            StudyCard(padding: 10, spacing: 2) {
+            LazyVGrid(columns: tileColumns, spacing: 10) {
                 NavigationLink {
                     letterExercises
                 } label: {
-                    StudyRow(title: "字母练习", symbol: "textformat.abc")
+                    practiceTile(title: "字母练习", subtitle: "3D 闪卡与 4 类专项", symbol: "textformat.abc",
+                                 colors: progress.theme.heroGradient)
                 }
                 .buttonStyle(.plain)
-                Divider()
+
                 NavigationLink {
                     wordExercises
                 } label: {
-                    StudyRow(title: "单词练习", symbol: "character.book.closed")
+                    practiceTile(title: "单词练习", subtitle: "词义 · 听力 · 拼写", symbol: "character.book.closed",
+                                 colors: progress.theme.warmGradient)
                 }
                 .buttonStyle(.plain)
-                Divider()
+
                 NavigationLink {
                     MinimalPairQuizView(content: content)
                 } label: {
-                    StudyRow(title: "易混音辨析", symbol: "ear", value: "\(content.minimalPairs.count) 组")
+                    practiceTile(title: "易混音辨析", subtitle: "\(content.minimalPairs.count) 组对比", symbol: "ear",
+                                 colors: progress.theme.indigoGradient)
                 }
                 .buttonStyle(.plain)
-                Divider()
+
                 NavigationLink {
                     games
                 } label: {
-                    StudyRow(title: "学习小游戏", symbol: "gamecontroller")
+                    practiceTile(title: "学习小游戏", subtitle: "侦探 · 拼字 · 配对", symbol: "gamecontroller",
+                                 colors: [Color(red: 0.88, green: 0.11, blue: 0.48), Color(red: 0.75, green: 0.15, blue: 0.65)])
                 }
                 .buttonStyle(.plain)
             }
@@ -48,13 +55,48 @@ struct PracticeCenterView: View {
             NavigationLink {
                 StudyCafeComicView(content: content)
             } label: {
-                StudyCard(padding: 10) {
-                    StudyRow(title: "咖啡馆点单", symbol: "book")
+                StudyHeroCard(colors: progress.theme.warmGradient, padding: 15, spacing: 6) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("情景对话挑战")
+                                .font(.caption2.weight(.bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.white.opacity(0.20), in: Capsule())
+                            Text("咖啡馆点单")
+                                .font(.headline.weight(.bold))
+                            Text("选对希伯来语台词，体验真实情景回应")
+                                .font(.caption)
+                                .foregroundStyle(Color.white.opacity(0.9))
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "cup.and.saucer.fill")
+                            .font(.largeTitle)
+                            .foregroundStyle(Color.white.opacity(0.92))
+                            .accessibilityHidden(true)
+                    }
                 }
             }
             .buttonStyle(.plain)
         }
         .studyHome()
+    }
+
+    private func practiceTile(title: String, subtitle: String, symbol: String, colors: [Color]) -> some View {
+        StudyCard(padding: 14, spacing: 10) {
+            StudyIconBadge(symbol: symbol, colors: colors, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(progress.theme.ink)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
     }
 
     private var letterExercises: some View {
@@ -131,6 +173,7 @@ struct StudyFlashcardsView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: StudyContent
     @State private var flipped = false
     @State private var shuffledIDs: [String]?
@@ -150,7 +193,6 @@ struct StudyFlashcardsView: View {
                     studyCard(current)
                     if flipped {
                         cardDetails(current)
-                        masteryControls(for: current)
                     }
                     cardNavigation
                 } else {
@@ -159,6 +201,21 @@ struct StudyFlashcardsView: View {
                 }
             }
             .onChange(of: cards[safe: index]?.id) { _, _ in scroll.scrollTo("flashcard-top", anchor: .top) }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let current = cards[safe: index] {
+                StudyActionBar {
+                    if flipped {
+                        masteryControls(for: current)
+                    } else {
+                        Button(action: flip) {
+                            Label("点按翻开卡片", systemImage: "rectangle.portrait.on.rectangle.portrait.angled")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(StudyButtonStyle(prominent: true))
+                    }
+                }
+            }
         }
         .studyDetail("字母闪卡")
         .toolbar {
@@ -207,16 +264,32 @@ struct StudyFlashcardsView: View {
     }
 
     private func studyCard(_ current: StudyLetter) -> some View {
-        StudyCard {
+        StudyCard(highlighted: flipped) {
             Button(action: flip) {
-                VStack(spacing: 14) {
-                    flashcard(current)
-                    Label(flipped ? "查看正面" : "点按翻面", systemImage: "hand.tap")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(progress.theme.mutedInk)
+                ZStack {
+                    VStack(spacing: 14) {
+                        frontFace(current)
+                        Label("点按翻面 · 左右滑动切卡", systemImage: "hand.tap")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    .opacity(flipped ? 0 : 1)
+                    .accessibilityHidden(flipped)
+
+                    VStack(spacing: 12) {
+                        backFace(current)
+                        Label("查看正面", systemImage: "arrow.uturn.backward")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                    .opacity(flipped ? 1 : 0)
+                    .accessibilityHidden(!flipped)
                 }
+                .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+                .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.78), value: flipped)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity, minHeight: 180)
+                .frame(maxWidth: .infinity, minHeight: 200)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -225,6 +298,15 @@ struct StudyFlashcardsView: View {
             .overlay(alignment: .topTrailing) {
                 PronunciationButton(hebrew: current.nameHebrew, iconOnly: true, title: "朗读字母名")
             }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 28)
+                    .onEnded { value in
+                        guard deck.count >= 2,
+                              abs(value.translation.width) > abs(value.translation.height) * 1.5,
+                              abs(value.translation.width) > 52 else { return }
+                        move(value.translation.width < 0 ? 1 : -1)
+                    }
+            )
         }
     }
 
@@ -355,25 +437,31 @@ struct StudyFlashcardsView: View {
     }
 
     private func flip() {
-        flipped.toggle()
+        if reduceMotion {
+            flipped.toggle()
+        } else {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                flipped.toggle()
+            }
+        }
         audio.playFeedback(.flip)
     }
 
-    @ViewBuilder private func flashcard(_ letter: StudyLetter) -> some View {
-        if flipped {
-            HebrewText(text: letter.hebrew, size: 72, style: .largeTitle)
-            Text("\(letter.studyName)  \(letter.modernIpa)").font(.headline).foregroundStyle(progress.theme.ink)
-            Text("\(letter.nameChinese) · \(letter.nameHebrew)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-        } else {
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 20))
-            layout {
-                if preferences.frontType != "cursive" {
-                    HebrewText(text: preferences.frontType == "sofit" ? (letter.sofit ?? letter.hebrew) : letter.hebrew,
-                               size: 80, style: .largeTitle)
-                }
-                if ["cursive", "both"].contains(preferences.frontType) {
-                    StudyCursiveLetter(letter: letter, size: 70)
-                }
+    @ViewBuilder private func backFace(_ letter: StudyLetter) -> some View {
+        HebrewText(text: letter.hebrew, size: 72, style: .largeTitle)
+        Text("\(letter.studyName)  \(letter.modernIpa)").font(.headline).foregroundStyle(progress.theme.ink)
+        Text("\(letter.nameChinese) · \(letter.nameHebrew)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+    }
+
+    @ViewBuilder private func frontFace(_ letter: StudyLetter) -> some View {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 20))
+        layout {
+            if preferences.frontType != "cursive" {
+                HebrewText(text: preferences.frontType == "sofit" ? (letter.sofit ?? letter.hebrew) : letter.hebrew,
+                           size: 80, style: .largeTitle)
+            }
+            if ["cursive", "both"].contains(preferences.frontType) {
+                StudyCursiveLetter(letter: letter, size: 70)
             }
         }
     }
