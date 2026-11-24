@@ -1101,12 +1101,12 @@ struct StudyReviewBatch: Codable, Hashable {
             var measured = achievementProgress
             if touches("alef.mastery.v1") {
                 measured.masteredLetters = cachedLetterMastery.lazy.filter {
-                    $0.value == .mastered && letterIDs.contains($0.key)
+                    $0.value == .mastered && self.letterIDs.contains($0.key)
                 }.count
             }
             if touches("alef.wordMastery.v1") {
                 measured.masteredWords = cachedWordMastery.lazy.filter {
-                    $0.value == .mastered && wordIDs.contains($0.key)
+                    $0.value == .mastered && self.wordIDs.contains($0.key)
                 }.count
             }
             measured.practiceCount = cachedStatistics.totalReviews
