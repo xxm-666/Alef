@@ -317,7 +317,7 @@ struct LetterStudyView: View {
             }))
             if let schedule = progress.letterSchedule[letter.id] {
                 StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalDays) 天 · 已巩固 \(schedule.repetitions) 次",
+                            note: "当前间隔 \(schedule.intervalLabel)",
                             reminder: schedule.isDue)
             }
             if let variants = letter.begadkefat { soundComparison(variants) }
@@ -371,7 +371,7 @@ struct LetterStudyView: View {
         .studyDetail("\(displayGlyph) · \(letter.studyName)")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                StudyMemoryCurveEntry(schedule: progress.letterSchedule[letter.id])
+                StudyMemoryCurveEntry(schedule: progress.letterSchedule[letter.id], item: .letter)
             }
         }
         .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }

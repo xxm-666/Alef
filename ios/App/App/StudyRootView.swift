@@ -355,8 +355,20 @@ struct StudyNotice: View {
 }
 
 struct StudyMemoryCurveEntry: View {
+    enum Item {
+        case letter, word
+
+        var reviewInstructions: String {
+            switch self {
+            case .letter: "在「复习字母」提交答案，或翻开字母闪卡后选择自评。每次提交或自评都会记录一次复习，并更新下次复习时间。"
+            case .word: "在「复习单词」提交答案，每题记录一次复习。完成「今日记词」的单词拼写，也会更新该词的复习安排。"
+            }
+        }
+    }
+
     @State private var showsCurve = false
     let schedule: ReviewSchedule?
+    let item: Item
 
     var body: some View {
         Button {
@@ -367,7 +379,7 @@ struct StudyMemoryCurveEntry: View {
         }
         .sheet(isPresented: $showsCurve) {
             NavigationStack {
-                StudyMemoryCurveView(schedule: schedule)
+                StudyMemoryCurveView(schedule: schedule, item: item)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("完成") { showsCurve = false }
@@ -381,6 +393,7 @@ struct StudyMemoryCurveEntry: View {
 private struct StudyMemoryCurveView: View {
     @Environment(StudyProgress.self) private var progress
     let schedule: ReviewSchedule?
+    let item: StudyMemoryCurveEntry.Item
 
     var body: some View {
         StudyPage {
@@ -398,7 +411,7 @@ private struct StudyMemoryCurveView: View {
                              subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
                     scheduleRow(schedule)
                     StudyRow(title: "当前间隔", symbol: "arrow.left.and.right",
-                             subtitle: "已巩固 \(schedule.repetitions) 次", value: schedule.intervalLabel, chevron: false)
+                             value: schedule.intervalLabel, chevron: false)
                 }
             } else if let schedule {
                 StudyCard { scheduleRow(schedule) }
@@ -406,8 +419,15 @@ private struct StudyMemoryCurveView: View {
                     .foregroundStyle(progress.theme.mutedInk)
             } else {
                 ContentUnavailableView("暂无复习安排", systemImage: "chart.line.downtrend.xyaxis",
-                                       description: Text("开始学习并生成复习安排后，即可查看预计的记忆曲线。"))
+                                       description: Text("将此项目标记为「学习中」，即可安排第一次复习。"))
             }
+            StudyCard {
+                StudySectionTitle("怎样算一次复习")
+                Text(item.reviewInstructions)
+                Text("答错也会记录，并安排更早再练。浏览和试听不会记录复习。")
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            .font(.subheadline)
         }
         .navigationTitle("记忆曲线")
         .navigationBarTitleDisplayMode(.inline)

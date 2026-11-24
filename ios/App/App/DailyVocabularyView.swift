@@ -245,6 +245,10 @@ private struct DailyVocabularyView: View {
             let solution = "\(word.hebrew) · \(word.hebrewUnpointed)"
             VStack(alignment: .leading, spacing: 8) {
                 StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input)
+                if let schedule = progress.schedule[word.id] {
+                    StudyNotice(title: "已安排下次复习", symbol: "calendar.badge.checkmark",
+                                note: schedule.displayDate)
+                }
                 PronunciationButton(hebrew: word.hebrew, title: "听正确发音")
             }
             .id(ScrollTarget.feedback)

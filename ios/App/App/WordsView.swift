@@ -573,7 +573,7 @@ struct WordDetailView: View {
             }))
             if let schedule = progress.schedule[word.id] {
                 StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalDays) 天 · 已巩固 \(schedule.repetitions) 次",
+                            note: "当前间隔 \(schedule.intervalLabel)",
                             reminder: schedule.isDue)
             }
             StudyCard {
@@ -593,7 +593,7 @@ struct WordDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                StudyMemoryCurveEntry(schedule: progress.schedule[word.id])
+                StudyMemoryCurveEntry(schedule: progress.schedule[word.id], item: .word)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -1069,8 +1069,8 @@ struct WordQuizView: View {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
             if reviewing, let schedule = progress.schedule[target.id] {
-                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalDays) 天")
+                StudyNotice(title: "已记录本次复习", symbol: "calendar.badge.checkmark",
+                            note: "下次复习 · \(schedule.displayDate)")
                 if correct {
                     reviewGradeBar(for: target)
                 }
@@ -1113,7 +1113,8 @@ struct WordQuizView: View {
                 }
             }
         } else {
-            primaryButton("确认答案", symbol: "checkmark", learningAction: true, action: confirm)
+            primaryButton(reviewing ? "提交并记录复习" : "确认答案",
+                          symbol: "checkmark", learningAction: true, action: confirm)
                 .disabled(kind == .spelling ? spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : selectedOption == nil)
         }
     }

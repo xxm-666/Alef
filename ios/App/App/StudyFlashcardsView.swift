@@ -303,7 +303,8 @@ struct StudyFlashcardsView: View {
                     .buttonStyle(StudyButtonStyle(selected: grade == .good))
                 }
             }
-            Text("自评后自动进入下一张并安排下次复习").font(.caption).foregroundStyle(progress.theme.mutedInk)
+            Text("选择自评会记录一次复习、安排下次时间，并进入下一张。")
+                .font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
     }
 
@@ -588,8 +589,8 @@ private struct FlashQuizView: View {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
             if reviewing, let schedule = progress.letterSchedule[question.letter.id] {
-                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalDays) 天")
+                StudyNotice(title: "已记录本次复习", symbol: "calendar.badge.checkmark",
+                            note: "下次复习 · \(schedule.displayDate)")
                 if success {
                     reviewGradeBar(for: question.letter)
                 }
@@ -647,7 +648,8 @@ private struct FlashQuizView: View {
                     Button {
                         if let selection { grade(selection, solution: question.solution) }
                     } label: {
-                        Label("确认答案", systemImage: "checkmark").frame(maxWidth: .infinity)
+                        Label(reviewing ? "提交并记录复习" : "确认答案", systemImage: "checkmark")
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(StudyButtonStyle(learningAction: true))
                     .disabled(selection == nil)
