@@ -316,7 +316,6 @@ struct WordsView: View {
                 NavigationLink {
                     WordDetailView(word: word, content: content, showNiqqud: showNiqqud,
                                    showCursive: showCursive)
-                        .onAppear { setting(\.selectedWordId).wrappedValue = word.id }
                 } label: {
                     let textLayout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5)) : AnyLayout(HStackLayout(spacing: 6))
                     textLayout {

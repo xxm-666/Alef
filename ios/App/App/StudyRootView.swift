@@ -3,14 +3,7 @@ import SwiftUI
 import UIKit
 
 struct StudyRootView: View {
-    private struct ReminderSyncKey: Equatable {
-        let active: Bool
-        let preferences: ReminderPreferences
-        let reviews: StudyReminderReviews
-    }
-
     @Environment(StudyProgress.self) private var progress
-    @Environment(StudyReminderManager.self) private var reminders
     @Environment(StudyFolderSyncManager.self) private var folderSync
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
@@ -20,7 +13,6 @@ struct StudyRootView: View {
     @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
 
     var body: some View {
-        let reminderKey = reminderSyncKey
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
             NavigationStack(path: $letterPath) {
                 AlphabetView(content: content)
@@ -73,8 +65,8 @@ struct StudyRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openTabNotification)) { _ in
             handlePendingReminderTab()
         }
-        .task(id: reminderKey) {
-            await reminders.sync(preferences: reminderKey.preferences, reviews: reminderKey.reviews)
+        .background {
+            StudyReminderSyncBridge(content: content)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard (phase == .active || phase == .background) && folderSync.isConfigured else { return }
@@ -96,14 +88,6 @@ struct StudyRootView: View {
         } message: {
             Text(audio.playbackError ?? "")
         }
-    }
-
-    private var reminderSyncKey: ReminderSyncKey {
-        ReminderSyncKey(
-            active: scenePhase == .active,
-            preferences: progress.reminderPreferences,
-            reviews: content.reminderReviews(in: progress)
-        )
     }
 
     private func openWidgetRoute(_ route: StudyWidgetRoute) {
@@ -139,6 +123,34 @@ struct StudyRootView: View {
     private var selectedTab: String {
         let saved = progress.read("alef.activeView.v1", default: "grid")
         return ["words", "flashcards", "rules", "settings"].contains(saved) ? saved : "grid"
+    }
+}
+
+private struct StudyReminderSyncBridge: View {
+    private struct ReminderSyncKey: Equatable {
+        let active: Bool
+        let preferences: ReminderPreferences
+        let reviews: StudyReminderReviews
+    }
+
+    @Environment(StudyProgress.self) private var progress
+    @Environment(StudyReminderManager.self) private var reminders
+    @Environment(\.scenePhase) private var scenePhase
+    let content: StudyContent
+
+    var body: some View {
+        let key = ReminderSyncKey(
+            active: scenePhase == .active,
+            preferences: progress.reminderPreferences,
+            reviews: content.reminderReviews(in: progress)
+        )
+        Color.clear
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task(id: key) {
+                await reminders.sync(preferences: key.preferences, reviews: key.reviews)
+            }
     }
 }
 

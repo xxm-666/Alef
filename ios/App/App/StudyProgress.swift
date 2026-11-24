@@ -206,7 +206,7 @@ struct ReviewSchedule: Codable, Equatable {
     }
 }
 
-struct StudyStatistics: Codable {
+struct StudyStatistics: Codable, Equatable {
     var streakDays = 0
     var lastActiveDate = ""
     var todayReviews = 0
@@ -387,29 +387,54 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     private let defaults: UserDefaults
-    private var entries: [String: Data]
+    @ObservationIgnored private var entries: [String: Data]
+    @ObservationIgnored private var readCache: [String: (Data, Any)] = [:]
     private(set) var restorePoint: BackupUndo?
     private(set) var syncRevision: Int = 0
     private(set) var localUpdatedAt: Int64 = 0
     var widgetRequest: StudyWidgetRoute?
+
+    private var cachedTheme: StudyTheme = .system
+    private var cachedLetterMastery: [String: Mastery] = [:]
+    private var cachedLetterSchedule: [String: ReviewSchedule] = [:]
+    private var cachedWordMastery: [String: Mastery] = [:]
+    private var cachedSchedule: [String: ReviewSchedule] = [:]
+    private var cachedFavorites: [String] = []
+    private var cachedStatistics = StudyStatistics()
+    private var cachedDailyVocabulary = DailyVocabularyPlan()
+    private var cachedLastBackupAt: Int64? = nil
+    private var cachedSpeechRate: Double = 1
+    private var cachedFeedbackEnabled = true
+    private var cachedHapticsEnabled = true
+    private var cachedPrefersRecordings = true
+    private var cachedAlphabetFromRight = true
+    private var cachedReminderPreferences = ReminderPreferences()
+    private var cachedWordMistakes: [StudyWordMistake] = []
+    private var cachedReviewBatch: StudyReviewBatch? = nil
+
+    private var activeViewVersion = 0
+    private var selectedLetterVersion = 0
+    private var displayConfigVersion = 0
+    private var wordsStateVersion = 0
+    private var flashcardStateVersion = 0
+    private var phraseFavoritesVersion = 0
+    private var otherKeyVersion = 0
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         entries = defaults.dictionary(forKey: Self.storageKey) as? [String: Data] ?? [:]
         restorePoint = defaults.data(forKey: Self.restoreKey).flatMap { try? JSONDecoder().decode(BackupUndo.self, from: $0) }
         localUpdatedAt = (defaults.object(forKey: Self.localUpdatedAtKey) as? NSNumber)?.int64Value ?? 0
+        refreshCachedState(changedKeys: nil)
     }
 
-    var letterMastery: [String: Mastery] { read("alef.mastery.v1", default: [:]) }
-    var letterSchedule: [String: ReviewSchedule] { read(Self.letterScheduleKey, default: [:]) }
-    var wordMastery: [String: Mastery] { read("alef.wordMastery.v1", default: [:]) }
-    var schedule: [String: ReviewSchedule] { read("alef.wordSrs.v1", default: [:]) }
-    var favorites: [String] { read("alef.favoriteWords.v1", default: []) }
-    var statistics: StudyStatistics { read("alef.studyStats.v1", default: StudyStatistics()) }
-    var dailyVocabulary: DailyVocabularyPlan {
-        let plan = read(DailyVocabularyPlan.storageKey, default: DailyVocabularyPlan())
-        return plan.isValid ? plan : DailyVocabularyPlan()
-    }
+    var letterMastery: [String: Mastery] { cachedLetterMastery }
+    var letterSchedule: [String: ReviewSchedule] { cachedLetterSchedule }
+    var wordMastery: [String: Mastery] { cachedWordMastery }
+    var schedule: [String: ReviewSchedule] { cachedSchedule }
+    var favorites: [String] { cachedFavorites }
+    var statistics: StudyStatistics { cachedStatistics }
+    var dailyVocabulary: DailyVocabularyPlan { cachedDailyVocabulary }
     var needsLegacyMigration: Bool { !defaults.bool(forKey: Self.migrationKey) }
 
     var hasMeaningfulData: Bool {
@@ -417,9 +442,7 @@ struct StudyReviewBatch: Codable, Hashable {
             || !letterSchedule.isEmpty || !favorites.isEmpty || statistics.totalReviews > 0
     }
 
-    var lastBackupAt: Int64? {
-        entries[Self.lastBackupAtKey].flatMap { try? JSONDecoder().decode(Int64.self, from: $0) }
-    }
+    var lastBackupAt: Int64? { cachedLastBackupAt }
 
     var lastBackupDate: Date? {
         lastBackupAt.map { Date(timeIntervalSince1970: Double($0) / 1_000) }
@@ -441,16 +464,10 @@ struct StudyReviewBatch: Codable, Hashable {
         return "距离上次备份已过 \(days) 天，建议导出 JSON 备份到「文件」。"
     }
 
-    private var appearanceOverride: AppearanceOverride { read(Self.appearanceKey, default: .manual) }
+    private var appearanceOverride: AppearanceOverride { decodeEntry(Self.appearanceKey, default: .manual) }
 
     var theme: StudyTheme {
-        get {
-            switch appearanceOverride {
-            case .system: .system
-            case .white: .white
-            case .manual: read(Self.themeKey, default: .system)
-            }
-        }
+        get { cachedTheme }
         set {
             update { values, encoder in
                 switch newValue {
@@ -469,44 +486,41 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     var speechRate: Double {
-        get { read("alef.speechRate.v1", default: 1) }
+        get { cachedSpeechRate }
         set { write(newValue, for: "alef.speechRate.v1") }
     }
 
     var feedbackEnabled: Bool {
-        get { read("alef.native.feedback.v1", default: true) }
+        get { cachedFeedbackEnabled }
         set { write(newValue, for: "alef.native.feedback.v1") }
     }
 
     var hapticsEnabled: Bool {
-        get { read("alef.native.haptics.v1", default: true) }
+        get { cachedHapticsEnabled }
         set { write(newValue, for: "alef.native.haptics.v1") }
     }
 
     var prefersRecordings: Bool {
-        get { read("alef.native.recordings.v1", default: true) }
+        get { cachedPrefersRecordings }
         set { write(newValue, for: "alef.native.recordings.v1") }
     }
 
     var alphabetFromRight: Bool {
-        get { read("alef.order.v1", default: "rtl") == "rtl" }
+        get { cachedAlphabetFromRight }
         set { write(newValue ? "rtl" : "ltr", for: "alef.order.v1") }
     }
 
     var reminderPreferences: ReminderPreferences {
-        get {
-            let stored = read(ReminderPreferences.storageKey, default: ReminderPreferences())
-            return stored.isValid ? stored : ReminderPreferences()
-        }
+        get { cachedReminderPreferences }
         set {
             guard newValue.isValid else { return }
             write(newValue, for: ReminderPreferences.storageKey)
         }
     }
 
-    var wordMistakes: [StudyWordMistake] { read(StudyWordMistake.storageKey, default: []) }
+    var wordMistakes: [StudyWordMistake] { cachedWordMistakes }
 
-    var reviewBatch: StudyReviewBatch? { read(StudyReviewBatch.storageKey, default: nil) }
+    var reviewBatch: StudyReviewBatch? { cachedReviewBatch }
 
     func beginReviewBatch(_ batch: StudyReviewBatch) {
         guard batch.isValid else { return }
@@ -688,10 +702,32 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     func read<Value: Decodable>(_ key: String, default defaultValue: Value) -> Value {
-        guard let data = entries[key], let value = try? JSONDecoder().decode(Value.self, from: data) else {
+        observeKey(key)
+        return decodeEntry(key, default: defaultValue)
+    }
+
+    private func decodeEntry<Value: Decodable>(_ key: String, default defaultValue: Value) -> Value {
+        guard let data = entries[key] else { return defaultValue }
+        if let cached = readCache[key], cached.0 == data, let typed = cached.1 as? Value {
+            return typed
+        }
+        guard let value = try? JSONDecoder().decode(Value.self, from: data) else {
             return defaultValue
         }
+        readCache[key] = (data, value)
         return value
+    }
+
+    private func observeKey(_ key: String) {
+        switch key {
+        case "alef.activeView.v1": _ = activeViewVersion
+        case "alef.selectedLetterId.v1": _ = selectedLetterVersion
+        case "alef.displayConfig.v1": _ = displayConfigVersion
+        case "alef.wordsState.v1": _ = wordsStateVersion
+        case "alef.flashcardState.v1": _ = flashcardStateVersion
+        case "alef.native.phraseFavorites.v1": _ = phraseFavoritesVersion
+        default: _ = otherKeyVersion
+        }
     }
 
     func write<Value: Encodable>(_ value: Value, for key: String) {
@@ -797,7 +833,9 @@ struct StudyReviewBatch: Codable, Hashable {
         if let encodedBackup = try? JSONEncoder().encode(Int64(syncDate.timeIntervalSince1970 * 1_000)) {
             nextEntries[Self.lastBackupAtKey] = encodedBackup
         }
+        readCache.removeAll()
         entries = nextEntries
+        refreshCachedState(changedKeys: nil)
         observeSyncTimestamp(updatedAt)
         save()
     }
@@ -856,7 +894,9 @@ struct StudyReviewBatch: Codable, Hashable {
         let keys = Set(old.keys).union(new.keys).subtracting(Self.nonSyncedKeys)
         return keys.contains { key in
             switch (old[key], new[key]) {
-            case let (a?, b?): return canonicalJSON(a) != canonicalJSON(b)
+            case let (a?, b?):
+                if a == b { return false }
+                return canonicalJSON(a) != canonicalJSON(b)
             case (nil, nil): return false
             default: return true
             }
@@ -870,8 +910,13 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     private func saveLocalEntries(_ proposed: [String: Data]) {
+        let allKeys = Set(entries.keys).union(proposed.keys)
+        let changedKeys = Set(allKeys.filter { entries[$0] != proposed[$0] })
+        guard !changedKeys.isEmpty else { return }
+
         var updated = proposed
-        if hasSyncableDifference(from: entries, to: updated) {
+        let hasSyncableChanges = !changedKeys.subtracting(Self.nonSyncedKeys).isEmpty
+        if hasSyncableChanges && hasSyncableDifference(from: entries, to: updated) {
             let now = Int64(Date.now.timeIntervalSince1970 * 1_000)
             let next = localUpdatedAt < Int64.max ? localUpdatedAt + 1 : localUpdatedAt
             let timestamp = max(now, next)
@@ -879,8 +924,116 @@ struct StudyReviewBatch: Codable, Hashable {
             observeSyncTimestamp(timestamp)
             syncRevision += 1
         }
+        for key in changedKeys {
+            readCache.removeValue(forKey: key)
+        }
         entries = updated
+        refreshCachedState(changedKeys: changedKeys)
         save()
+    }
+
+    private func refreshCachedState(changedKeys: Set<String>?) {
+        func touches(_ keys: String...) -> Bool {
+            guard let changedKeys else { return true }
+            return keys.contains(where: changedKeys.contains)
+        }
+
+        if touches(Self.appearanceKey, Self.themeKey) {
+            let resolvedTheme: StudyTheme = switch appearanceOverride {
+            case .system: .system
+            case .white: .white
+            case .manual: decodeEntry(Self.themeKey, default: .system)
+            }
+            if cachedTheme != resolvedTheme { cachedTheme = resolvedTheme }
+        }
+        if touches("alef.mastery.v1") {
+            let val: [String: Mastery] = decodeEntry("alef.mastery.v1", default: [:])
+            if cachedLetterMastery != val { cachedLetterMastery = val }
+        }
+        if touches(Self.letterScheduleKey) {
+            let val: [String: ReviewSchedule] = decodeEntry(Self.letterScheduleKey, default: [:])
+            if cachedLetterSchedule != val { cachedLetterSchedule = val }
+        }
+        if touches("alef.wordMastery.v1") {
+            let val: [String: Mastery] = decodeEntry("alef.wordMastery.v1", default: [:])
+            if cachedWordMastery != val { cachedWordMastery = val }
+        }
+        if touches("alef.wordSrs.v1") {
+            let val: [String: ReviewSchedule] = decodeEntry("alef.wordSrs.v1", default: [:])
+            if cachedSchedule != val { cachedSchedule = val }
+        }
+        if touches("alef.favoriteWords.v1") {
+            let val: [String] = decodeEntry("alef.favoriteWords.v1", default: [])
+            if cachedFavorites != val { cachedFavorites = val }
+        }
+        if touches("alef.studyStats.v1") {
+            let val: StudyStatistics = decodeEntry("alef.studyStats.v1", default: StudyStatistics())
+            if cachedStatistics != val { cachedStatistics = val }
+        }
+        if touches(DailyVocabularyPlan.storageKey) {
+            let decoded = decodeEntry(DailyVocabularyPlan.storageKey, default: DailyVocabularyPlan())
+            let val = decoded.isValid ? decoded : DailyVocabularyPlan()
+            if cachedDailyVocabulary != val { cachedDailyVocabulary = val }
+        }
+        if touches(Self.lastBackupAtKey) {
+            let val: Int64? = entries[Self.lastBackupAtKey].flatMap { try? JSONDecoder().decode(Int64.self, from: $0) }
+            if cachedLastBackupAt != val { cachedLastBackupAt = val }
+        }
+        if touches("alef.speechRate.v1") {
+            let val: Double = decodeEntry("alef.speechRate.v1", default: 1)
+            if cachedSpeechRate != val { cachedSpeechRate = val }
+        }
+        if touches("alef.native.feedback.v1") {
+            let val: Bool = decodeEntry("alef.native.feedback.v1", default: true)
+            if cachedFeedbackEnabled != val { cachedFeedbackEnabled = val }
+        }
+        if touches("alef.native.haptics.v1") {
+            let val: Bool = decodeEntry("alef.native.haptics.v1", default: true)
+            if cachedHapticsEnabled != val { cachedHapticsEnabled = val }
+        }
+        if touches("alef.native.recordings.v1") {
+            let val: Bool = decodeEntry("alef.native.recordings.v1", default: true)
+            if cachedPrefersRecordings != val { cachedPrefersRecordings = val }
+        }
+        if touches("alef.order.v1") {
+            let val = decodeEntry("alef.order.v1", default: "rtl") == "rtl"
+            if cachedAlphabetFromRight != val { cachedAlphabetFromRight = val }
+        }
+        if touches(ReminderPreferences.storageKey) {
+            let stored = decodeEntry(ReminderPreferences.storageKey, default: ReminderPreferences())
+            let val = stored.isValid ? stored : ReminderPreferences()
+            if cachedReminderPreferences != val { cachedReminderPreferences = val }
+        }
+        if touches(StudyWordMistake.storageKey) {
+            let val: [StudyWordMistake] = decodeEntry(StudyWordMistake.storageKey, default: [])
+            if cachedWordMistakes != val { cachedWordMistakes = val }
+        }
+        if touches(StudyReviewBatch.storageKey) {
+            let val: StudyReviewBatch? = decodeEntry(StudyReviewBatch.storageKey, default: nil)
+            if cachedReviewBatch != val { cachedReviewBatch = val }
+        }
+
+        if let changedKeys {
+            for key in changedKeys {
+                switch key {
+                case "alef.activeView.v1": activeViewVersion &+= 1
+                case "alef.selectedLetterId.v1": selectedLetterVersion &+= 1
+                case "alef.displayConfig.v1": displayConfigVersion &+= 1
+                case "alef.wordsState.v1": wordsStateVersion &+= 1
+                case "alef.flashcardState.v1": flashcardStateVersion &+= 1
+                case "alef.native.phraseFavorites.v1": phraseFavoritesVersion &+= 1
+                case Self.appearanceKey, Self.themeKey, "alef.mastery.v1", Self.letterScheduleKey,
+                     "alef.wordMastery.v1", "alef.wordSrs.v1", "alef.favoriteWords.v1",
+                     "alef.studyStats.v1", DailyVocabularyPlan.storageKey, Self.lastBackupAtKey,
+                     "alef.speechRate.v1", "alef.native.feedback.v1", "alef.native.haptics.v1",
+                     "alef.native.recordings.v1", "alef.order.v1", ReminderPreferences.storageKey,
+                     StudyWordMistake.storageKey, StudyReviewBatch.storageKey:
+                    break
+                default:
+                    otherKeyVersion &+= 1
+                }
+            }
+        }
     }
 
     private func validateBackupEntry(_ key: String, data: Data) throws {
