@@ -31,16 +31,37 @@ enum StudyWidgetWords {
         return [now] + (1...12).map { Date(timeIntervalSince1970: start + Double($0) * interval) }
     }
 
-    static func groupIdentifiers(signedGroups: [String]) -> [String] {
-        // AltStore writes its team-suffixed group names into each bundle when re-signing.
-        signedGroups.filter { $0.hasPrefix(groupID + ".") } + [groupID]
+    static func groupIdentifiers(signedGroups: [String], provisioningProfile: Data? = nil) -> [String] {
+        var seen: Set<String> = []
+        let provisioned = provisioningProfile.map(groups(in:)) ?? []
+        return (provisioned + signedGroups + [groupID]).filter { identifier in
+            (identifier == groupID || identifier.hasPrefix(groupID + ".")) && seen.insert(identifier).inserted
+        }
+    }
+
+    private static func groups(in profile: Data) -> [String] {
+        // Development provisioning profiles wrap an XML property list in a CMS signature.
+        guard let start = profile.range(of: Data("<?xml".utf8))?.lowerBound,
+              let end = profile.range(of: Data("</plist>".utf8), in: start..<profile.endIndex)?.upperBound,
+              let payload = try? PropertyListSerialization.propertyList(from: profile[start..<end],
+                                                                       options: [], format: nil),
+              let fields = payload as? [String: Any],
+              let entitlements = fields["Entitlements"] as? [String: Any] else { return [] }
+        return entitlements["com.apple.security.application-groups"] as? [String] ?? []
     }
 
     #if os(iOS)
+    private static let installedGroupIdentifiers: [String] = {
+        let bundle = Bundle.main
+        let signedGroups = bundle.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? []
+        // SideStore can provision a team-suffixed group without adding ALTAppGroups to Info.plist.
+        let profile = try? Data(contentsOf: bundle.bundleURL.appendingPathComponent("embedded.mobileprovision"))
+        return groupIdentifiers(signedGroups: signedGroups, provisioningProfile: profile)
+    }()
+
     static var snapshotURL: URL? {
-        let groups = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? []
         let manager = FileManager.default
-        for group in groupIdentifiers(signedGroups: groups) {
+        for group in installedGroupIdentifiers {
             if let container = manager.containerURL(forSecurityApplicationGroupIdentifier: group),
                manager.fileExists(atPath: container.path) {
                 return container.appendingPathComponent("learned-widget-words.json")

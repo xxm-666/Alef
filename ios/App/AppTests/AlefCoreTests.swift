@@ -829,6 +829,27 @@ final class AlefCoreTests: XCTestCase {
                        [group + ".TEAMID", group])
     }
 
+    func testLearnedWidgetFindsSideStoreGroupWithoutInfoPlistMetadata() throws {
+        let group = StudyWidgetWords.groupID
+        let provisionedGroup = group + ".SIDETEAM01"
+        let profile: [String: Any] = [
+            "Entitlements": ["com.apple.security.application-groups": ["group.other", provisionedGroup]]
+        ]
+        let plist = try PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
+        var wrappedProfile = Data([0x30, 0x82, 0x00])
+        wrappedProfile.append(plist)
+        wrappedProfile.append(Data([0x31, 0x82, 0xFF]))
+
+        XCTAssertEqual(StudyWidgetWords.groupIdentifiers(signedGroups: [], provisioningProfile: wrappedProfile),
+                       [provisionedGroup, group])
+        XCTAssertEqual(StudyWidgetWords.groupIdentifiers(signedGroups: [provisionedGroup, group + ".ALTTEAM001"],
+                                                         provisioningProfile: wrappedProfile),
+                       [provisionedGroup, group + ".ALTTEAM001", group])
+        XCTAssertEqual(StudyWidgetWords.groupIdentifiers(signedGroups: [group + ".ALTTEAM001"],
+                                                         provisioningProfile: Data([0x30, 0x82])),
+                       [group + ".ALTTEAM001", group])
+    }
+
     func testDailyLetterRotationAndDeepLink() {
         XCTAssertEqual(DailyLetter.alphabet.count, 22)
         XCTAssertTrue(DailyLetter.alphabet.allSatisfy { !$0.nameZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
