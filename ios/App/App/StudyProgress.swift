@@ -381,6 +381,9 @@ struct StudyAnswerRun {
 struct DailySpellingAnswer: Codable, Equatable {
     let input: String
     let correct: Bool
+    var peeked: Bool? = nil
+
+    var wasPeeked: Bool { peeked == true }
 }
 
 struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
@@ -393,7 +396,7 @@ struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
     var hasStarted: Bool { studied > 0 }
     var isComplete: Bool { answers.count == wordIds.count && !feedbackPending }
     var correctCount: Int { answers.filter(\.correct).count }
-    var answerCombo: Int { answers.reversed().prefix(while: \.correct).count }
+    var answerCombo: Int { answers.reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count }
     var status: String {
         if isComplete { return "拼对 \(correctCount) / \(wordIds.count)" }
         if studied == wordIds.count { return "拼写 \(answers.count) / \(wordIds.count)" }
@@ -413,7 +416,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     var completedCount: Int { groups.filter(\.isComplete).count }
     var nextGroup: DailyVocabularyGroup? { groups.first { !$0.isComplete } }
     var hasStarted: Bool { groups.contains(where: \.hasStarted) }
-    var answerCombo: Int { groups.flatMap(\.answers).reversed().prefix(while: \.correct).count }
+    var answerCombo: Int { groups.flatMap(\.answers).reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count }
 
     static func dayKey(for date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
@@ -842,16 +845,25 @@ struct StudyReviewBatch: Codable, Hashable {
     }
 
     func answerDailyVocabulary(_ expected: DailyVocabularyGroup, day: String, word: StudyWord, input: String,
-                               date: Date = .now) -> DailySpellingAnswer? {
+                               peeked: Bool = false, date: Date = .now) -> DailySpellingAnswer? {
         var plan = dailyVocabulary
         let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard plan.day == day, plan.nextGroup == expected, let index = plan.groups.firstIndex(of: expected),
               !answer.isEmpty, expected.studied == expected.wordIds.count, !expected.feedbackPending,
               expected.wordIds.indices.contains(expected.answers.count), expected.wordIds[expected.answers.count] == word.id
         else { return nil }
-        let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer))
+        let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer), peeked: peeked ? true : nil)
         plan.groups[index].answers.append(attempt)
         plan.groups[index].feedbackPending = true
+        if peeked && attempt.correct {
+            var stats = statistics
+            stats.record(on: date)
+            update { entries, encoder in
+                entries["alef.studyStats.v1"] = try encoder.encode(stats)
+                entries[DailyVocabularyPlan.storageKey] = try encoder.encode(plan)
+            }
+            return attempt
+        }
         saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
                    base: schedule[word.id], grade: attempt.correct ? .good : .again,
                    recordStats: true, date: date, dailyPlan: plan, mistakeKind: .spelling,

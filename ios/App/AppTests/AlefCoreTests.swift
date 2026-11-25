@@ -1290,6 +1290,31 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.letterProficiency("alef", at: day0), 32)
     }
 
+    func testDailyVocabularyPeekedAnswerDoesNotBoostProficiencyOrCombo() throws {
+        let words = (1...2).map { makeWord(id: "p\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        let day = DailyVocabularyPlan.dayKey(for: today)
+        progress.prepareDailyVocabulary(words: words, date: today)
+        for _ in words {
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+
+        // First word answered independently -> proficiency +18, combo 1
+        let g0 = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertEqual(progress.answerDailyVocabulary(g0, day: day, word: words[0], input: "שלום", date: today)?.correct, true)
+        XCTAssertEqual(progress.wordProficiency(words[0].id, at: today), 18)
+        XCTAssertEqual(progress.dailyVocabulary.answerCombo, 1)
+        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+
+        // Second word answered after peeking -> group advances, but proficiency stays 0 and combo resets
+        let g1 = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        let peekedAns = progress.answerDailyVocabulary(g1, day: day, word: words[1], input: "שלום", peeked: true, date: today)
+        XCTAssertEqual(peekedAns?.correct, true)
+        XCTAssertEqual(peekedAns?.wasPeeked, true)
+        XCTAssertEqual(progress.wordProficiency(words[1].id, at: today), 0)
+        XCTAssertEqual(progress.dailyVocabulary.answerCombo, 0)
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

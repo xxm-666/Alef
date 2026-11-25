@@ -8,7 +8,6 @@ struct StudySettingsView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var showsDisplay = false
-    @State private var showsThemes = false
 
     var body: some View {
         StudyPage {
@@ -29,11 +28,17 @@ struct StudySettingsView: View {
 
             StudySectionTitle("外观与设备")
             StudyCard(padding: 10, spacing: 6) {
-                Button { showsThemes = true } label: {
-                    StudyRow(title: "外观主题", symbol: "sun.max", value: progress.theme.title,
-                             badgeColors: progress.theme.warmGradient)
+                HStack(spacing: 8) {
+                    Text("外观主题")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.ink)
+                    Spacer(minLength: 4)
+                    Text(progress.theme.title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(progress.theme.mutedInk)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 4)
+                .padding(.top, 2)
                 StudyThemeChoices()
                     .padding(.vertical, 4)
                 Divider()
@@ -77,9 +82,6 @@ struct StudySettingsView: View {
         .studyHome()
         .sheet(isPresented: $showsDisplay) {
             NavigationStack { StudyLetterDisplayView(content: content) }.presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showsThemes) {
-            NavigationStack { StudyAppearanceView() }.presentationDragIndicator(.visible)
         }
     }
 

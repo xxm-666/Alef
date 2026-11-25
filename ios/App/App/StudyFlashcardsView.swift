@@ -21,32 +21,28 @@ struct PracticeCenterView: View {
                 NavigationLink {
                     letterExercises
                 } label: {
-                    practiceTile(title: "字母练习", subtitle: "3D 闪卡与 4 类专项", symbol: "textformat.abc",
-                                 colors: progress.theme.heroGradient)
+                    practiceTile(title: "字母练习", subtitle: "3D 闪卡与 4 类专项", symbol: "textformat.abc")
                 }
                 .buttonStyle(.plain)
 
                 NavigationLink {
                     wordExercises
                 } label: {
-                    practiceTile(title: "单词练习", subtitle: "词义 · 听力 · 拼写", symbol: "character.book.closed",
-                                 colors: progress.theme.warmGradient)
+                    practiceTile(title: "单词练习", subtitle: "词义 · 听力 · 拼写", symbol: "character.book.closed")
                 }
                 .buttonStyle(.plain)
 
                 NavigationLink {
                     MinimalPairQuizView(content: content)
                 } label: {
-                    practiceTile(title: "易混音辨析", subtitle: "\(content.minimalPairs.count) 组对比", symbol: "ear",
-                                 colors: progress.theme.indigoGradient)
+                    practiceTile(title: "易混音辨析", subtitle: "\(content.minimalPairs.count) 组对比", symbol: "ear")
                 }
                 .buttonStyle(.plain)
 
                 NavigationLink {
                     games
                 } label: {
-                    practiceTile(title: "学习小游戏", subtitle: "侦探 · 拼字 · 配对", symbol: "gamecontroller",
-                                 colors: [Color(red: 0.88, green: 0.11, blue: 0.48), Color(red: 0.75, green: 0.15, blue: 0.65)])
+                    practiceTile(title: "学习小游戏", subtitle: "侦探 · 拼字 · 配对", symbol: "gamecontroller")
                 }
                 .buttonStyle(.plain)
             }
@@ -55,24 +51,34 @@ struct PracticeCenterView: View {
             NavigationLink {
                 StudyCafeComicView(content: content)
             } label: {
-                StudyHeroCard(colors: progress.theme.warmGradient, padding: 15, spacing: 6) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("情景对话挑战")
-                                .font(.caption2.weight(.bold))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.white.opacity(0.20), in: Capsule())
-                            Text("咖啡馆点单")
-                                .font(.headline.weight(.bold))
+                StudyCard(padding: 14, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "cup.and.saucer.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(progress.theme.reminder)
+                            .frame(width: 42, height: 42)
+                            .background(progress.theme.reminderSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text("咖啡馆点单")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(progress.theme.ink)
+                                Text("情景对话")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(progress.theme.reminder)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .background(progress.theme.reminderSurface, in: Capsule())
+                            }
                             Text("选对希伯来语台词，体验真实情景回应")
                                 .font(.caption)
-                                .foregroundStyle(Color.white.opacity(0.9))
+                                .foregroundStyle(progress.theme.mutedInk)
                         }
-                        Spacer(minLength: 8)
-                        Image(systemName: "cup.and.saucer.fill")
-                            .font(.largeTitle)
-                            .foregroundStyle(Color.white.opacity(0.92))
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
                             .accessibilityHidden(true)
                     }
                 }
@@ -82,9 +88,14 @@ struct PracticeCenterView: View {
         .studyHome()
     }
 
-    private func practiceTile(title: String, subtitle: String, symbol: String, colors: [Color]) -> some View {
+    private func practiceTile(title: String, subtitle: String, symbol: String) -> some View {
         StudyCard(padding: 14, spacing: 10) {
-            StudyIconBadge(symbol: symbol, colors: colors, size: 38)
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(progress.theme.accent)
+                .frame(width: 36, height: 36)
+                .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.subheadline.weight(.bold))

@@ -319,18 +319,11 @@ struct WordsView: View {
                                             cursive: showCursive, size: stacked ? 30 : 28)
                         .lineLimit(stacked ? nil : 2)
                         .minimumScaleFactor(0.75)
-                    let proficiency = progress.wordProficiency(word.id)
                     let details = VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(word.transliteration)
-                                .font(stacked ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-                                .foregroundStyle(stacked ? progress.theme.accent : progress.theme.ink)
-                                .lineLimit(1)
-                            if stacked { Spacer(minLength: 4) }
-                            if proficiency > 0 {
-                                StudyProficiencyMeter(proficiency: proficiency, width: 34, height: 5)
-                            }
-                        }
+                        Text(word.transliteration)
+                            .font(stacked ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                            .foregroundStyle(stacked ? progress.theme.accent : progress.theme.ink)
+                            .lineLimit(1)
                         Text(word.meaningZh)
                             .font(stacked ? .subheadline.weight(.medium) : .caption)
                             .foregroundStyle(stacked ? progress.theme.ink : progress.theme.mutedInk)

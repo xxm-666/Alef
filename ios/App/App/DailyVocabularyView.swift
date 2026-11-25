@@ -66,6 +66,7 @@ private struct DailyVocabularyView: View {
     @State private var spelling = ""
     @State private var retryingMistake = false
     @State private var retryMatched = false
+    @State private var peekedWordIDs: Set<String> = []
     @State private var celebration: StudyAnswerCelebration?
     @State private var reviewingGroup: DailyVocabularyGroup?
 
@@ -196,7 +197,7 @@ private struct DailyVocabularyView: View {
                     }
                 } else {
                     layout {
-                        PronunciationButton(hebrew: word.hebrew, title: "听发音")
+                        reviewWordsButton(group, currentSpellingWordID: word.id)
                         groupAction(group, word: word, day: day)
                     }
                 }
@@ -337,7 +338,10 @@ private struct DailyVocabularyView: View {
             VStack(alignment: .leading, spacing: 8) {
                 StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input,
                                   combo: plan.answerCombo)
-                if let schedule = progress.schedule[word.id] {
+                if answer.wasPeeked && answer.correct {
+                    StudyNotice(title: "已参考单词提示", symbol: "book",
+                                note: "本题仅作跟写巩固，不增加熟练度与连击。")
+                } else if let schedule = progress.schedule[word.id] {
                     StudyProficiencyCard(
                         proficiency: proficiency,
                         schedule: schedule,
@@ -392,10 +396,13 @@ private struct DailyVocabularyView: View {
         }
     }
 
-    private func reviewWordsButton(_ group: DailyVocabularyGroup) -> some View {
+    private func reviewWordsButton(_ group: DailyVocabularyGroup, currentSpellingWordID: String? = nil) -> some View {
         Button {
             audio.stop()
             celebration = nil
+            if let currentSpellingWordID {
+                peekedWordIDs.insert(currentSpellingWordID)
+            }
             reviewingGroup = group
         } label: {
             Label("回看单词", systemImage: "book")
@@ -406,8 +413,13 @@ private struct DailyVocabularyView: View {
 
     private func groupWordReview(_ group: DailyVocabularyGroup) -> some View {
         let words = group.wordIds.compactMap { word($0) }
+        let duringSpelling = group.studied >= group.wordIds.count && !group.feedbackPending && !group.isComplete
         return NavigationStack {
             StudyPage {
+                if duringSpelling {
+                    StudyNotice(title: "正在拼写答题中", symbol: "info.circle",
+                                note: "提前回看后，当前词仅作跟写巩固，不增加熟练度与连击。")
+                }
                 StudyCard {
                     ForEach(words) { word in
                         if word.id != words.first?.id { Divider() }
@@ -487,6 +499,7 @@ private struct DailyVocabularyView: View {
         celebration = nil
         retryingMistake = false
         retryMatched = false
+        peekedWordIDs.removeAll()
         spelling = ""
     }
 
@@ -500,10 +513,11 @@ private struct DailyVocabularyView: View {
     }
 
     private func submit(_ group: DailyVocabularyGroup, word: StudyWord, day: String) {
-        guard let answer = progress.answerDailyVocabulary(group, day: day, word: word, input: spelling) else { return }
+        let peeked = peekedWordIDs.contains(word.id)
+        guard let answer = progress.answerDailyVocabulary(group, day: day, word: word, input: spelling, peeked: peeked) else { return }
         retryingMistake = false
         retryMatched = false
-        celebration = answer.correct ? StudyAnswerCelebration(combo: progress.dailyVocabulary.answerCombo) : nil
+        celebration = (answer.correct && !peeked) ? StudyAnswerCelebration(combo: progress.dailyVocabulary.answerCombo) : nil
         audio.playFeedback(answer.correct ? .correct : .wrong)
     }
 

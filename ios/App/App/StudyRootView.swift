@@ -256,7 +256,7 @@ extension StudyTheme {
     }
 
     var warmGradient: [Color] {
-        [palette(light: 0xD97706, dark: 0xB45309), palette(light: 0xEA580C, dark: 0xC2410C)]
+        [palette(light: 0xB45309, dark: 0x9A3412), palette(light: 0xC2410C, dark: 0xB45309)]
     }
 
     var indigoGradient: [Color] {
@@ -629,11 +629,11 @@ struct StudyProficiencyCard: View {
                         .frame(width: 8, height: 8)
                     Text(StudyProficiencyStyle.stageTitle(for: proficiency))
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(tint)
+                        .foregroundStyle(progress.theme.ink)
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
-                .background(tint.opacity(0.14), in: Capsule())
+                .background(tint.opacity(0.16), in: Capsule())
             }
             StudyProficiencyMeter(proficiency: proficiency, height: 8)
             HStack(alignment: .center, spacing: 8) {
