@@ -6,6 +6,7 @@ struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(StudyFolderSyncManager.self) private var folderSync
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: StudyContent
     @State private var showsDisplay = false
 
@@ -144,27 +145,78 @@ struct StudySettingsView: View {
     private var learningSettings: some View {
         @Bindable var progress = progress
         return StudyCard(padding: 10, spacing: 6) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text("希伯来语写法")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(progress.theme.ink)
-                    Spacer(minLength: 4)
-                    Text(progress.showNiqqud ? "传统标音（带元音点）" : "现代无点全拼")
-                        .font(.caption)
-                        .foregroundStyle(progress.theme.mutedInk)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 11) {
+                    StudyIconBadge(symbol: "character.textbox", colors: progress.theme.heroGradient)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("希伯来语写法")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(progress.theme.ink)
+                        Text("词库、短语、短文与今日记词")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 6)
+                    HebrewText(text: progress.showNiqqud ? "שָׁלוֹם" : "שלום",
+                               cursive: progress.showCursive,
+                               size: 20)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 5)
+                        .background(progress.theme.insetSurface,
+                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                                .allowsHitTesting(false)
+                        }
+                        .fixedSize()
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: progress.showNiqqud)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: progress.showCursive)
+                        .accessibilityLabel(
+                            "\(progress.showNiqqud ? "传统标音" : "现代无点")，\(progress.showCursive ? "手写体" : "印刷体")预览"
+                        )
                 }
-                StudySegments(title: "希伯来语写法",
-                              options: [(true, "传统标音"), (false, "现代无点")],
-                              selection: $progress.showNiqqud)
-                StudySegments(title: "希伯来语书体",
-                              options: [(false, "印刷体"), (true, "手写体")],
-                              selection: $progress.showCursive)
-                Text("同步作用于词库、短语、短文与今日记词。")
-                    .font(.caption2)
-                    .foregroundStyle(progress.theme.mutedInk)
+
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("标音")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                        StudySegments(title: "希伯来语写法",
+                                      options: [(true, "传统标音"), (false, "现代无点")],
+                                      selection: $progress.showNiqqud,
+                                      compact: true)
+                        Text("书体")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                        StudySegments(title: "希伯来语书体",
+                                      options: [(false, "印刷体"), (true, "手写体")],
+                                      selection: $progress.showCursive,
+                                      compact: true)
+                    }
+                } else {
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                        GridRow {
+                            Text("标音")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(progress.theme.mutedInk)
+                            StudySegments(title: "希伯来语写法",
+                                          options: [(true, "传统标音"), (false, "现代无点")],
+                                          selection: $progress.showNiqqud,
+                                          compact: true)
+                        }
+                        GridRow {
+                            Text("书体")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(progress.theme.mutedInk)
+                            StudySegments(title: "希伯来语书体",
+                                          options: [(false, "印刷体"), (true, "手写体")],
+                                          selection: $progress.showCursive,
+                                          compact: true)
+                        }
+                    }
+                }
             }
-            .padding(.horizontal, 4)
             .padding(.vertical, 2)
             Divider()
             Toggle(isOn: $progress.alphabetFromRight) {

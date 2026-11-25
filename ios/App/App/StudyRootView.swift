@@ -831,39 +831,56 @@ struct StudySegments<Value: Hashable>: View {
     let title: String
     let options: [(value: Value, title: String)]
     @Binding var selection: Value
+    var compact = false
 
     var body: some View {
+        let outerRadius: CGFloat = compact ? 10 : 12
+        let innerRadius: CGFloat = compact ? 7.5 : 9.5
+        let itemHeight: CGFloat = compact ? 32 : 36
+        let outerShape = RoundedRectangle(cornerRadius: outerRadius, style: .continuous)
+        let innerShape = RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+
         if typeSize.isAccessibilitySize {
             Picker(title, selection: $selection) {
                 ForEach(options, id: \.value) { option in Text(option.title).tag(option.value) }
             }
             .pickerStyle(.menu)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .background(progress.theme.insetSurface, in: Capsule())
+            .background(progress.theme.insetSurface, in: outerShape)
+            .overlay {
+                outerShape
+                    .strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
         } else {
             HStack(spacing: 3) {
                 ForEach(options, id: \.value) { option in
                     let isSelected = selection == option.value
                     Button {
+                        guard !isSelected else { return }
+                        if progress.hapticsEnabled {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                        }
                         if reduceMotion {
                             selection = option.value
                         } else {
-                            withAnimation(.spring(response: 0.30, dampingFraction: 0.78)) {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                                 selection = option.value
                             }
                         }
                     } label: {
                         Text(option.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font((compact ? Font.footnote : Font.subheadline).weight(isSelected ? .semibold : .medium))
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(isSelected ? Color.white : progress.theme.ink)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .padding(.horizontal, 4)
+                            .foregroundStyle(isSelected ? Color.white : progress.theme.mutedInk)
+                            .frame(maxWidth: .infinity, minHeight: itemHeight)
+                            .padding(.horizontal, 6)
                             .background {
                                 if isSelected {
-                                    Capsule()
+                                    innerShape
                                         .fill(progress.theme.primaryButton)
+                                        .shadow(color: Color.black.opacity(0.14), radius: 2, y: 1)
                                         .matchedGeometryEffect(id: "activeSegment", in: segmentNamespace)
                                 }
                             }
@@ -874,7 +891,12 @@ struct StudySegments<Value: Hashable>: View {
                 }
             }
             .padding(3)
-            .background(progress.theme.insetSurface, in: Capsule())
+            .background(progress.theme.insetSurface, in: outerShape)
+            .overlay {
+                outerShape
+                    .strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(title)
         }
