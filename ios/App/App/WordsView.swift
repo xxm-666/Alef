@@ -1204,7 +1204,8 @@ struct WordQuizView: View {
                               solution: kind == .spelling ? "\(target.hebrew) · \(target.hebrewUnpointed)" : "\(target.hebrew) · \(target.meaningZh)",
                               response: kind == .spelling ? spelling : options.first { $0.id == selectedOption }?.meaningZh,
                               explanation: "\(target.transliteration) · \(target.partOfSpeech)",
-                              combo: usesQueue && !isRetryAnswer ? answerRun.combo : 0)
+                              combo: usesQueue && !isRetryAnswer ? answerRun.combo : 0,
+                              spellingComparison: kind == .spelling && !correct ? target.spellingComparison(for: spelling) : nil)
             if kind == .spelling {
                 PronunciationButton(hebrew: target.hebrew, title: "听正确发音")
             }

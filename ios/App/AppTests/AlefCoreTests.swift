@@ -1381,6 +1381,33 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(decodedMerged.groups[0].roundCount, 1)
     }
 
+    func testSpellingComparisonErrorPositions() {
+        let word = makeWord(id: "shalom", hebrew: "שָׁלוֹם", unpointed: "שלום")
+
+        let exact = word.spellingComparison(for: "שלום")
+        XCTAssertTrue(exact.isExactMatch)
+        XCTAssertEqual(exact.summary, "")
+        XCTAssertTrue(exact.tokens.allSatisfy { $0.kind == .match })
+
+        let finalForm = word.spellingComparison(for: "שלומ")
+        XCTAssertFalse(finalForm.isExactMatch)
+        XCTAssertEqual(finalForm.tokens.map(\.kind), [.match, .match, .match, .wrong])
+        XCTAssertTrue(finalForm.tokens[3].isFinalFormMismatch)
+        XCTAssertEqual(finalForm.summary, "第 4 位注意词尾形（从右往左数）")
+
+        let missing = word.spellingComparison(for: "שלם")
+        XCTAssertEqual(missing.tokens.map(\.kind), [.match, .match, .missing, .match])
+        XCTAssertEqual(missing.summary, "第 3 位缺少字母（从右往左数）")
+
+        let extra = word.spellingComparison(for: "שלוום")
+        XCTAssertEqual(extra.tokens.map(\.kind), [.match, .match, .extra, .match, .match])
+        XCTAssertEqual(extra.summary, "第 3 位多写了字母（从右往左数）")
+
+        let wrongTwo = word.spellingComparison(for: "סלון")
+        XCTAssertEqual(wrongTwo.tokens.map(\.kind), [.wrong, .match, .match, .wrong])
+        XCTAssertEqual(wrongTwo.summary, "第 1、4 位有误（从右往左数）")
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

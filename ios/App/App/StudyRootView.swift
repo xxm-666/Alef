@@ -1202,6 +1202,60 @@ struct StudyAnswerButton: View {
     }
 }
 
+struct SpellingDiffView: View {
+    @Environment(StudyProgress.self) private var progress
+    let comparison: SpellingComparison
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(comparison.tokens) { token in
+                        VStack(spacing: 2) {
+                            tokenChip(token)
+                            Text("\(token.id + 1)")
+                                .font(.caption2.weight(token.kind == .match ? .regular : .semibold).monospacedDigit())
+                                .foregroundStyle(token.kind == .match ? progress.theme.mutedInk : progress.theme.error)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+                .environment(\.layoutDirection, .rightToLeft)
+            }
+            if !comparison.summary.isEmpty {
+                Text(comparison.summary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(progress.theme.error)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(comparison.summary)
+    }
+
+    private func tokenChip(_ token: SpellingComparison.Token) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let tint = token.kind == .match ? progress.theme.success : progress.theme.error
+        return Text(token.text)
+            .font(.system(size: 22, weight: .semibold, design: .serif))
+            .strikethrough(token.kind == .extra, color: progress.theme.error)
+            .foregroundStyle(tint)
+            .frame(minWidth: 30, minHeight: 34)
+            .padding(.horizontal, 4)
+            .background {
+                if token.kind != .missing {
+                    shape.fill(tint.opacity(token.kind == .match ? 0.14 : 0.16))
+                }
+            }
+            .overlay {
+                if token.kind == .missing {
+                    shape.strokeBorder(tint.opacity(0.75), style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
+                } else {
+                    shape.strokeBorder(tint.opacity(token.kind == .match ? 0.35 : 0.65), lineWidth: 1)
+                }
+            }
+    }
+}
+
 struct StudyQuizFeedback: View {
     @Environment(StudyProgress.self) private var progress
     @AccessibilityFocusState(for: .voiceOver) private var focused: Bool
@@ -1211,6 +1265,7 @@ struct StudyQuizFeedback: View {
     var response: String?
     var explanation: String?
     var combo = 0
+    var spellingComparison: SpellingComparison? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1218,7 +1273,9 @@ struct StudyQuizFeedback: View {
                   systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.headline)
                 .foregroundStyle(correct ? progress.theme.success : progress.theme.error)
-            if !correct, let response {
+            if !correct, let spellingComparison, !spellingComparison.isExactMatch {
+                SpellingDiffView(comparison: spellingComparison)
+            } else if !correct, let response {
                 Text("你的答案  \(response)").foregroundStyle(progress.theme.mutedInk)
             }
             Text("正确答案  \(solution)")

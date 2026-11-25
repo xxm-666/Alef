@@ -283,14 +283,160 @@ struct StudyWord: Decodable, Identifiable {
             && hebrewUnpointed.allSatisfy { "אבגדהוזחטיכלמנסעפצקרשתךםןףץ".contains($0) }
     }
 
+    private static func normalizeSpelling(_ value: String) -> String {
+        value.precomposedStringWithCanonicalMapping
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            .replacingOccurrences(of: "\"", with: "״")
+    }
+
+    private static func containsHebrewMarks(_ value: String) -> Bool {
+        value.unicodeScalars.contains { (0x0591...0x05C7).contains($0.value) }
+    }
+
     func acceptsSpelling(_ input: String) -> Bool {
-        func normalized(_ value: String) -> String {
-            value.precomposedStringWithCanonicalMapping
-                .split(whereSeparator: \.isWhitespace).joined(separator: " ")
-                .replacingOccurrences(of: "\"", with: "״")
+        let answer = Self.normalizeSpelling(input)
+        return ([hebrew, hebrewUnpointed] + (alternateSpellings ?? [])).contains { Self.normalizeSpelling($0) == answer }
+    }
+
+    func spellingComparison(for input: String) -> SpellingComparison {
+        let normalizedInput = Self.normalizeSpelling(input)
+        let rawCandidates = Self.containsHebrewMarks(normalizedInput)
+            ? [hebrew, hebrewUnpointed] + (alternateSpellings ?? [])
+            : [hebrewUnpointed] + (alternateSpellings ?? [])
+        let candidates = rawCandidates.map(Self.normalizeSpelling).filter { !$0.isEmpty }
+        let inputChars = Array(normalizedInput)
+        var bestTarget = Array(candidates.first ?? Self.normalizeSpelling(hebrewUnpointed))
+        var bestDistance = Int.max
+        for candidate in candidates {
+            let chars = Array(candidate)
+            let distance = SpellingComparison.editDistance(inputChars, chars)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestTarget = chars
+                if distance == 0 { break }
+            }
         }
-        let answer = normalized(input)
-        return ([hebrew, hebrewUnpointed] + (alternateSpellings ?? [])).contains { normalized($0) == answer }
+        return SpellingComparison.compare(input: inputChars, target: bestTarget)
+    }
+}
+
+struct SpellingComparison: Equatable {
+    enum TokenKind: Equatable {
+        case match
+        case wrong
+        case extra
+        case missing
+    }
+
+    struct Token: Equatable, Identifiable {
+        let id: Int
+        let text: String
+        let kind: TokenKind
+        let isFinalFormMismatch: Bool
+    }
+
+    let tokens: [Token]
+    let summary: String
+    let isExactMatch: Bool
+
+    private static let finalFormCounterparts: [Character: Character] = [
+        "כ": "ך", "ך": "כ",
+        "מ": "ם", "ם": "מ",
+        "נ": "ן", "ן": "נ",
+        "פ": "ף", "ף": "פ",
+        "צ": "ץ", "ץ": "צ",
+    ]
+
+    static func editDistance(_ source: [Character], _ target: [Character]) -> Int {
+        let m = source.count
+        let n = target.count
+        if m == 0 { return n }
+        if n == 0 { return m }
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        for i in 0...m { dp[i][0] = i }
+        for j in 0...n { dp[0][j] = j }
+        for i in 1...m {
+            for j in 1...n {
+                let cost = source[i - 1] == target[j - 1] ? 0 : 1
+                dp[i][j] = min(dp[i - 1][j - 1] + cost, dp[i - 1][j] + 1, dp[i][j - 1] + 1)
+            }
+        }
+        return dp[m][n]
+    }
+
+    static func compare(input: [Character], target: [Character]) -> SpellingComparison {
+        let m = input.count
+        let n = target.count
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        for i in 0...m { dp[i][0] = i }
+        for j in 0...n { dp[0][j] = j }
+        if m > 0 && n > 0 {
+            for i in 1...m {
+                for j in 1...n {
+                    let cost = input[i - 1] == target[j - 1] ? 0 : 1
+                    dp[i][j] = min(dp[i - 1][j - 1] + cost, dp[i - 1][j] + 1, dp[i][j - 1] + 1)
+                }
+            }
+        }
+
+        var reversed: [(text: String, kind: TokenKind, finalForm: Bool)] = []
+        var i = m
+        var j = n
+        while i > 0 || j > 0 {
+            if i > 0 && j > 0 && input[i - 1] == target[j - 1] && dp[i][j] == dp[i - 1][j - 1] {
+                reversed.append((String(input[i - 1]), .match, false))
+                i -= 1
+                j -= 1
+            } else if i > 0 && j > 0 && dp[i][j] == dp[i - 1][j - 1] + 1 {
+                let isFinal = finalFormCounterparts[input[i - 1]] == target[j - 1]
+                reversed.append((String(input[i - 1]), .wrong, isFinal))
+                i -= 1
+                j -= 1
+            } else if i > 0 && dp[i][j] == dp[i - 1][j] + 1 {
+                reversed.append((String(input[i - 1]), .extra, false))
+                i -= 1
+            } else {
+                reversed.append(("?", .missing, false))
+                j -= 1
+            }
+        }
+
+        let tokens = reversed.reversed().enumerated().map { offset, item in
+            Token(id: offset, text: item.text, kind: item.kind, isFinalFormMismatch: item.finalForm)
+        }
+
+        let wrongPositions = tokens.filter { $0.kind == .wrong }.map { $0.id + 1 }
+        let missingPositions = tokens.filter { $0.kind == .missing }.map { $0.id + 1 }
+        let extraPositions = tokens.filter { $0.kind == .extra }.map { $0.id + 1 }
+        let finalMismatchOnly = wrongPositions.count == 1
+            && missingPositions.isEmpty
+            && extraPositions.isEmpty
+            && tokens.contains { $0.kind == .wrong && $0.isFinalFormMismatch }
+
+        let summary: String
+        if wrongPositions.isEmpty && missingPositions.isEmpty && extraPositions.isEmpty {
+            summary = ""
+        } else if finalMismatchOnly {
+            summary = "第 \(wrongPositions[0]) 位注意词尾形（从右往左数）"
+        } else {
+            var parts: [String] = []
+            if !wrongPositions.isEmpty {
+                parts.append("第 \(formatPositions(wrongPositions)) 位有误")
+            }
+            if !missingPositions.isEmpty {
+                parts.append("第 \(formatPositions(missingPositions)) 位缺少字母")
+            }
+            if !extraPositions.isEmpty {
+                parts.append("第 \(formatPositions(extraPositions)) 位多写了字母")
+            }
+            summary = parts.joined(separator: "，") + "（从右往左数）"
+        }
+
+        return SpellingComparison(tokens: tokens, summary: summary, isExactMatch: summary.isEmpty)
+    }
+
+    private static func formatPositions(_ positions: [Int]) -> String {
+        positions.map(String.init).joined(separator: "、")
     }
 }
 

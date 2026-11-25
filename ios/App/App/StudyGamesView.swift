@@ -448,7 +448,8 @@ struct StudyGameView: View {
             .disabled(selectedTiles.count != word.hebrewUnpointed.count)
         } else if let answer {
             StudyQuizFeedback(correct: answer, solution: word.hebrewUnpointed, response: spelling,
-                              explanation: word.transliteration)
+                              explanation: word.transliteration,
+                              spellingComparison: answer ? nil : word.spellingComparison(for: spelling))
             if answer {
                 PronunciationButton(hebrew: word.hebrew, title: "听拼好的单词")
             }

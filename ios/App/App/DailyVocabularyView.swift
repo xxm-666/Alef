@@ -68,6 +68,7 @@ private struct DailyVocabularyView: View {
     @State private var spelling = ""
     @State private var retryingMistake = false
     @State private var retryMatched = false
+    @State private var retryComparison: SpellingComparison?
     @State private var peekedWordIDs: Set<String> = []
     @State private var celebration: StudyAnswerCelebration?
     @State private var reviewingGroup: DailyVocabularyGroup?
@@ -128,6 +129,11 @@ private struct DailyVocabularyView: View {
                         scroll.scrollTo(ScrollTarget.question, anchor: .top)
                     }
                 }
+                .onChange(of: retryComparison) { _, comparison in
+                    if comparison != nil {
+                        scroll.scrollTo(ScrollTarget.feedback, anchor: .bottom)
+                    }
+                }
                 .onChange(of: activeId) { _, _ in
                     scroll.scrollTo(ScrollTarget.question, anchor: .top)
                 }
@@ -185,6 +191,7 @@ private struct DailyVocabularyView: View {
                                 audio.stop()
                                 retryingMistake = true
                                 retryMatched = false
+                                retryComparison = nil
                                 spelling = ""
                             } label: {
                                 Label("再拼一次", systemImage: "arrow.counterclockwise")
@@ -406,12 +413,24 @@ private struct DailyVocabularyView: View {
             StudyNotice(title: "订正成功，印象更牢了", symbol: "checkmark.circle.fill",
                         note: "\(word.hebrew) · \(word.hebrewUnpointed)")
                 .id(ScrollTarget.feedback)
+        } else if isRetrying, let retryComparison, !retryComparison.isExactMatch {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("订正仍有误", systemImage: "xmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(progress.theme.error)
+                SpellingDiffView(comparison: retryComparison)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(progress.theme.errorSurface, in: RoundedRectangle(cornerRadius: 12))
+            .id(ScrollTarget.feedback)
         } else if let answer, !isRetrying {
             let solution = "\(word.hebrew) · \(word.hebrewUnpointed)"
             let proficiency = progress.wordProficiency(word.id)
             VStack(alignment: .leading, spacing: 8) {
                 StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input,
-                                  combo: plan.answerCombo)
+                                  combo: plan.answerCombo,
+                                  spellingComparison: answer.correct ? nil : word.spellingComparison(for: answer.input))
                 if answer.wasPeeked && answer.correct {
                     StudyNotice(title: "已参考单词提示", symbol: "book",
                                 note: "本题仅作跟写巩固，不增加熟练度与连击。")
@@ -611,6 +630,7 @@ private struct DailyVocabularyView: View {
         celebration = nil
         retryingMistake = false
         retryMatched = false
+        retryComparison = nil
         peekedWordIDs.removeAll()
         spelling = ""
     }
@@ -632,6 +652,7 @@ private struct DailyVocabularyView: View {
         celebration = nil
         retryingMistake = false
         retryMatched = false
+        retryComparison = nil
         spelling = ""
     }
 
@@ -640,6 +661,7 @@ private struct DailyVocabularyView: View {
         guard let answer = progress.answerDailyVocabulary(group, day: day, word: word, input: spelling, peeked: peeked) else { return }
         retryingMistake = false
         retryMatched = false
+        retryComparison = nil
         celebration = (answer.correct && !peeked) ? StudyAnswerCelebration(combo: progress.dailyVocabulary.answerCombo) : nil
         audio.playFeedback(answer.correct ? .correct : .wrong)
     }
@@ -649,8 +671,10 @@ private struct DailyVocabularyView: View {
         guard !trimmed.isEmpty else { return }
         if word.acceptsSpelling(trimmed) {
             retryMatched = true
+            retryComparison = nil
             audio.playFeedback(.correct)
         } else {
+            retryComparison = word.spellingComparison(for: trimmed)
             audio.playFeedback(.wrong)
         }
     }
