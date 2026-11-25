@@ -1315,6 +1315,44 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.dailyVocabulary.answerCombo, 0)
     }
 
+    func testDailyVocabularyAddGroupRestartGroupAndImmediateLimitUpdate() throws {
+        let words = (1...20).map { makeWord(id: "e\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        let day = DailyVocabularyPlan.dayKey(for: today)
+        progress.prepareDailyVocabulary(words: words, date: today)
+        XCTAssertEqual(progress.dailyVocabulary.groups.count, 2)
+
+        // Start group 0, then increase limit from 2 -> 3: takes effect immediately!
+        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        progress.setDailyVocabularyLimit(3, words: words, date: today)
+        XCTAssertEqual(progress.dailyVocabulary.groupsPerDay, 3)
+        XCTAssertEqual(progress.dailyVocabulary.groups.count, 3)
+        XCTAssertTrue(progress.dailyVocabulary.isValid)
+
+        // Add an extra 4th group beyond the default 3-group limit
+        let extra = try XCTUnwrap(progress.addDailyVocabularyGroup(words: words, date: today))
+        XCTAssertEqual(extra.wordIds.count, 5)
+        XCTAssertEqual(progress.dailyVocabulary.groups.count, 4)
+        XCTAssertTrue(progress.dailyVocabulary.isValid)
+
+        // Complete group 0 and restart it for repeated practice
+        for _ in 0..<4 {
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+        for i in 0..<5 {
+            let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+            XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: words[i], input: "שלום", date: today)?.correct, true)
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+        let completedGroup = progress.dailyVocabulary.groups[0]
+        XCTAssertTrue(completedGroup.isComplete)
+        XCTAssertTrue(progress.restartDailyVocabularyGroup(completedGroup, day: day))
+        XCTAssertFalse(progress.dailyVocabulary.groups[0].isComplete)
+        XCTAssertEqual(progress.dailyVocabulary.groups[0].studied, 0)
+        XCTAssertEqual(progress.dailyVocabulary.groups[0].wordIds, completedGroup.wordIds)
+        XCTAssertTrue(progress.dailyVocabulary.isValid)
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

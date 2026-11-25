@@ -92,7 +92,6 @@ private struct DailyVocabularyView: View {
                                     Text("\(count) 组").tag(count)
                                 }
                             }
-                            if current.hasStarted { Text("调整从明天生效") }
                         }
                     }
                 }
@@ -206,7 +205,11 @@ private struct DailyVocabularyView: View {
     }
 
     private func planContent(_ today: DailyVocabularyPlan) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let canAddGroup = today.groups.count < DailyVocabularyPlan.maxGroupsPerDay
+            && !today.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
+                                          mastery: progress.wordMastery,
+                                          schedule: progress.schedule).isEmpty
+        return VStack(alignment: .leading, spacing: 16) {
             StudyCard {
                 StudySectionTitle("今日计划")
                 Text("每组最多 \(DailyVocabularyPlan.groupSize) 词，先认读，再拼写。")
@@ -219,11 +222,21 @@ private struct DailyVocabularyView: View {
                 }
                 ForEach(Array(today.groups.enumerated()), id: \.element.id) { index, group in
                     Divider()
-                    groupRow(group, index: index, completed: today.completedCount)
+                    groupRow(group, index: index, nextGroupID: today.nextGroup?.id)
                 }
                 if today.completedCount > 0 && today.completedCount == today.groups.count {
-                    Label("今日新词已完成，明天接着学。", systemImage: "checkmark.circle.fill")
+                    Label("今日计划已完成，可继续加学或重练任意一组。", systemImage: "checkmark.circle.fill")
                         .font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.accent)
+                }
+                if canAddGroup {
+                    Divider()
+                    Button {
+                        addExtraGroup()
+                    } label: {
+                        Label("加学一组新词", systemImage: "plus.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: today.nextGroup == nil))
                 }
             }
         }
@@ -234,20 +247,21 @@ private struct DailyVocabularyView: View {
                 set: { progress.setDailyVocabularyLimit($0, words: content.dailyVocabularyWords(in: progress)) })
     }
 
-    private func groupRow(_ group: DailyVocabularyGroup, index: Int, completed: Int) -> some View {
+    private func groupRow(_ group: DailyVocabularyGroup, index: Int, nextGroupID: String?) -> some View {
         let title = "第 \(index + 1) 组 · \(group.wordIds.count) 词"
-        let action = group.isComplete ? "查看结果" : group.hasStarted ? "继续" : "开始"
+        let action = group.isComplete ? "查看 / 重练" : group.hasStarted ? "继续" : "开始"
+        let isNext = group.id == nextGroupID
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 groupRowLabel(title, status: group.status)
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 0)
-                groupRowAction(group, index: index, completed: completed, action: action)
+                groupRowAction(group, index: index, isNext: isNext, action: action)
                     .fixedSize(horizontal: true, vertical: false)
             }
             VStack(alignment: .leading, spacing: 6) {
                 groupRowLabel(title, status: group.status)
-                groupRowAction(group, index: index, completed: completed, action: action)
+                groupRowAction(group, index: index, isNext: isNext, action: action)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,13 +274,13 @@ private struct DailyVocabularyView: View {
         }
     }
 
-    @ViewBuilder private func groupRowAction(_ group: DailyVocabularyGroup, index: Int, completed: Int, action: String) -> some View {
-        if index <= completed {
+    @ViewBuilder private func groupRowAction(_ group: DailyVocabularyGroup, index: Int, isNext: Bool, action: String) -> some View {
+        if group.isComplete || group.hasStarted || isNext {
             Button(action) {
                 progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
                 openGroup(group.id)
             }
-            .buttonStyle(StudyButtonStyle(prominent: index == completed))
+            .buttonStyle(StudyButtonStyle(prominent: isNext))
             .accessibilityLabel("第 \(index + 1) 组 · \(action)")
         } else {
             Text("上一组完成后开始").font(.caption).foregroundStyle(progress.theme.mutedInk)
@@ -293,8 +307,33 @@ private struct DailyVocabularyView: View {
                 }
             }
             let next = plan.nextGroup
-            reviewWordsButton(group)
-            primaryButton(next == nil ? "返回今日计划" : "开始下一组", symbol: "arrow.right") { openGroup(next?.id) }
+            let canAddGroup = plan.groups.count < DailyVocabularyPlan.maxGroupsPerDay
+                && !plan.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
+                                             mastery: progress.wordMastery,
+                                             schedule: progress.schedule).isEmpty
+            HStack(spacing: 8) {
+                reviewWordsButton(group)
+                Button {
+                    restartGroup(group, day: day)
+                } label: {
+                    Label("再练一遍本组", systemImage: "arrow.counterclockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle())
+            }
+            if let next {
+                primaryButton("开始下一组", symbol: "arrow.right") { openGroup(next.id) }
+            } else if canAddGroup {
+                primaryButton("加学一组新词", symbol: "plus.circle.fill") { addExtraGroup() }
+                Button {
+                    openGroup(nil)
+                } label: {
+                    Text("返回今日计划").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(StudyButtonStyle())
+            } else {
+                primaryButton("返回今日计划", symbol: "arrow.right") { openGroup(nil) }
+            }
         } else if let word = currentWord(group) {
             let total = group.wordIds.count
             if group.studied < total {
@@ -501,6 +540,16 @@ private struct DailyVocabularyView: View {
         retryMatched = false
         peekedWordIDs.removeAll()
         spelling = ""
+    }
+
+    private func addExtraGroup() {
+        guard let added = progress.addDailyVocabularyGroup(words: content.dailyVocabularyWords(in: progress)) else { return }
+        openGroup(added.id)
+    }
+
+    private func restartGroup(_ group: DailyVocabularyGroup, day: String) {
+        guard progress.restartDailyVocabularyGroup(group, day: day) else { return }
+        openGroup(group.id)
     }
 
     private func advance(_ group: DailyVocabularyGroup, day: String) {

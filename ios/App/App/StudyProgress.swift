@@ -408,6 +408,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     static let storageKey = "alef.dailyVocabulary.v1"
     static let groupOptions = [1, 2, 3]
     static let groupSize = 5
+    static let maxGroupsPerDay = 20
 
     var day = ""
     var groupsPerDay = 2
@@ -452,22 +453,24 @@ struct DailyVocabularyPlan: Codable, Equatable {
         return Self(day: today, groupsPerDay: groupsPerDay, groups: assignments)
     }
 
+    func remainingNewWordIds(from words: [StudyWord], mastery: [String: Mastery], schedule: [String: ReviewSchedule]) -> [String] {
+        let assigned = Set(groups.flatMap(\.wordIds))
+        return words.filter { !assigned.contains($0.id) && mastery[$0.id] != .mastered && schedule[$0.id] == nil }.map(\.id)
+    }
+
     var isValid: Bool {
-        guard Self.groupOptions.contains(groupsPerDay), groups.count <= Self.groupOptions.count,
+        guard Self.groupOptions.contains(groupsPerDay), groups.count <= Self.maxGroupsPerDay,
               day.isEmpty ? groups.isEmpty : day.range(of: #"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"#, options: .regularExpression) != nil
         else { return false }
         var ids = Set<String>()
-        var foundIncomplete = false
         for group in groups {
             guard (1...Self.groupSize).contains(group.wordIds.count),
                   (0...group.wordIds.count).contains(group.studied), group.answers.count <= group.wordIds.count,
                   group.studied == group.wordIds.count || group.answers.isEmpty,
                   !group.feedbackPending || !group.answers.isEmpty,
                   group.answers.allSatisfy({ !$0.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
-                  !foundIncomplete || !group.hasStarted,
                   group.wordIds.allSatisfy({ !$0.isEmpty && ids.insert($0).inserted })
             else { return false }
-            if !group.isComplete { foundIncomplete = true }
         }
         return true
     }
@@ -820,18 +823,48 @@ struct StudyReviewBatch: Codable, Hashable {
         var plan = dailyVocabularyPlan(words: words, date: date)
         guard plan.groupsPerDay != count else { return }
         plan.groupsPerDay = count
-        if !plan.hasStarted {
-            plan.day = ""
-            plan.groups = []
-            plan = plan.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+        if plan.groups.count < count {
+            let newIds = plan.remainingNewWordIds(from: words, mastery: wordMastery, schedule: schedule)
+            for offset in stride(from: 0, to: newIds.count, by: DailyVocabularyPlan.groupSize) {
+                guard plan.groups.count < count else { break }
+                plan.groups.append(DailyVocabularyGroup(wordIds: Array(newIds.dropFirst(offset).prefix(DailyVocabularyPlan.groupSize))))
+            }
+        } else if plan.groups.count > count {
+            while plan.groups.count > count, let last = plan.groups.last, !last.hasStarted {
+                plan.groups.removeLast()
+            }
         }
         write(plan, for: DailyVocabularyPlan.storageKey)
     }
 
     @discardableResult
+    func addDailyVocabularyGroup(words: [StudyWord], date: Date = .now) -> DailyVocabularyGroup? {
+        var plan = dailyVocabularyPlan(words: words, date: date)
+        guard plan.groups.count < DailyVocabularyPlan.maxGroupsPerDay else { return nil }
+        let newIds = plan.remainingNewWordIds(from: words, mastery: wordMastery, schedule: schedule)
+        guard !newIds.isEmpty else { return nil }
+        let added = DailyVocabularyGroup(wordIds: Array(newIds.prefix(DailyVocabularyPlan.groupSize)))
+        plan.groups.append(added)
+        write(plan, for: DailyVocabularyPlan.storageKey)
+        return added
+    }
+
+    @discardableResult
+    func restartDailyVocabularyGroup(_ expected: DailyVocabularyGroup, day: String) -> Bool {
+        var plan = dailyVocabulary
+        guard plan.day == day, expected.isComplete,
+              let index = plan.groups.firstIndex(of: expected) else { return false }
+        plan.groups[index].studied = 0
+        plan.groups[index].answers = []
+        plan.groups[index].feedbackPending = false
+        write(plan, for: DailyVocabularyPlan.storageKey)
+        return true
+    }
+
+    @discardableResult
     func advanceDailyVocabulary(_ expected: DailyVocabularyGroup, day: String) -> Bool {
         var plan = dailyVocabulary
-        guard plan.day == day, plan.nextGroup == expected,
+        guard plan.day == day, !expected.isComplete,
               let index = plan.groups.firstIndex(of: expected) else { return false }
         if expected.studied < expected.wordIds.count {
             plan.groups[index].studied += 1
@@ -848,7 +881,7 @@ struct StudyReviewBatch: Codable, Hashable {
                                peeked: Bool = false, date: Date = .now) -> DailySpellingAnswer? {
         var plan = dailyVocabulary
         let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard plan.day == day, plan.nextGroup == expected, let index = plan.groups.firstIndex(of: expected),
+        guard plan.day == day, !expected.isComplete, let index = plan.groups.firstIndex(of: expected),
               !answer.isEmpty, expected.studied == expected.wordIds.count, !expected.feedbackPending,
               expected.wordIds.indices.contains(expected.answers.count), expected.wordIds[expected.answers.count] == word.id
         else { return nil }
