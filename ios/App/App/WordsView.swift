@@ -43,13 +43,15 @@ struct WordsView: View {
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
+    @FocusState private var searchFocused: Bool
+    @State private var openedWordID: String?
     @State private var showsFilters = false
     @State private var phraseCategory = "all"
     @State private var hidePhraseTranslation = false
     @State private var shadowingPhraseId: String?
 
     var body: some View {
-        StudyPage {
+        StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize) {
             StudyHeading(title: "词库", eyebrow: "VOCABULARY · \(content.words.count) 词")
             StudySegments(title: "词库内容",
                           options: [("browse", "单词"), ("phrases", "情景短语"), ("reading", "阅读")],
@@ -71,6 +73,14 @@ struct WordsView: View {
             }
         }
         .studyHome()
+        .onChange(of: libraryMode) { _, _ in searchFocused = false }
+        .onDisappear { searchFocused = false }
+        .navigationDestination(item: $openedWordID) { id in
+            if let word = content.words.first(where: { $0.id == id }) {
+                WordDetailView(word: word, content: content, showNiqqud: preferences.showNiqqud,
+                               showCursive: preferences.showCursive)
+            }
+        }
         .sheet(isPresented: $showsFilters) {
             NavigationStack {
                 WordFilterSheet(content: content, preferences: preferences) { updated in
@@ -140,7 +150,9 @@ struct WordsView: View {
             TextField("搜索单词", text: setting(\.searchQuery))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($searchFocused)
                 .submitLabel(.search)
+                .onSubmit { searchFocused = false }
                 .accessibilityLabel("搜索词库")
                 .accessibilityHint("可按希伯来语、中文、音译或词根搜索")
             if !preferences.searchQuery.isEmpty {
@@ -311,9 +323,9 @@ struct WordsView: View {
         return StudyCard(padding: stacked ? 10 : 7) {
             layout {
                 if !stacked { wordMasteryMenu(word, mastery: mastery) }
-                NavigationLink {
-                    WordDetailView(word: word, content: content, showNiqqud: showNiqqud,
-                                   showCursive: showCursive)
+                Button {
+                    searchFocused = false
+                    openedWordID = word.id
                 } label: {
                     let hebrew = HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed,
                                             cursive: showCursive, size: stacked ? 30 : 28)
@@ -723,21 +735,20 @@ struct WordDetailView: View {
     StudyCard {
         DisclosureGroup("用法与词形") {
             VStack(alignment: .leading, spacing: 10) {
-                if let root = word.root, !root.isEmpty {
+                StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                            symbol: "info.circle")
+                ForEach(word.rootKeys, id: \.self) { root in
                     let familyCount = content.words(withRoot: root).count
                     NavigationLink {
                         RootFamilyView(root: root, content: content)
                     } label: {
                         StudyCard(padding: 10) {
-                            StudyRow(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
+                            StudyRow(title: "词根 · \(root)",
                                      symbol: "point.3.connected.trianglepath.dotted",
-                                     subtitle: "词根 · \(root)（查看全部 \(familyCount) 个同根词）")
+                                     value: "\(familyCount) 词")
                         }
                     }
                     .buttonStyle(.plain)
-                } else {
-                    StudyNotice(title: [word.partOfSpeech, word.grammarTag].filter { !$0.isEmpty }.joined(separator: " · "),
-                                symbol: "info.circle")
                 }
                 if !word.note.isEmpty {
                     Text(word.note).font(.subheadline)
@@ -1076,7 +1087,7 @@ struct WordQuizView: View {
                     quizHeader
                     questionPrompt(target).id("word-question")
                     if kind == .spelling {
-                        WordSpellingInput(content: content, wordId: target.id, spelling: $spelling, submitted: result != nil, onSubmit: confirm)
+                        WordSpellingInput(wordId: target.id, spelling: $spelling, submitted: result != nil, onSubmit: confirm)
                     } else {
                         ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                             StudyAnswerButton(title: option.meaningZh, submitted: result != nil,
@@ -1303,13 +1314,15 @@ struct WordQuizView: View {
 
 struct WordSpellingInput: View {
     @Environment(StudyProgress.self) private var progress
-    let content: StudyContent
+    @EnvironmentObject private var audio: StudyAudio
     let wordId: String
     @Binding var spelling: String
     let submitted: Bool
     let onSubmit: () -> Void
     @State private var systemInput = false
     @FocusState private var inputFocused: Bool
+    private let keySpacing: CGFloat = 4
+    private let keyHeight: CGFloat = 46
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1336,14 +1349,15 @@ struct WordSpellingInput: View {
                 }
             }
             if !submitted {
-                if !systemInput { spellingKeyboard }
-                Button {
-                    systemInput.toggle()
-                    inputFocused = systemInput
-                } label: {
-                    Label(systemInput ? "使用屏内键盘" : "使用系统键盘", systemImage: "globe")
+                if systemInput {
+                    Button("使用屏内键盘", systemImage: "keyboard") {
+                        systemInput = false
+                        inputFocused = false
+                    }
+                    .buttonStyle(StudyButtonStyle())
+                } else {
+                    spellingKeyboard
                 }
-                .buttonStyle(StudyButtonStyle())
             }
         }
         .onChange(of: wordId) { _, _ in inputFocused = false }
@@ -1351,34 +1365,106 @@ struct WordSpellingInput: View {
     }
 
     private var spellingKeyboard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 5)], spacing: 5) {
-                ForEach(content.letters.map(\.hebrew) + content.letters.compactMap(\.sofit) + ["״", " "], id: \.self) { character in
-                    Button { spelling += character } label: {
-                        Group {
-                            if character == " " {
-                                Text("空格").font(.caption.weight(.medium))
-                            } else {
-                                HebrewText(text: character, size: 23)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
-                        .contentShape(Rectangle())
+        GeometryReader { geometry in
+            let column = (geometry.size.width + keySpacing) / 10
+            let letterWidth = max(0, column - keySpacing)
+            let sideWidth = max(0, 2.5 * column - keySpacing)
+            let smallControlWidth = max(0, (sideWidth - keySpacing) / 2)
+            let spaceWidth = max(0, 5 * column - keySpacing)
+
+            // Key positions follow the standard Hebrew layout, listed from left to right.
+            VStack(spacing: keySpacing) {
+                HStack(spacing: keySpacing) {
+                    letterKeys("קראטוןםפ", width: letterWidth)
+                    key("退格", width: 2 * letterWidth + keySpacing, utility: true, action: {
+                        if !spelling.isEmpty { spelling.removeLast() }
+                    }) {
+                        Image(systemName: "delete.left")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(character == " " ? "空格" : character == "״" ? "希伯来语双引号" : character)
+                    .buttonRepeatBehavior(.enabled)
+                    .disabled(spelling.isEmpty)
+                }
+                HStack(spacing: keySpacing) {
+                    letterKeys("שדגכעיחלךף", width: letterWidth)
+                }
+                HStack(spacing: keySpacing) {
+                    letterKeys("זסבהנמצתץ", width: letterWidth)
+                }
+                HStack(spacing: keySpacing) {
+                    key("使用系统键盘", width: smallControlWidth, utility: true, action: {
+                        systemInput = true
+                        inputFocused = true
+                    }) {
+                        Image(systemName: "globe")
+                    }
+                    key("希伯来语双引号", width: smallControlWidth, utility: true, action: { spelling.append("״") }) {
+                        Text("״").font(.title3)
+                    }
+                    key("空格", width: spaceWidth, action: { spelling.append(" ") }) {
+                        Text("空格").font(.subheadline.weight(.medium))
+                    }
+                    key("清空", width: sideWidth, utility: true, action: { spelling.removeAll() }) {
+                        Text("清空").font(.subheadline.weight(.medium))
+                    }
+                    .disabled(spelling.isEmpty)
                 }
             }
-            .environment(\.layoutDirection, .rightToLeft)
-            HStack {
-                Button("退格", systemImage: "delete.left") { if !spelling.isEmpty { spelling.removeLast() } }
-                Button("清空", systemImage: "eraser") { spelling = "" }
-            }
-            .buttonStyle(StudyButtonStyle())
-            .disabled(spelling.isEmpty)
+            .frame(maxWidth: .infinity)
         }
-        .padding(8)
+        .frame(height: 4 * keyHeight + 3 * keySpacing)
+        .environment(\.layoutDirection, .leftToRight)
+        .padding(6)
         .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func letterKeys(_ letters: String, width: CGFloat) -> some View {
+        ForEach(Array(letters), id: \.self) { letter in
+            key(String(letter), width: width, action: { spelling.append(letter) }) {
+                Text(String(letter)).font(.title2.weight(.medium))
+                    .speechSpellsOutCharacters(true)
+            }
+        }
+    }
+
+    private func key<Label: View>(_ accessibilityName: String, width: CGFloat, utility: Bool = false,
+                                  action: @escaping () -> Void, @ViewBuilder label: () -> Label) -> some View {
+        Button {
+            audio.playSelectionHaptic()
+            action()
+        } label: {
+            label()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(width: width, height: keyHeight)
+        }
+        .buttonStyle(WordSpellingKeyStyle(utility: utility))
+        .accessibilityLabel(Text(accessibilityName))
+    }
+}
+
+private struct WordSpellingKeyStyle: ButtonStyle {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let utility: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = enabled && configuration.isPressed
+        let theme = progress.theme
+        let shape = RoundedRectangle(cornerRadius: 7)
+        configuration.label
+            .foregroundStyle(theme.ink)
+            .background {
+                shape.fill(utility ? theme.highlightedSurface : theme.cardSurface)
+                    .overlay(shape.fill(theme.accent.opacity(pressed ? 0.24 : 0)))
+                    .overlay(shape.strokeBorder(theme.outline, lineWidth: 1))
+                    .shadow(color: theme.ink.opacity(0.17), radius: 0, y: pressed ? 0 : 1)
+            }
+            .opacity(enabled ? 1 : 0.52)
+            .scaleEffect(pressed && !reduceMotion ? 0.93 : 1)
+            .contentShape(Rectangle())
+            .animation(pressed || reduceMotion ? nil : .easeOut(duration: 0.14), value: pressed)
     }
 }

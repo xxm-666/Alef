@@ -359,7 +359,7 @@ private struct DailyVocabularyView: View {
             Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
             Text("屏内键盘输入无点全拼即可，系统键盘也支持带点写法").font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
-        WordSpellingInput(content: content, wordId: word.id, spelling: input,
+        WordSpellingInput(wordId: word.id, spelling: input,
                           submitted: isRetrying ? retryMatched : answer != nil) {
             if isRetrying {
                 checkMistakeRetry(word: word)

@@ -246,6 +246,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '日常表达',
     grammarTag: '名词 + 形容词',
     category: 'greetings',
+    root: 'ט-ו-ב',
     note: '用于生日、婚礼、升职等一切喜事。现代口语重音常在 מא-זל 或 מאזל-טוב。',
     sentence: {
       hebrew: 'מַזָּל טוֹב לְיוֹם הֻלַּדְתְּךָ!',
@@ -353,6 +354,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'family',
+    root: 'א-נ-ש',
     note: '复数是不规则变化 אֲנָשִׁים (anashim)。',
     sentence: {
       hebrew: 'הָאִישׁ הַזֶּה חָכָם מְאֹד.',
@@ -370,6 +372,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'family',
+    root: 'א-נ-ש',
     note: '无元音点日常拼写常补入 י 写作 אישה，以区分 אֵשׁ（火）。',
     sentence: {
       hebrew: 'הָאִשָּׁה הַזֹּאת מוֹרָה לְמוּזִיקָה.',
@@ -423,6 +426,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'family',
+    root: 'ש-פ-ח',
     note: '词尾 ה 表示阴性名词；复数为 מִשְׁפָּחוֹת (mishpachot)。',
     sentence: {
       hebrew: 'יֵשׁ לִי מִשְׁפָּחָה גְּדוֹלָה וְחַמָּה.',
@@ -597,6 +601,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数（虽以 ה 结尾）',
     category: 'time',
+    root: 'ל-י-ל',
     note: '注意：לַיְלָה 虽然以 ה 结尾，但语法上属于**阳性名词**，所以「晚安」说 לַיְלָה טוֹב（不加 ה）。',
     sentence: {
       hebrew: 'לַיְלָה טוֹב וַחֲלוֹמוֹת פַּז.',
@@ -632,6 +637,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '数词',
     grammarTag: '基数词 1',
     category: 'time',
+    root: 'א-ח-ד',
     note: '阴性形式为 אַחַת (achat)。希伯来语数词有阴阳性之分。',
     sentence: {
       hebrew: 'קָפֶה אֶחָד בְּבַקָּשָׁה.',
@@ -649,6 +655,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '数词',
     grammarTag: '基数词 3',
     category: 'time',
+    root: 'ש-ל-ש',
     note: '日常数数、报时间、报电话号码时默认使用阴性数词（如 שָׁלוֹשׁ）。',
     sentence: {
       hebrew: 'הַשָּׁעָה שָׁלוֹשׁ בַּצָּהֳרַיִם.',
@@ -717,6 +724,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'time',
+    root: 'ש-נ-ה',
     note: '犹太新年祝语 שָׁנָה טוֹבָה (Shanah Tovah) 意为「新年快乐」。复数 שָׁנִים。',
     sentence: {
       hebrew: 'שָׁנָה טוֹבָה וּמְתוּקָה!',
@@ -769,6 +777,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '数词',
     grammarTag: '基数词 10',
     category: 'time',
+    root: 'ע-ש-ר',
     note: '中间字母 שׂ 带左点（Sin），读 /s/ 而非 /ʃ/。',
     sentence: {
       hebrew: 'הַחֲנוּת נִפְתַּחַת בְּעֶשֶׂר בַּבֹּקֶר.',
@@ -840,6 +849,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'ב-י-ת',
     note: '第二个字母 ב 的名称就叫 בֵּית (Bet)，源自「房子」的象形。',
     sentence: {
       hebrew: 'הַבַּיִת שֶׁלָּנוּ קָרוֹב לַיָּם.',
@@ -927,6 +937,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'ח-ל-ב',
     note: '以色列经典拿铁叫 קָפֶה הָפוּךְ（字面：倒过来的咖啡），加 חָלָב（牛奶）。',
     sentence: {
       hebrew: 'יֵשׁ חָלָב טָרִי בַּמְּקָרֵר.',
@@ -944,6 +955,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'נ-פ-ח',
     note: '词尾 ח 带偷渡元音 Patach，读 /-uach/。土豆叫 תַּפּוּחַ אֲדָמָה（大地的苹果）。',
     sentence: {
       hebrew: 'הַתַּפּוּחַ הָאָדֹם מָתוֹק מְאֹד.',
@@ -961,6 +973,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'daily',
+    root: 'ד-ל-ת',
     note: '第四个字母 ד 的名称 דָּלֶת (Dalet) 就源自「门」的象形。',
     sentence: {
       hebrew: 'בְּבַקָּשָׁה סְגֹר אֶת הַדֶּלֶת.',
@@ -978,6 +991,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'ח-ל-ל',
     note: '词尾使用 ן（Nun Sofit），复数为 חַלּוֹנוֹת (chalonot)。',
     sentence: {
       hebrew: 'פְּתַח אֶת הַחַלּוֹן, חַם כָּאן.',
@@ -995,6 +1009,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'כ-ס-א',
     note: '词尾 א 不发音；无元音点日常拼写补入 י 写作 כיסא。',
     sentence: {
       hebrew: 'הַכִּסֵּא הַזֶּה פָּנוּי?',
@@ -1012,6 +1027,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'daily',
+    root: 'כ-ס-ף',
     note: '词首 כּ 带点读 /k/，词尾 ף（Pe Sofit）无点读 /f/。本义为「白银」。',
     sentence: {
       hebrew: 'כַּמָּה כֶּסֶף זֶה עוֹלֶה?',
@@ -1031,6 +1047,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴/阳性（多作阴性）',
     category: 'nature',
+    root: 'ש-מ-ש',
     note: '两个 ש 都带右点（Shin /ʃ/），首尾呼应，对称好记。',
     sentence: {
       hebrew: 'הַשֶּׁמֶשׁ זוֹרַחַת בַּשָּׁמַיִם.',
@@ -1048,6 +1065,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'י-ר-ח',
     note: '词尾 ח 带有偷渡元音 Patach，先发元音 /a/ 再发喉音 /χ/（即 /-ach/）。',
     sentence: {
       hebrew: 'הַיָּרֵחַ מָלֵא הַלַּיְלָה.',
@@ -1082,6 +1100,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'nature',
+    root: 'א-ר-ץ',
     note: '词尾使用 ץ（Tsadi Sofit），读 /ts/（类似汉语「次」的声母）。',
     sentence: {
       hebrew: 'אֶרֶץ יִשְׂרָאֵל אֶרֶץ יָפָה.',
@@ -1099,6 +1118,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'י-מ-ם',
     note: '在圣经地理中，「海 (יָם)」也常用来指代「西方」（因为地中海在以色列西边）。',
     sentence: {
       hebrew: 'אֲנַחְנוּ הוֹלְכִים לַיָּם בַּקַּיִץ.',
@@ -1116,6 +1136,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'א-ו-ר',
     note: '仅 3 个字母：א 承载元音，ו 作元音 /o/，ר 结尾。',
     sentence: {
       hebrew: 'יְהִי אוֹר, וַיְהִי אוֹר.',
@@ -1133,6 +1154,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'ע-צ-ה',
     note: '由喉音字母 ע 和词尾形 ץ（Tsadi Sofit）组成，仅两个字母。',
     sentence: {
       hebrew: 'יֵשׁ עֵץ גָּדוֹל בַּגִּנָּה.',
@@ -1150,6 +1172,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'ג-ש-ם',
     note: '词尾使用 ם（Mem Sofit）。「下雨」习惯搭配动词 יוֹרֵד（落下）：יוֹרֵד גֶּשֶׁם。',
     sentence: {
       hebrew: 'הַיּוֹם יוֹרֵד גֶּשֶׁם חָזָק.',
@@ -1167,6 +1190,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'ה-ר-ר',
     note: '如 הַר הַזֵּיתִים（橄榄山）、הַר סִינַי（西奈山）。复数为 הָרִים (harim)。',
     sentence: {
       hebrew: 'עָלִינוּ עַל הַר גָּבוֹהַּ.',
@@ -1184,6 +1208,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'נ-ה-ר',
     note: '词中的 ה 发清晰的 /h/ 音，不能省略。如 נְהַר הַיַּרְדֵּן（约旦河）。',
     sentence: {
       hebrew: 'הַנָּהָר זוֹרֵם אֶל הַיָּם.',
@@ -1253,6 +1278,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'nature',
+    root: 'ע-ל-ם',
     note: '在现代语中指「世界」，在圣经与祈祷文里常指「永远、永恒」（לְעוֹלָם）。',
     sentence: {
       hebrew: 'כָּל הָעוֹלָם כֻּלּוֹ גֶּשֶׁר צַר מְאֹד.',
@@ -1543,6 +1569,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数（偶作阳性）',
     category: 'biblical',
+    root: 'ר-ו-ח',
     note: '词尾 ח 带偷渡元音 Patach，读作 /ru-ach/。在圣经与现代语中同时表示「风」和「精神/灵」。',
     sentence: {
       hebrew: 'וְרוּחַ אֱלֹהִים מְרַחֶפֶת עַל פְּנֵי הַמָּיִם.',
@@ -1686,6 +1713,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'biblical',
+    root: 'ל-ב-ב',
     note: '圣经中 לֵב 不仅指情感，更常指人的理智、思想与决志的中心。',
     sentence: {
       hebrew: 'בְּכָל לְבָבְךָ וּבְכָל נַפְשְׁךָ.',
@@ -1721,6 +1749,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阴性单数',
     category: 'biblical',
+    root: 'ב-ר-ה',
     note: '在圣经中，「立约」通常搭配动词 כָּרַת（切割，字面：切约）。',
     sentence: {
       hebrew: 'זֹאת אוֹת הַבְּרִית בֵּינִי וּבֵינֵיכֶם.',
@@ -1756,6 +1785,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     partOfSpeech: '名词',
     grammarTag: '阳性单数',
     category: 'biblical',
+    root: 'ע-מ-ם',
     note: '注意元音不同时含义不同：עַם (/am/) 是「民族」，עִם (/im/) 是介词「和…一起」。',
     sentence: {
       hebrew: 'עַם יִשְׂרָאֵל חַי.',

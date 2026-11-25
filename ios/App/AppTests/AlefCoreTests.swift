@@ -963,7 +963,18 @@ final class AlefCoreTests: XCTestCase {
 
         let families = content.rootFamilies()
         XCTAssertGreaterThan(families.count, 50)
-        XCTAssertTrue(families.allSatisfy { $0.words.count >= 2 })
+        XCTAssertTrue(families.contains { $0.words.count == 1 })
+        XCTAssertEqual(Set(families.flatMap { $0.words.map(\.id) }),
+                       Set(content.words.filter { $0.root?.isEmpty == false }.map(\.id)))
+        for family in families {
+            XCTAssertEqual(content.words(withRoot: family.root).map(\.id), family.words.map(\.id))
+        }
+
+        let compound = try XCTUnwrap(content.words.first { $0.id == "shabat-shalom" })
+        XCTAssertEqual(compound.rootKeys, ["ש-ב-ת", "ש-ל-ם"])
+        XCTAssertTrue(content.words(withRoot: "ש-ב-ת").contains { $0.id == compound.id })
+        XCTAssertTrue(content.words(withRoot: "שׁלמ").contains { $0.id == compound.id })
+        XCTAssertTrue(content.words(withRoot: "ח-ב-ר").contains { $0.id == "machberet" })
 
         let wordIds = Set(content.words.map(\.id))
         for pair in content.minimalPairs {

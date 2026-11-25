@@ -21,6 +21,7 @@ struct StudyContent: Decodable {
     let minimalPairs: [StudyMinimalPair]
     let learningPath: [StudyPathStage]
     private let ambiguousSpellings: Set<String>
+    private let wordsByRoot: [String: [StudyWord]]
 
     enum CodingKeys: CodingKey {
         case letters, words, wordCategories, phrases, phraseCategories, readings, readingCategories
@@ -32,6 +33,11 @@ struct StudyContent: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         letters = try container.decode([StudyLetter].self, forKey: .letters)
         words = try container.decode([StudyWord].self, forKey: .words)
+        wordsByRoot = words.reduce(into: [:]) { index, word in
+            for root in word.rootKeys {
+                index[root, default: []].append(word)
+            }
+        }
         let entriesBySpelling = Dictionary(grouping: words, by: \.hebrewUnpointed)
         ambiguousSpellings = Set(entriesBySpelling.compactMap { spelling, entries in
             Set(entries.map(\.meaningZh)).count > 1 ? spelling : nil
@@ -123,13 +129,12 @@ struct StudyContent: Decodable {
     }
 
     func words(withRoot root: String) -> [StudyWord] {
-        words.filter { $0.root == root }
+        guard let key = StudyRoot.key(for: root) else { return [] }
+        return wordsByRoot[key] ?? []
     }
 
     func rootFamilies() -> [(root: String, words: [StudyWord])] {
-        let grouped = Dictionary(grouping: words.filter { $0.root?.isEmpty == false }) { $0.root ?? "" }
-        return grouped
-            .filter { !$0.key.isEmpty && $0.value.count >= 2 }
+        wordsByRoot
             .map { (root: $0.key, words: $0.value) }
             .sorted { lhs, rhs in
                 if lhs.words.count != rhs.words.count { return lhs.words.count > rhs.words.count }
@@ -265,6 +270,14 @@ struct StudyWord: Decodable, Identifiable {
     let note: String
     let sentence: Sentence?
 
+    var rootKeys: [String] {
+        guard let root else { return [] }
+        var seen: Set<String> = []
+        return root.split(separator: "/")
+            .compactMap { StudyRoot.key(for: String($0)) }
+            .filter { seen.insert($0).inserted }
+    }
+
     var canPracticeSpelling: Bool {
         (2...8).contains(hebrewUnpointed.count)
             && hebrewUnpointed.allSatisfy { "אבגדהוזחטיכלמנסעפצקרשתךםןףץ".contains($0) }
@@ -278,6 +291,22 @@ struct StudyWord: Decodable, Identifiable {
         }
         let answer = normalized(input)
         return ([hebrew, hebrewUnpointed] + (alternateSpellings ?? [])).contains { normalized($0) == answer }
+    }
+}
+
+enum StudyRoot {
+    private static let normalLetters: [Character: Character] = ["ך": "כ", "ם": "מ", "ן": "נ", "ף": "פ", "ץ": "צ"]
+    private static let finalLetters: [Character: Character] = ["כ": "ך", "מ": "ם", "נ": "ן", "פ": "ף", "צ": "ץ"]
+
+    static func letters(in value: String) -> String {
+        let hebrew = String(value.unicodeScalars.filter { (0x05D0...0x05EA).contains($0.value) })
+        return String(hebrew.map { normalLetters[$0] ?? $0 })
+    }
+
+    static func key(for value: String) -> String? {
+        let letters = letters(in: value)
+        guard let last = letters.last, (2...5).contains(letters.count) else { return nil }
+        return (Array(letters.dropLast()) + [finalLetters[last] ?? last]).map { String($0) }.joined(separator: "-")
     }
 }
 

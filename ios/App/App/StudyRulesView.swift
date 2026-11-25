@@ -389,15 +389,14 @@ private struct GrammarBinyanimView: View {
 }
 
 private struct RootDirectoryView: View {
-    @Environment(StudyProgress.self) private var progress
     let content: StudyContent
     @State private var query = ""
 
     var body: some View {
         let families = filteredFamilies
         StudyPage {
-            StudyNotice(title: "Shoresh（三辅音词根）", symbol: "point.3.connected.trianglepath.dotted",
-                        note: "同一组词根辅音会衍生出大量相关名词与动词。记住词根，能成串扩展词汇。")
+            StudyNotice(title: "希伯来语词根 · Shoresh", symbol: "point.3.connected.trianglepath.dotted",
+                        note: "可搜索词根、释义或拼写。同形词根可能有不同含义。")
             if families.isEmpty {
                 ContentUnavailableView("没有匹配的词根", systemImage: "magnifyingglass")
             } else {
@@ -428,11 +427,13 @@ private struct RootDirectoryView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let all = content.rootFamilies()
         guard !trimmed.isEmpty else { return all }
+        let rootQuery = StudyRoot.letters(in: trimmed)
         return all.filter { family in
             family.root.localizedCaseInsensitiveContains(trimmed)
+                || (!rootQuery.isEmpty && StudyRoot.letters(in: family.root).contains(rootQuery))
                 || family.words.contains {
                     $0.meaningZh.localizedCaseInsensitiveContains(trimmed)
-                        || $0.hebrewUnpointed.contains(trimmed)
+                        || (!rootQuery.isEmpty && StudyRoot.letters(in: $0.hebrewUnpointed).contains(rootQuery))
                         || $0.transliteration.localizedCaseInsensitiveContains(trimmed)
                 }
         }
@@ -450,7 +451,7 @@ struct RootFamilyView: View {
             StudyCard(highlighted: true) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("三辅音词根").font(.caption.weight(.semibold)).foregroundStyle(progress.theme.accent)
+                        Text("希伯来语词根").font(.caption.weight(.semibold)).foregroundStyle(progress.theme.accent)
                         HebrewText(text: root, size: 38)
                     }
                     Spacer(minLength: 0)
@@ -458,9 +459,6 @@ struct RootFamilyView: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(progress.theme.mutedInk)
                 }
-                Text("观察这些词如何共享相同的核心辅音骨架，通过改变元音和前缀表达不同词性与含义。")
-                    .font(.caption)
-                    .foregroundStyle(progress.theme.mutedInk)
             }
             ForEach(familyWords) { word in
                 StudyCard(padding: 10) {

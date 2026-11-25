@@ -286,7 +286,7 @@ private struct LearningStageDetailView: View {
         case "confusable": "易混字母对照辨析"
         case "prefixes": "高频前缀与后缀"
         case "binyanim": "动词词干 Binyanim"
-        case "roots": "三辅音词根家族"
+        case "roots": "希伯来语词根家族"
         default: "发音与语法规则"
         }
     }

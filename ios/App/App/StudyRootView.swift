@@ -289,6 +289,8 @@ extension StudyTheme {
 struct StudyPage<Content: View>: View {
     @Environment(StudyProgress.self) private var progress
     var maxWidth: CGFloat = 620
+    var keyboardDismissMode: ScrollDismissesKeyboardMode = .interactively
+    var verticalBounce: ScrollBounceBehavior = .basedOnSize
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -301,8 +303,8 @@ struct StudyPage<Content: View>: View {
                 .frame(maxWidth: .infinity)
         }
         .background(progress.theme.canvas.ignoresSafeArea())
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(verticalBounce, axes: .vertical)
+        .scrollDismissesKeyboard(keyboardDismissMode)
     }
 }
 
