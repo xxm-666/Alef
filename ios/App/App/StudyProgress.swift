@@ -525,6 +525,9 @@ struct StudyReviewBatch: Codable, Hashable {
     var letterMastery: [String: Mastery] { cachedLetterMastery }
     var letterSchedule: [String: ReviewSchedule] { cachedLetterSchedule }
     var wordMastery: [String: Mastery] { cachedWordMastery }
+    var learnedWidgetWordIDs: Set<String> {
+        Set(cachedWordMastery.compactMap { $0.value == .unlearned ? nil : $0.key })
+    }
     var schedule: [String: ReviewSchedule] { cachedSchedule }
     var favorites: [String] { cachedFavorites }
     var statistics: StudyStatistics { cachedStatistics }

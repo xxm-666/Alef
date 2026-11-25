@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct DailyLetter {
     let id: String
@@ -60,98 +61,84 @@ struct DailyLetter {
     }
 }
 
-struct DailyLetterCard: View {
-    let letter: DailyLetter
-    @Environment(\.colorScheme) private var scheme
-
-    private var ink: Color {
-        scheme == .dark ? Color(red: 0.93, green: 0.98, blue: 0.98) : Color(red: 0.07, green: 0.23, blue: 0.27)
-    }
+struct StudyWidgetWordCard: View {
+    let word: StudyWidgetWord?
+    var title = "已学单词"
+    var emptyMessage = "学习单词后会在这里出现"
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("每日字母")
-                    .font(.caption.weight(.bold))
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.right.circle.fill")
-                    .accessibilityHidden(true)
-            }
-            Spacer(minLength: 1)
-            Text(letter.glyph)
-                .font(.system(size: 65, weight: .semibold, design: .serif))
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-                .layoutPriority(-1)
-            Text(letter.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-            Spacer(minLength: 1)
-        }
-        .foregroundStyle(ink)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name)")
-        .accessibilityHint("打开字母详情")
-    }
-}
-
-struct DailyLetterCircularContent: View {
-    let letter: DailyLetter
-
-    var body: some View {
-        VStack(spacing: -2) {
-            Text(letter.glyph)
-                .font(.system(size: 28, weight: .semibold, design: .serif))
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text(letter.name)
-                .font(.system(size: 9, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
-    }
-}
-
-struct DailyLetterRectangularContent: View {
-    let letter: DailyLetter
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(letter.glyph)
-                .font(.system(size: 34, weight: .bold, design: .serif))
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .frame(minWidth: 32)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("每日字母")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(letter.name)
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: "text.book.closed")
+                .font(.caption.bold())
+                .widgetAccentable()
+            Spacer(minLength: 2)
+            if let word {
+                Text(word.hebrew)
+                    .font(.system(size: 36, weight: .semibold, design: .serif))
                     .lineLimit(1)
-                Text(letter.nameZh)
+                    .minimumScaleFactor(0.5)
+                Text(word.transliteration)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                Text(word.meaningZh)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+            } else {
+                Text(emptyMessage).font(.footnote)
             }
             Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
-struct DailyLetterInlineContent: View {
-    let letter: DailyLetter
+struct StudyWidgetWordAccessory: View {
+    enum Style {
+        case circular, rectangular, inline
+    }
+
+    let word: StudyWidgetWord?
+    let style: Style
+    var emptyMessage = "学习单词后会在这里出现"
 
     var body: some View {
-        Label("\(letter.glyph) · \(letter.name) \(letter.nameZh)", systemImage: "book")
-            .accessibilityLabel("每日字母，\(letter.glyph)，\(letter.name) \(letter.nameZh)")
+        Group {
+            switch style {
+            case .circular:
+                if let word {
+                    Text(word.hebrew)
+                        .font(.system(size: 20, weight: .semibold, design: .serif))
+                        .minimumScaleFactor(0.35)
+                        .lineLimit(1)
+                        .padding(6)
+                } else {
+                    Image(systemName: "text.book.closed")
+                        .font(.title3)
+                }
+            case .rectangular:
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("已学单词").font(.caption2.weight(.semibold))
+                    if let word {
+                        Text(word.hebrew).font(.title3.weight(.semibold))
+                        Text(word.meaningZh).font(.caption)
+                    } else {
+                        Text(emptyMessage).font(.caption)
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            case .inline:
+                Label(word.map { "\($0.hebrew) · \($0.meaningZh)" } ?? "已学单词",
+                      systemImage: "text.book.closed")
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(word.map {
+            "已学单词，\($0.hebrew)，\($0.transliteration)，\($0.meaningZh)"
+        } ?? emptyMessage))
     }
 }
 

@@ -1,6 +1,6 @@
 # Alef — 希伯来语字母与词汇学习工具 (iOS 原生版)
 
-**Alef** 是一款基于 **SwiftUI + PencilKit + WidgetKit** 构建的离线优先希伯来语原生 iOS 学习应用（iOS 17+），内置 22 个希伯来字母的印刷体与手写体对照、分步笔顺与临摹练习、词尾形（Sofit）与 Begadkefat 规则、1,053 个高频词库、情景短语、分级阅读、拼读实验室、动态 SRS 间隔重复、本地学习提醒以及主屏幕/锁屏「每日字母」小组件。
+**Alef** 是一款基于 **SwiftUI + PencilKit + WidgetKit** 构建的离线优先希伯来语原生 iOS 学习应用（iOS 17+），内置 22 个希伯来字母的印刷体与手写体对照、分步笔顺与临摹练习、词尾形（Sofit）与 Begadkefat 规则、1,053 个高频词库、情景短语、分级阅读、拼读实验室、动态 SRS 间隔重复、本地学习提醒以及主屏幕/锁屏「已学单词」小组件。
 
 ---
 
@@ -25,7 +25,7 @@
 ### 5. 本地学习提醒、主题、小组件与数据备份
 - **本地提醒**：基于 `UNUserNotificationCenter` 离线安排每日固定时段提醒，支持“仅在有到期复习时提醒”与点击跳转。
 - **6 套原生外观**：跟随系统、白色、羊皮纸、玫瑰、紫罗兰、深色。
-- **主屏幕与锁屏「每日字母」小组件**：支持桌面小尺寸与锁屏圆形/矩形/单行样式，按本地日期离线轮换 22 个字母，点击直达对应字母详情。
+- **主屏幕与锁屏「已学单词」小组件**：从「学习中」和「已掌握」的词中每两小时轮换一次，点击直达单词详情。原「每日字母」组件会升级为「已学单词」，组件库仍提供「字母速查」。
 - **JSON 备份与 iCloud Drive 文件夹自动同步**：支持将授权文件夹（建议选在「iCloud Drive」下自建文件夹，如 `iCloud Drive/Alef`）内的 `alef-sync.json` 在后台与变更时自动双向合并，**无需付费 Apple 开发者账号**，AltStore 重签或卸载重装后重新选择同一目录即可无损恢复；同时保留手动 JSON 导入/导出、变更预览与撤销功能。
 
 ---
@@ -33,9 +33,9 @@
 ## iPhone 安装方式
 
 1. 在 GitHub 仓库打开 **Actions → Build Alef iOS IPA → Run workflow**。默认使用 **Xcode 27** 预览 runner；若无法分配，可选择 **Xcode 26 (Intel)**。工作流会自动执行内容校验、TypeScript 类型检查、`AppTests` 单元测试并产出 `Alef.ipa`。
-2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`（未签名，需自签名后安装）。
+2. 下载运行结果中的 **Alef-iOS**，解压得到 `Alef.ipa`。安装前仍需重签，IPA 中的临时签名用于保留小组件的 App Group 信息。
 3. Windows 用户可按 [AltStore Classic 官方指南](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows) 安装 AltServer 和 AltStore，再在 iPhone 上通过 **AltStore → My Apps → ＋** 导入 `Alef.ipa`（提示保留应用扩展时选择保留，以启用小组件）。免费 Apple 账号签名通常每 7 天需刷新一次，刷新或重装前建议在「我的 → 数据备份与恢复」导出 JSON 备份。
-4. 安装后可长按主屏幕或锁定屏幕，在组件库中搜索 **Alef** 添加「每日字母」。
+4. 安装后先打开 Alef，再长按主屏幕或锁屏，在组件库中搜索 **Alef** 添加「已学单词」。主应用和小组件必须使用同一签名团队，并保留共同的 App Group，组件才能读取学习记录。
 
 ---
 
@@ -79,7 +79,7 @@ Alef/
 ├── ios/App/
 │   ├── App/                      # SwiftUI 主应用（字母、词库、练习、规则、我的）
 │   ├── AppTests/                 # XCTest 核心逻辑单元测试 (AlefCoreTests)
-│   ├── DailyLetterWidget/        # 主屏幕与锁屏「每日字母」WidgetKit 扩展
+│   ├── DailyLetterWidget/        # 主屏幕与锁屏 WidgetKit 扩展
 │   └── Shared/                   # 主应用与小组件共享模型与视图 (DailyLetter)
 ├── public/audio/                 # 1,529 段预录希伯来语 MP3 与 CREDITS.md
 ├── src/

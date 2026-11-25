@@ -434,49 +434,53 @@ private struct StudyWidgetPreview: View {
     let content: StudyContent
 
     var body: some View {
+        let learnedIDs = progress.learnedWidgetWordIDs
+        let vocabulary = content.words.map {
+            StudyWidgetWord(id: $0.id, hebrew: $0.hebrew, transliteration: $0.transliteration, meaningZh: $0.meaningZh)
+        }
+        let candidates = StudyWidgetWords.candidates(for: learnedIDs, in: vocabulary)
         TimelineView(.everyMinute) { timeline in
-            let today = DailyLetter.on(timeline.date)
+            let word = StudyWidgetWords.word(on: timeline.date, from: candidates)
             StudyPage {
-                if let letter = content.letters.first(where: { $0.id == today.id }) {
-                    StudySectionTitle("主屏幕小组件")
-                    NavigationLink {
-                        LetterStudyView(letter: letter, content: content)
-                    } label: {
-                        DailyLetterCard(letter: today)
-                            .padding(14)
-                            .frame(width: 154, height: 154)
-                            .background { DailyLetterBackground() }
-                            .clipShape(RoundedRectangle(cornerRadius: 24))
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity)
+                StudySectionTitle("主屏幕小组件")
+                Button { openWidgetWord(word) } label: {
+                    StudyWidgetWordCard(word: word)
+                        .padding(14)
+                        .frame(width: 154, height: 154)
+                        .background { DailyLetterBackground() }
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
 
-                    StudySectionTitle("锁屏小组件")
-                    NavigationLink {
-                        LetterStudyView(letter: letter, content: content)
-                    } label: {
-                        StudyCard {
-                            HStack(spacing: 16) {
-                                DailyLetterCircularContent(letter: today)
-                                    .frame(width: 60, height: 60)
-                                    .background(progress.theme.insetSurface, in: Circle())
-                                DailyLetterRectangularContent(letter: today)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                    .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
-                            }
-                            .foregroundStyle(progress.theme.ink)
+                StudySectionTitle("锁屏小组件")
+                Button { openWidgetWord(word) } label: {
+                    StudyCard {
+                        HStack(spacing: 16) {
+                            StudyWidgetWordAccessory(word: word, style: .circular)
+                                .frame(width: 60, height: 60)
+                                .background(progress.theme.insetSurface, in: Circle())
+                            StudyWidgetWordAccessory(word: word, style: .rectangular)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12))
                         }
+                        .foregroundStyle(progress.theme.ink)
                     }
-                    .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                if StudyWidgetWords.snapshotURL == nil {
+                    StudyNotice(title: "此安装未启用学习记录共享",
+                                symbol: "info.circle",
+                                note: "桌面和锁屏组件需要主应用与组件使用同一个 App Group。")
                 }
                 StudySectionTitle("可添加的小组件")
                 StudyCard(padding: 10, spacing: 2) {
-                    StudyRow(title: "每日字母", symbol: "textformat.abc",
-                             subtitle: "主屏幕小号 · 锁屏圆形、矩形、行内", chevron: false)
+                    StudyRow(title: "已学单词", symbol: "text.book.closed",
+                             subtitle: "每两小时轮换 · 支持主屏幕和锁屏", chevron: false)
                     Divider()
                     StudyRow(title: "每日单词", symbol: "calendar",
-                             subtitle: "主屏幕小号、中号 · 点击打开单词详情", chevron: false)
+                             subtitle: "每天从完整词库选一个词 · 主屏幕小号、中号", chevron: false)
                     Divider()
                     StudyRow(title: "字母速查", symbol: "rectangle.grid.3x2",
                              subtitle: "主屏幕中号 · 查看全部 22 个字母", chevron: false)
@@ -495,6 +499,10 @@ private struct StudyWidgetPreview: View {
             }
         }
         .studyDetail("小组件")
+    }
+
+    private func openWidgetWord(_ word: StudyWidgetWord?) {
+        progress.widgetRequest = word.map { .word($0.id) } ?? .tab(.words)
     }
 }
 

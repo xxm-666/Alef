@@ -788,6 +788,47 @@ final class AlefCoreTests: XCTestCase {
         }
     }
 
+    func testLearnedWordWidgetUsesStudyRecordsAndTwoHourSlots() throws {
+        progress.setWord("study", mastery: .learning)
+        progress.setWord("known", mastery: .mastered)
+        progress.setWord("removed", mastery: .learning)
+        progress.setWord("removed", mastery: .unlearned)
+
+        let allWords = ["study", "new", "known", "removed"].map {
+            StudyWidgetWord(id: $0, hebrew: "מִלָּה", transliteration: "mila", meaningZh: $0)
+        }
+        let candidates = StudyWidgetWords.candidates(for: progress.learnedWidgetWordIDs, in: allWords)
+        XCTAssertEqual(candidates.map(\.id), ["known", "study"])
+
+        let now = Date(timeIntervalSince1970: 7_199)
+        let dates = StudyWidgetWords.timelineDates(from: now)
+        XCTAssertEqual(dates.count, 13)
+        XCTAssertEqual(dates.first, now)
+        XCTAssertEqual(dates[1], Date(timeIntervalSince1970: 7_200))
+        for (earlier, later) in zip(dates.dropFirst(), dates.dropFirst(2)) {
+            XCTAssertEqual(later.timeIntervalSince(earlier), 7_200)
+        }
+        XCTAssertEqual(dates.prefix(3).map { StudyWidgetWords.word(on: $0, from: candidates)?.id },
+                       ["known", "study", "known"])
+        XCTAssertNil(StudyWidgetWords.word(on: now, from: []))
+        XCTAssertEqual(StudyWidgetWords.word(on: dates[2], from: [candidates[1]]), candidates[1])
+    }
+
+    func testLearnedWidgetSnapshotCanUpdateAndClearAcrossProcesses() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: file) }
+        XCTAssertEqual(StudyWidgetWords.readIDs(from: file), [])
+        XCTAssertTrue(try StudyWidgetWords.writeIDs(["alef", "shalom"], to: file))
+        XCTAssertEqual(StudyWidgetWords.readIDs(from: file), ["alef", "shalom"])
+        XCTAssertFalse(try StudyWidgetWords.writeIDs(["shalom", "alef"], to: file))
+        XCTAssertTrue(try StudyWidgetWords.writeIDs([], to: file))
+        XCTAssertEqual(StudyWidgetWords.readIDs(from: file), [])
+
+        let group = StudyWidgetWords.groupID
+        XCTAssertEqual(StudyWidgetWords.groupIdentifiers(signedGroups: ["group.other", group + ".TEAMID"]),
+                       [group + ".TEAMID", group])
+    }
+
     func testDailyLetterRotationAndDeepLink() {
         XCTAssertEqual(DailyLetter.alphabet.count, 22)
         XCTAssertTrue(DailyLetter.alphabet.allSatisfy { !$0.nameZh.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })

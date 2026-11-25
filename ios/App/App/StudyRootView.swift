@@ -1,6 +1,7 @@
 import Charts
 import SwiftUI
 import UIKit
+import WidgetKit
 
 struct StudyRootView: View {
     @Environment(StudyProgress.self) private var progress
@@ -67,6 +68,7 @@ struct StudyRootView: View {
         }
         .background {
             StudyReminderSyncBridge(content: content)
+            StudyWidgetWordsSyncBridge()
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard (phase == .active || phase == .background) && folderSync.isConfigured else { return }
@@ -123,6 +125,21 @@ struct StudyRootView: View {
     private var selectedTab: String {
         let saved = progress.read("alef.activeView.v1", default: "grid")
         return ["words", "flashcards", "rules", "settings"].contains(saved) ? saved : "grid"
+    }
+}
+
+private struct StudyWidgetWordsSyncBridge: View {
+    @Environment(StudyProgress.self) private var progress
+
+    var body: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: progress.learnedWidgetWordIDs, initial: true) { _, ids in
+                guard let url = StudyWidgetWords.snapshotURL,
+                      (try? StudyWidgetWords.writeIDs(ids, to: url)) == true else { return }
+                WidgetCenter.shared.reloadTimelines(ofKind: StudyWidgetWords.kind)
+            }
     }
 }
 
