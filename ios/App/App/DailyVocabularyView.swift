@@ -60,11 +60,13 @@ private struct DailyVocabularyView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var activeId: String?
     @State private var revealed = false
     @State private var spelling = ""
     @State private var celebration: StudyAnswerCelebration?
+    @State private var reviewingGroup: DailyVocabularyGroup?
 
     private var plan: DailyVocabularyPlan { progress.dailyVocabulary }
     var body: some View {
@@ -95,6 +97,9 @@ private struct DailyVocabularyView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 actionBar(group: group, day: current.day)
+            }
+            .sheet(item: $reviewingGroup, onDismiss: { audio.stop() }) { group in
+                groupWordReview(group)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active && group == nil {
@@ -148,7 +153,19 @@ private struct DailyVocabularyView: View {
 
     @ViewBuilder private func actionBar(group: DailyVocabularyGroup?, day: String) -> some View {
         if let group, !group.isComplete, let word = currentWord(group) {
-            StudyActionBar { groupAction(group, word: word, day: day) }
+            StudyActionBar {
+                if group.studied < group.wordIds.count {
+                    groupAction(group, word: word, day: day)
+                } else {
+                    let layout = typeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(spacing: 8))
+                        : AnyLayout(HStackLayout(spacing: 8))
+                    layout {
+                        reviewWordsButton(group)
+                        groupAction(group, word: word, day: day)
+                    }
+                }
+            }
         }
     }
 
@@ -240,6 +257,7 @@ private struct DailyVocabularyView: View {
                 }
             }
             let next = plan.nextGroup
+            reviewWordsButton(group)
             primaryButton(next == nil ? "返回今日计划" : "开始下一组", symbol: "arrow.right") { openGroup(next?.id) }
         } else if let word = currentWord(group) {
             let total = group.wordIds.count
@@ -299,6 +317,50 @@ private struct DailyVocabularyView: View {
             .frame(maxWidth: .infinity)
             .multilineTextAlignment(.center)
         }
+    }
+
+    private func reviewWordsButton(_ group: DailyVocabularyGroup) -> some View {
+        Button {
+            audio.stop()
+            celebration = nil
+            reviewingGroup = group
+        } label: {
+            Label("回看单词", systemImage: "book")
+        }
+        .buttonStyle(StudyButtonStyle())
+        .accessibilityLabel("回看本组单词")
+    }
+
+    private func groupWordReview(_ group: DailyVocabularyGroup) -> some View {
+        let words = group.wordIds.compactMap { word($0) }
+        return NavigationStack {
+            StudyPage {
+                StudyCard {
+                    ForEach(words) { word in
+                        if word.id != words.first?.id { Divider() }
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HebrewText(text: word.hebrew, size: 30)
+                                Text(word.meaningZh).font(.subheadline.weight(.semibold))
+                                Text(word.transliteration)
+                                    .font(.caption)
+                                    .foregroundStyle(progress.theme.mutedInk)
+                            }
+                            Spacer(minLength: 4)
+                            PronunciationButton(hebrew: word.hebrew, iconOnly: true, title: "播放\(word.meaningZh)的发音")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("本组单词")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(group.isComplete ? "返回结果" : "继续拼写") { reviewingGroup = nil }
+                }
+            }
+        }
+        .presentationDragIndicator(.visible)
     }
 
     @ViewBuilder private func groupAction(_ group: DailyVocabularyGroup, word: StudyWord, day: String) -> some View {
