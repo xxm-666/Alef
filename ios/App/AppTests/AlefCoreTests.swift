@@ -1408,6 +1408,47 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(wrongTwo.summary, "第 1、4 位有误（从右往左数）")
     }
 
+    @MainActor
+    func testManualMasteryToggleWhenRawAndEffectiveDiverge() throws {
+        let suite = "alef.tests.masteryDiverge.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let progress = StudyProgress(defaults: defaults)
+        let day0 = makeDate(year: 2026, month: 1, day: 1, hour: 10)
+        let day120 = makeDate(year: 2026, month: 5, day: 1, hour: 10)
+
+        // Case 1: Raw mastery is .mastered, but schedule decays over time so effective mastery becomes .learning.
+        progress.setLetter("alef", mastery: .mastered, date: day0)
+        XCTAssertEqual(progress.effectiveLetterMastery("alef", at: day0), .mastered)
+        XCTAssertEqual(progress.effectiveLetterMastery("alef", at: day120), .learning)
+
+        // Clicking "标记已记住" at day120 must restore proficiency to 100 and effective mastery to .mastered.
+        progress.setLetter("alef", mastery: .mastered, date: day120)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day120), 100)
+        XCTAssertEqual(progress.effectiveLetterMastery("alef", at: day120), .mastered)
+
+        // Case 2: Raw mastery is .learning, but schedule strength >= 80 makes effective mastery .mastered.
+        progress.write(["shalom": Mastery.learning], for: "alef.wordMastery.v1")
+        let highSchedule = ReviewSchedule(
+            nextReviewAt: Int64(day0.addingTimeInterval(30 * 86_400).timeIntervalSince1970 * 1_000),
+            intervalDays: 30,
+            easeFactor: 2.5,
+            repetitions: 3,
+            lapses: 0,
+            lastReview: nil,
+            strength: 90,
+            updatedAt: day0
+        )
+        progress.write(["shalom": highSchedule], for: "alef.wordSrs.v1")
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .mastered)
+
+        // Clicking "已记住" to unmark must drop proficiency <= 65 and effective mastery to .learning.
+        progress.setWord("shalom", mastery: .learning, date: day0)
+        XCTAssertLessThanOrEqual(progress.wordProficiency("shalom", at: day0), 65)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

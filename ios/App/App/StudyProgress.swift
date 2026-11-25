@@ -727,6 +727,7 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func setLetter(_ id: String, mastery: Mastery, date: Date = .now) {
         if (letterMastery[id] ?? .unlearned) == mastery,
+           effectiveLetterMastery(id, at: date) == mastery,
            (letterSchedule[id] == nil) == (mastery == .unlearned) { return }
         saveManual(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey, mastery: mastery, date: date)
     }
@@ -747,6 +748,7 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func setWord(_ id: String, mastery: Mastery, date: Date = .now) {
         if (wordMastery[id] ?? .unlearned) == mastery,
+           effectiveWordMastery(id, at: date) == mastery,
            (schedule[id] == nil) == (mastery == .unlearned) { return }
         saveManual(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1", mastery: mastery, date: date)
     }

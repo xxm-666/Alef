@@ -403,14 +403,13 @@ struct StudyFlashcardsView: View {
     }
 
     private var deck: [StudyLetter] {
-        let mastery = progress.letterMastery
         let filtered: [StudyLetter]
         if preferences.deckScope == "due_srs" {
             filtered = content.dueLetters(in: progress)
         } else {
             filtered = content.letters.filter { letter in
                 switch preferences.deckScope {
-                case "needs_review": mastery[letter.id] != .mastered
+                case "needs_review": progress.effectiveLetterMastery(letter.id) != .mastered
                 case "sofit": letter.sofit != nil
                 case "begadkefat": letter.begadkefat != nil
                 default: true

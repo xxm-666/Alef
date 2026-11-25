@@ -656,6 +656,7 @@ struct StudyProficiencyCard: View {
                                 remembered ? progress.theme.successSurface : progress.theme.accent.opacity(0.12),
                                 in: Capsule()
                             )
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(remembered ? "已记住，点按恢复常规练习" : "标记为已记住，30 天后再抽查")

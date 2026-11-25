@@ -25,8 +25,8 @@ struct LearningPathEntry: View {
     }
 
     private func isComplete(_ stage: StudyPathStage) -> Bool {
-        let lettersDone = stage.letterIds.allSatisfy { progress.letterMastery[$0] == .mastered }
-        let wordsDone = stage.wordIds.allSatisfy { progress.wordMastery[$0] == .mastered }
+        let lettersDone = stage.letterIds.allSatisfy { progress.effectiveLetterMastery($0) == .mastered }
+        let wordsDone = stage.wordIds.allSatisfy { progress.effectiveWordMastery($0) == .mastered }
         return (!stage.letterIds.isEmpty || !stage.wordIds.isEmpty) && lettersDone && wordsDone
     }
 
@@ -128,8 +128,8 @@ struct LearningPathView: View {
     }
 
     private func stageProgress(_ stage: StudyPathStage) -> (done: Int, total: Int, isComplete: Bool) {
-        let lettersDone = stage.letterIds.filter { progress.letterMastery[$0] == .mastered }.count
-        let wordsDone = stage.wordIds.filter { progress.wordMastery[$0] == .mastered }.count
+        let lettersDone = stage.letterIds.filter { progress.effectiveLetterMastery($0) == .mastered }.count
+        let wordsDone = stage.wordIds.filter { progress.effectiveWordMastery($0) == .mastered }.count
         let done = lettersDone + wordsDone
         let total = stage.letterIds.count + stage.wordIds.count
         return (done, total, total > 0 && done == total)
@@ -162,11 +162,11 @@ private struct LearningStageDetailView: View {
                 Text(stage.goal)
                     .font(.subheadline)
                     .foregroundStyle(progress.theme.ink)
-                if let nextLetter = stageLetters.first(where: { progress.letterMastery[$0.id] != .mastered }) {
+                if let nextLetter = stageLetters.first(where: { progress.effectiveLetterMastery($0.id) != .mastered }) {
                     Text("下一步 · 学习 \(nextLetter.studyName)")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(progress.theme.accent)
-                } else if stageWords.contains(where: { progress.wordMastery[$0.id] != .mastered }) {
+                } else if stageWords.contains(where: { progress.effectiveWordMastery($0.id) != .mastered }) {
                     Text("下一步 · 学习本阶高频词")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(progress.theme.accent)

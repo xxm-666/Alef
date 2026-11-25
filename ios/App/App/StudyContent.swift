@@ -91,12 +91,10 @@ struct StudyContent: Decodable {
         }
     }
 
-    func recommendedStage(in progress: StudyProgress) -> StudyPathStage? {
-        let letters = progress.letterMastery
-        let words = progress.wordMastery
-        return learningPath.first { stage in
-            stage.letterIds.contains { letters[$0] != .mastered }
-                || stage.wordIds.contains { words[$0] != .mastered }
+    func recommendedStage(in progress: StudyProgress, at date: Date = .now) -> StudyPathStage? {
+        learningPath.first { stage in
+            stage.letterIds.contains { progress.effectiveLetterMastery($0, at: date) != .mastered }
+                || stage.wordIds.contains { progress.effectiveWordMastery($0, at: date) != .mastered }
         }
     }
 
