@@ -1,6 +1,6 @@
 import SwiftUI
 
-private struct WordPreferences: Codable {
+struct WordPreferences: Codable {
     var searchQuery = ""
     var activeFilter = "all"
     var initialLetter = "all"
@@ -64,7 +64,7 @@ struct WordsView: View {
             case "phrases":
                 phraseLibrary
             case "reading":
-                StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud))
+                StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
             default:
                 searchControls
                 quickTogglesBar
@@ -614,6 +614,7 @@ private struct WordFilterSheet: View {
 private struct StudyReadingLibrary: View {
     let content: StudyContent
     @Binding var showNiqqud: Bool
+    @Binding var showCursive: Bool
 
     var body: some View {
         ForEach(content.readingCategories.keys.sorted(), id: \.self) { category in
@@ -623,7 +624,7 @@ private struct StudyReadingLibrary: View {
                 ForEach(readings) { reading in
                     if reading.id != readings.first?.id { Divider() }
                     NavigationLink {
-                        StudyReadingView(reading: reading, showNiqqud: $showNiqqud)
+                        StudyReadingView(reading: reading, showNiqqud: $showNiqqud, showCursive: $showCursive)
                     } label: {
                         StudyRow(title: reading.title, symbol: "text.book.closed",
                                  subtitle: "\(reading.sentences.count) 句 · 阅读理解")
@@ -825,7 +826,9 @@ struct StudyReadingView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let reading: StudyReading
     private var showNiqqudBinding: Binding<Bool>?
+    private var showCursiveBinding: Binding<Bool>?
     @State private var niqqudMode: ReadingNiqqudMode
+    @State private var showCursive: Bool
     @State private var showTranslation = false
     @State private var answer: Int?
     @State private var celebration: StudyAnswerCelebration?
@@ -835,10 +838,12 @@ struct StudyReadingView: View {
     @State private var shadowingSentence: Int?
     @State private var isRecording = false
 
-    init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil) {
+    init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil, showCursive: Binding<Bool>? = nil) {
         self.reading = reading
         self.showNiqqudBinding = showNiqqud
+        self.showCursiveBinding = showCursive
         _niqqudMode = State(initialValue: (showNiqqud?.wrappedValue ?? true) ? .full : .unpointed)
+        _showCursive = State(initialValue: showCursive?.wrappedValue ?? false)
     }
 
     private struct GlossSelection: Equatable {
@@ -888,6 +893,7 @@ struct StudyReadingView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu("阅读选项", systemImage: "slider.horizontal.3") {
                     Toggle("中希对照", isOn: $showTranslation)
+                    Toggle("手写体", isOn: $showCursive)
                     Picker("元音点", selection: $niqqudMode) {
                         ForEach(ReadingNiqqudMode.allCases, id: \.self) { mode in
                             Text(mode.title).tag(mode)
@@ -900,6 +906,9 @@ struct StudyReadingView: View {
             selectedGloss = nil
             revealedPointed.removeAll()
             showNiqqudBinding?.wrappedValue = (mode != .unpointed)
+        }
+        .onChange(of: showCursive) { _, enabled in
+            showCursiveBinding?.wrappedValue = enabled
         }
     }
 
@@ -914,7 +923,7 @@ struct StudyReadingView: View {
         return VStack(alignment: .leading, spacing: 8) {
             layout {
                 Text(attributedSentence(text, glosses: glosses, selectedTerm: selectedTerm))
-                    .font(.title2)
+                    .font(showCursive ? .custom("GveretLevin-Regular", size: 24, relativeTo: .title2) : .title2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .environment(\.layoutDirection, .rightToLeft)

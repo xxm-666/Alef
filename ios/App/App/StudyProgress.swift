@@ -688,6 +688,26 @@ struct StudyReviewBatch: Codable, Hashable {
         set { write(newValue ? "rtl" : "ltr", for: "alef.order.v1") }
     }
 
+    var showNiqqud: Bool {
+        get { read("alef.wordsState.v1", default: WordPreferences()).showNiqqud }
+        set {
+            var prefs = read("alef.wordsState.v1", default: WordPreferences())
+            guard prefs.showNiqqud != newValue else { return }
+            prefs.showNiqqud = newValue
+            write(prefs, for: "alef.wordsState.v1")
+        }
+    }
+
+    var showCursive: Bool {
+        get { read("alef.wordsState.v1", default: WordPreferences()).showCursive }
+        set {
+            var prefs = read("alef.wordsState.v1", default: WordPreferences())
+            guard prefs.showCursive != newValue else { return }
+            prefs.showCursive = newValue
+            write(prefs, for: "alef.wordsState.v1")
+        }
+    }
+
     var reminderPreferences: ReminderPreferences {
         get { cachedReminderPreferences }
         set {

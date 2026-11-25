@@ -298,7 +298,8 @@ private struct DailyVocabularyView: View {
                         if !group.answers[offset].correct, let word = word(id) {
                             Divider()
                             HStack(spacing: 10) {
-                                HebrewText(text: word.hebrew, size: 24)
+                                HebrewText(text: progress.showNiqqud ? word.hebrew : word.hebrewUnpointed,
+                                           cursive: progress.showCursive, size: 24)
                                 Spacer(minLength: 4)
                                 Text(word.meaningZh).font(.subheadline)
                             }
@@ -394,9 +395,10 @@ private struct DailyVocabularyView: View {
     }
 
     private func wordCard(_ word: StudyWord) -> some View {
-        StudyCard {
+        let displayWord = progress.showNiqqud ? word.hebrew : word.hebrewUnpointed
+        return StudyCard {
             VStack(spacing: 10) {
-                HebrewText(text: word.hebrew, size: 52, style: .largeTitle)
+                HebrewText(text: displayWord, cursive: progress.showCursive, size: 52, style: .largeTitle)
                 PronunciationButton(hebrew: word.hebrew, title: "听发音")
                 Text(word.meaningZh)
                     .font(.title3.bold())
@@ -422,7 +424,7 @@ private struct DailyVocabularyView: View {
                 if let sentence = word.sentence {
                     Divider()
                     VStack(spacing: 4) {
-                        HebrewText(text: sentence.hebrew, size: 22)
+                        HebrewText(text: sentence.hebrew, cursive: progress.showCursive, size: 22)
                         Text(sentence.meaningZh)
                             .font(.caption)
                             .foregroundStyle(progress.theme.mutedInk)
@@ -464,7 +466,8 @@ private struct DailyVocabularyView: View {
                         if word.id != words.first?.id { Divider() }
                         HStack(alignment: .top, spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                HebrewText(text: word.hebrew, size: 30)
+                                HebrewText(text: progress.showNiqqud ? word.hebrew : word.hebrewUnpointed,
+                                           cursive: progress.showCursive, size: 30)
                                 Text(word.meaningZh).font(.subheadline.weight(.semibold))
                                 Text(word.transliteration)
                                     .font(.caption)

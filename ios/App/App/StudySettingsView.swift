@@ -143,7 +143,30 @@ struct StudySettingsView: View {
 
     private var learningSettings: some View {
         @Bindable var progress = progress
-        return StudyCard(padding: 10, spacing: 2) {
+        return StudyCard(padding: 10, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("希伯来语写法")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.ink)
+                    Spacer(minLength: 4)
+                    Text(progress.showNiqqud ? "传统标音（带元音点）" : "现代无点全拼")
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
+                }
+                StudySegments(title: "希伯来语写法",
+                              options: [(true, "传统标音"), (false, "现代无点")],
+                              selection: $progress.showNiqqud)
+                StudySegments(title: "希伯来语书体",
+                              options: [(false, "印刷体"), (true, "手写体")],
+                              selection: $progress.showCursive)
+                Text("同步作用于词库、短语、短文与今日记词。")
+                    .font(.caption2)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            Divider()
             Toggle(isOn: $progress.alphabetFromRight) {
                 StudyRow(title: "字母从右向左排列", symbol: "arrow.left.arrow.right",
                          subtitle: progress.alphabetFromRight ? "RTL" : "LTR", chevron: false,
