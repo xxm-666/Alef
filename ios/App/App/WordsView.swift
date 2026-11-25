@@ -309,31 +309,57 @@ struct WordsView: View {
     }
 
     private func wordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery, stacked: Bool, showNiqqud: Bool, showCursive: Bool) -> some View {
-        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-        return StudyCard(padding: 7) {
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 0))
+        return StudyCard(padding: stacked ? 10 : 7) {
             layout {
                 if !stacked { wordMasteryMenu(word, mastery: mastery) }
                 NavigationLink {
                     WordDetailView(word: word, content: content, showNiqqud: showNiqqud,
                                    showCursive: showCursive)
                 } label: {
-                    let textLayout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5)) : AnyLayout(HStackLayout(spacing: 6))
-                    textLayout {
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text(word.transliteration).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
-                                let proficiency = progress.wordProficiency(word.id)
-                                if proficiency > 0 {
-                                    StudyProficiencyMeter(proficiency: proficiency, width: 34, height: 5)
-                                }
+                    let hebrew = HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed,
+                                            cursive: showCursive, size: stacked ? 30 : 28)
+                        .lineLimit(stacked ? nil : 2)
+                        .minimumScaleFactor(0.75)
+                    let proficiency = progress.wordProficiency(word.id)
+                    let details = VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(word.transliteration)
+                                .font(stacked ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                                .foregroundStyle(stacked ? progress.theme.accent : progress.theme.ink)
+                                .lineLimit(1)
+                            if stacked { Spacer(minLength: 4) }
+                            if proficiency > 0 {
+                                StudyProficiencyMeter(proficiency: proficiency, width: 34, height: 5)
                             }
-                            Text(word.meaningZh).font(.caption).foregroundStyle(progress.theme.mutedInk)
                         }
-                        if !stacked { Spacer(minLength: 4) }
-                        HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed,
-                                   cursive: showCursive, size: 28)
-                            .lineLimit(stacked ? nil : 2)
-                            .minimumScaleFactor(0.75)
+                        Text(word.meaningZh)
+                            .font(stacked ? .subheadline.weight(.medium) : .caption)
+                            .foregroundStyle(stacked ? progress.theme.ink : progress.theme.mutedInk)
+                            .lineLimit(stacked ? 2 : 1)
+                    }
+                    Group {
+                        if stacked {
+                            let stageShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            VStack(alignment: .leading, spacing: 8) {
+                                hebrew
+                                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .center)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 8)
+                                    .background(progress.theme.insetSurface, in: stageShape)
+                                    .overlay {
+                                        stageShape.strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+                                    }
+                                details
+                                    .padding(.horizontal, 2)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                details
+                                Spacer(minLength: 4)
+                                hebrew
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                     .contentShape(Rectangle())
@@ -341,10 +367,16 @@ struct WordsView: View {
                     .accessibilityValue(mastery.title)
                 }
                 .buttonStyle(.plain)
+                if stacked {
+                    Rectangle()
+                        .fill(progress.theme.outline.opacity(0.55))
+                        .frame(height: 1)
+                }
                 HStack(spacing: 0) {
                     if stacked { wordMasteryMenu(word, mastery: mastery) }
                     PronunciationButton(hebrew: word.hebrew, iconOnly: true,
                                         title: "播放\(word.meaningZh)的发音")
+                    if stacked { Spacer(minLength: 0) }
                     Button { progress.toggleFavorite(word.id) } label: {
                         Image(systemName: favorite ? "bookmark.fill" : "bookmark")
                             .frame(width: 44, height: 44)
