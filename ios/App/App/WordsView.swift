@@ -1212,8 +1212,8 @@ struct WordQuizView: View {
             if reviewing && !correct && requeuedThisTurn {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
-            if reviewing, let schedule = progress.schedule[target.id] {
-                if isRetryAnswer {
+            if let schedule = progress.schedule[target.id] {
+                if reviewing && isRetryAnswer {
                     StudyNotice(title: "已记录本轮补练", symbol: "calendar.badge.checkmark",
                                 note: "下次复习 · \(schedule.displayDate)")
                 } else {
@@ -1286,7 +1286,7 @@ struct WordQuizView: View {
                 requeuedThisTurn = true
             }
         } else {
-            progress.recordStudy()
+            progress.recordWordPractice(target.id, correct: success)
         }
         answerRun.record(correct: success, in: progress, isRetry: isRetryAnswer)
         audio.playFeedback(success ? .correct : .wrong)

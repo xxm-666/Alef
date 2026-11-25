@@ -1449,6 +1449,42 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
     }
 
+    @MainActor
+    func testRecordPracticeUpdatesProficiencyWithoutInflatingIntervals() throws {
+        let suite = "alef.tests.recordPractice.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let progress = StudyProgress(defaults: defaults)
+        let day0 = makeDate(year: 2026, month: 2, day: 1, hour: 10)
+
+        // Brand-new word grows 0 -> 25 -> 40 -> 55 -> 70 -> 85 (mastered) without inflating intervalDays.
+        progress.recordWordPractice("shalom", correct: true, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 25)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
+        let initialReviewAt = progress.schedule["shalom"]?.nextReviewAt
+        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 1)
+
+        for _ in 0..<4 {
+            progress.recordWordPractice("shalom", correct: true, date: day0)
+        }
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 85)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .mastered)
+        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 1)
+        XCTAssertEqual(progress.schedule["shalom"]?.nextReviewAt, initialReviewAt)
+
+        // Wrong practice reduces proficiency gently without dropping below 10.
+        progress.recordWordPractice("shalom", correct: false, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 70)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
+
+        // Same for letters.
+        progress.recordLetterPractice("alef", correct: true, date: day0)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 25)
+        progress.recordLetterPractice("alef", correct: false, date: day0)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 10)
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

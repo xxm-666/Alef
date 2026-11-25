@@ -657,6 +657,12 @@ private struct FlashQuizView: View {
                 if success && !isRetryAnswer {
                     reviewGradeBar(for: question.letter)
                 }
+            } else if !reviewing, let schedule = progress.letterSchedule[question.letter.id] {
+                StudyProficiencyCard(
+                    proficiency: progress.letterProficiency(question.letter.id),
+                    schedule: schedule,
+                    mastery: progress.effectiveLetterMastery(question.letter.id)
+                )
             }
         }
     }
@@ -746,7 +752,7 @@ private struct FlashQuizView: View {
                 requeuedThisTurn = true
             }
         } else {
-            progress.recordStudy()
+            progress.recordLetterPractice(question.letter.id, correct: success)
         }
         answerRun.record(correct: success, in: progress, isRetry: isRetryAnswer)
         audio.playFeedback(success ? .correct : .wrong)
@@ -1018,7 +1024,7 @@ private struct MinimalPairQuizView: View {
         total += 1
         let success = selectedId == question.target.id
         if success { correct += 1 }
-        progress.recordStudy()
+        progress.recordWordPractice(question.target.id, correct: success)
         answerRun.record(correct: success, in: progress)
         audio.playFeedback(success ? .correct : .wrong)
     }

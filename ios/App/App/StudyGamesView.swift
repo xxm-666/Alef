@@ -134,12 +134,14 @@ struct StudyGameChoice: Identifiable {
     let hebrew: String
     let audio: String
     let hint: String
+    let isLetter: Bool
 
     init(_ letter: StudyLetter) {
         id = letter.id
         hebrew = letter.hebrew
         audio = letter.nameHebrew
         hint = letter.studyName
+        isLetter = true
     }
 
     init(_ word: StudyWord) {
@@ -147,6 +149,7 @@ struct StudyGameChoice: Identifiable {
         hebrew = word.hebrew
         audio = word.hebrew
         hint = word.meaningZh
+        isLetter = false
     }
 }
 
@@ -497,6 +500,22 @@ struct StudyGameView: View {
     private func submit(_ correct: Bool) {
         guard let turn = round?.current, round?.answer == nil else { return }
         round?.submit(correct: correct)
+        if turn.isRetry {
+            progress.recordStudy()
+        } else {
+            switch turn.question {
+            case .letter(let letter, _, _):
+                progress.recordLetterPractice(letter.id, correct: correct)
+            case .word(let word, _):
+                progress.recordWordPractice(word.id, correct: correct)
+            case .listening(let solution, _, _):
+                if solution.isLetter {
+                    progress.recordLetterPractice(solution.id, correct: correct)
+                } else {
+                    progress.recordWordPractice(solution.id, correct: correct)
+                }
+            }
+        }
         answerRun.record(correct: correct, in: progress, isRetry: turn.isRetry)
         audio.stop()
         audio.playFeedback(correct ? .correct : .wrong)
@@ -520,10 +539,10 @@ enum StudyMatchingDeck: String {
 
     func cards(in content: StudyContent, progress: StudyProgress? = nil) -> [StudyMatchingCard] {
         let selection = StudyGameSelection(content: content, progress: progress)
-        let pairs: [(StudyMatchingCard.Face, StudyMatchingCard.Face)]
+        let pairs: [(itemID: String, first: StudyMatchingCard.Face, second: StudyMatchingCard.Face)]
         switch self {
         case .letters:
-            pairs = selection.letters(content.letters).prefix(4).map { (.hebrew($0.hebrew), .cursive($0)) }
+            pairs = selection.letters(content.letters).prefix(4).map { ($0.id, .hebrew($0.hebrew), .cursive($0)) }
         case .words:
             let words = selection.words(content.words.filter { selection.includesWord($0.id) })
             var hebrew: Set<String> = []
@@ -535,12 +554,12 @@ enum StudyMatchingDeck: String {
                 meanings.insert(word.meaningZh)
                 selected.append(word)
             }
-            pairs = selected.map { (.hebrew($0.hebrew), .translation($0.meaningZh)) }
+            pairs = selected.map { ($0.id, .hebrew($0.hebrew), .translation($0.meaningZh)) }
         }
         return pairs.enumerated().flatMap { index, pair in
             [
-                StudyMatchingCard(id: index * 2, pair: index, face: pair.0),
-                StudyMatchingCard(id: index * 2 + 1, pair: index, face: pair.1)
+                StudyMatchingCard(id: index * 2, pair: index, face: pair.first, itemID: pair.itemID),
+                StudyMatchingCard(id: index * 2 + 1, pair: index, face: pair.second, itemID: pair.itemID)
             ]
         }.shuffled()
     }
@@ -561,6 +580,7 @@ struct StudyMatchingCard: Identifiable {
     let id: Int
     let pair: Int
     let face: Face
+    var itemID: String = ""
 }
 
 struct StudyMatchingRound {
@@ -656,7 +676,15 @@ struct StudyMatchingGameView: View {
         let revealed = matched || round.revealedIDs.contains(card.id)
         return Button {
             let result = round.flip(card)
-            if let result { answerRun.record(correct: result, in: progress) }
+            if let result {
+                if result && !card.itemID.isEmpty {
+                    switch deck {
+                    case .letters: progress.recordLetterPractice(card.itemID, correct: true)
+                    case .words: progress.recordWordPractice(card.itemID, correct: true)
+                    }
+                }
+                answerRun.record(correct: result, in: progress)
+            }
             audio.playFeedback(result.map { $0 ? .correct : .wrong } ?? .flip)
         } label: {
             ZStack {

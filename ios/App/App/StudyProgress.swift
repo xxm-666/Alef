@@ -767,6 +767,16 @@ struct StudyReviewBatch: Codable, Hashable {
         completeReview(id, grade: grade, mistakeKind: mistakeKind, isRetry: isRetry, date: date)
     }
 
+    func recordWordPractice(_ id: String, correct: Bool, date: Date = .now) {
+        savePractice(id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                     correct: correct, date: date)
+    }
+
+    func recordLetterPractice(_ id: String, correct: Bool, date: Date = .now) {
+        savePractice(id, masteryKey: "alef.mastery.v1", scheduleKey: Self.letterScheduleKey,
+                     correct: correct, date: date)
+    }
+
     func wordProficiency(_ id: String, at date: Date = .now) -> Int {
         let mastery = wordMastery[id] ?? .unlearned
         if let existing = schedule[id] {
@@ -939,6 +949,61 @@ struct StudyReviewBatch: Codable, Hashable {
         } else {
             dates.removeValue(forKey: id)
         }
+        var stats = statistics
+        stats.record(on: date)
+        update { entries, encoder in
+            entries[masteryKey] = try encoder.encode(values)
+            entries[scheduleKey] = try encoder.encode(dates)
+            entries["alef.studyStats.v1"] = try encoder.encode(stats)
+        }
+    }
+
+    private func savePractice(_ id: String, masteryKey: String, scheduleKey: String, correct: Bool, date: Date) {
+        var values: [String: Mastery] = read(masteryKey, default: [:])
+        var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
+        let currentMastery = values[id] ?? .unlearned
+        let existing = dates[id]
+        let currentStrength: Double = if let existing {
+            Double(existing.proficiency(at: date, mastery: currentMastery))
+        } else {
+            switch currentMastery {
+            case .unlearned: 0
+            case .learning: 35
+            case .mastered: 100
+            }
+        }
+        let newStrength: Double = if correct {
+            currentStrength == 0 ? 25 : min(100, currentStrength + 15)
+        } else {
+            max(10, currentStrength - 15)
+        }
+        let nextSchedule: ReviewSchedule
+        if let existing {
+            nextSchedule = ReviewSchedule(
+                nextReviewAt: existing.nextReviewAt,
+                intervalDays: existing.intervalDays,
+                easeFactor: existing.easeFactor,
+                repetitions: existing.repetitions,
+                lapses: existing.lapses,
+                lastReview: existing.lastReview,
+                strength: newStrength,
+                updatedAt: date
+            )
+        } else {
+            let nextDate = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
+            nextSchedule = ReviewSchedule(
+                nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
+                intervalDays: 1,
+                easeFactor: ReviewSchedule.defaultEase,
+                repetitions: correct ? 1 : 0,
+                lapses: correct ? 0 : 1,
+                lastReview: nil,
+                strength: newStrength,
+                updatedAt: date
+            )
+        }
+        values[id] = Self.mastery(forProficiency: Int(round(newStrength)))
+        dates[id] = nextSchedule
         var stats = statistics
         stats.record(on: date)
         update { entries, encoder in
