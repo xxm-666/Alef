@@ -176,7 +176,7 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.schedule["todah"]?.intervalDays, 2)
         progress.completeReview("todah", correct: true, date: normalReview)
         XCTAssertEqual(progress.schedule["todah"]?.lastReview?.grade, .good)
-        XCTAssertEqual(progress.wordMastery["todah"], .mastered)
+        XCTAssertEqual(progress.wordMastery["todah"], .learning)
         XCTAssertEqual(progress.statistics.totalReviews, 6)
     }
 
@@ -1085,7 +1085,7 @@ final class AlefCoreTests: XCTestCase {
         let syncB = StudyFolderSyncManager(defaults: defaultsSyncB)
         await syncB.configureFolder(url: tempDir, progress: progressB)
 
-        XCTAssertEqual(progressB.wordMastery["shalom"], .mastered)
+        XCTAssertEqual(progressB.wordMastery["shalom"], .learning)
         XCTAssertEqual(progressB.favorites, ["shalom"])
         XCTAssertEqual(progressB.statistics.totalReviews, 1)
         XCTAssertEqual(progressB.syncRevision, 0)
@@ -1106,9 +1106,9 @@ final class AlefCoreTests: XCTestCase {
         await syncA.sync(progress: progress, now: day2)
 
         // Both devices converge with combined reviews, favorites, and no extra syncRevision loop
-        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
-        XCTAssertEqual(progress.letterMastery["bet"], .mastered)
-        XCTAssertEqual(progressB.wordMastery["todah"], .mastered)
+        XCTAssertEqual(progress.wordMastery["bayit"], .learning)
+        XCTAssertEqual(progress.letterMastery["bet"], .learning)
+        XCTAssertEqual(progressB.wordMastery["todah"], .learning)
         XCTAssertEqual(Set(progress.favorites), Set(["shalom", "todah", "bayit"]))
         XCTAssertEqual(Set(progressB.favorites), Set(["shalom", "todah", "bayit"]))
         XCTAssertEqual(progress.syncRevision, revABeforeSync)
@@ -1122,8 +1122,8 @@ final class AlefCoreTests: XCTestCase {
         } else {
             XCTFail("Expected .failed state on corrupt sync document, got \(syncA.state)")
         }
-        XCTAssertEqual(progress.wordMastery["shalom"], .mastered)
-        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
+        XCTAssertEqual(progress.wordMastery["shalom"], .learning)
+        XCTAssertEqual(progress.wordMastery["bayit"], .learning)
     }
 
     @MainActor
@@ -1188,9 +1188,9 @@ final class AlefCoreTests: XCTestCase {
         await manager.configureFolder(url: FileManager.default.temporaryDirectory, progress: progress)
 
         XCTAssertEqual(storage.writeCount, 2)
-        XCTAssertEqual(progress.wordMastery["bayit"], .mastered)
+        XCTAssertEqual(progress.wordMastery["bayit"], .learning)
         XCTAssertEqual(progress.wordMastery["shalom"], .learning)
-        XCTAssertEqual(progress.wordMastery["todah"], .mastered)
+        XCTAssertEqual(progress.wordMastery["todah"], .learning)
         let cloud = try progress.parseSyncDocument(XCTUnwrap(storage.data))
         XCTAssertTrue(StudySyncMerger.canonicalEqual(cloud.entries, progress.syncSnapshot()))
     }
@@ -1261,20 +1261,25 @@ final class AlefCoreTests: XCTestCase {
         // Consecutive good reviews accelerate: +18 -> +25 -> +32 -> +38 (capped at 100)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 18)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 43)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 75)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 100)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .mastered)
         XCTAssertEqual(progress.quizWeight(forWord: "shalom", at: day0), 1)
         XCTAssertEqual(progress.quizWeight(forWord: "unseen", at: day0), 10)
 
-        // Even at 100%, long idle period causes proficiency to decay below 100%
+        // Even at 100%, long idle period causes proficiency to decay below 80% and mastery drops back to .learning
         let longLater = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 60, to: day0))
         let decayed = progress.wordProficiency("shalom", at: longLater)
-        XCTAssertLessThan(decayed, 100)
+        XCTAssertLessThan(decayed, 80)
         XCTAssertGreaterThanOrEqual(decayed, 10)
+        XCTAssertEqual(progress.effectiveWordMastery("shalom", at: longLater), .learning)
 
         // A spelling/review mistake drops proficiency further and resets acceleration
         progress.completeLetterReview("alef", grade: .easy, date: day0)

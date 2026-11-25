@@ -341,7 +341,7 @@ private struct DailyVocabularyView: View {
                     StudyProficiencyCard(
                         proficiency: proficiency,
                         schedule: schedule,
-                        mastery: progress.wordMastery[word.id] ?? .learning
+                        mastery: progress.effectiveWordMastery(word.id)
                     )
                 }
                 PronunciationButton(hebrew: word.hebrew, title: "听正确发音")

@@ -760,6 +760,20 @@ struct StudyReviewBatch: Codable, Hashable {
         }
     }
 
+    static func mastery(forProficiency proficiency: Int) -> Mastery {
+        if proficiency >= 80 { return .mastered }
+        if proficiency > 0 { return .learning }
+        return .unlearned
+    }
+
+    func effectiveWordMastery(_ id: String, at date: Date = .now) -> Mastery {
+        Self.mastery(forProficiency: wordProficiency(id, at: date))
+    }
+
+    func effectiveLetterMastery(_ id: String, at date: Date = .now) -> Mastery {
+        Self.mastery(forProficiency: letterProficiency(id, at: date))
+    }
+
     func quizWeight(forWord id: String, at date: Date = .now) -> Int {
         let proficiency = wordProficiency(id, at: date)
         if wordMastery[id] == .mastered && proficiency >= 80 { return 1 }
@@ -873,8 +887,10 @@ struct StudyReviewBatch: Codable, Hashable {
         }
         var values: [String: Mastery] = read(masteryKey, default: [:])
         var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
-        values[id] = dailyPlan != nil ? .learning : grade.mastery
-        dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
+        let nextSchedule = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
+        let nextProficiency = nextSchedule.proficiency(at: date, mastery: .learning)
+        values[id] = dailyPlan != nil ? .learning : Self.mastery(forProficiency: nextProficiency)
+        dates[id] = nextSchedule
         var stats = statistics
         if recordStats { stats.record(on: date) }
         let mistakes = mistakeKind.map { kind in

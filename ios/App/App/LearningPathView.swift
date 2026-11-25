@@ -231,7 +231,8 @@ private struct LearningStageDetailView: View {
     }
 
     private func letterCard(_ letter: StudyLetter) -> some View {
-        let mastery = progress.letterMastery[letter.id] ?? .unlearned
+        let mastery = progress.effectiveLetterMastery(letter.id)
+        let proficiency = progress.letterProficiency(letter.id)
         return NavigationLink {
             LetterStudyView(letter: letter, content: content)
         } label: {
@@ -241,7 +242,7 @@ private struct LearningStageDetailView: View {
                     Text(letter.studyName).font(.caption.weight(.semibold)).foregroundStyle(progress.theme.ink)
                     Image(systemName: mastery.symbol)
                         .font(.caption2)
-                        .foregroundStyle(mastery == .unlearned ? progress.theme.mutedInk : progress.theme.accent)
+                        .foregroundStyle(proficiency > 0 ? StudyProficiencyStyle.color(for: proficiency) : progress.theme.mutedInk)
                 }
                 .frame(maxWidth: .infinity, minHeight: 74)
             }
@@ -250,7 +251,7 @@ private struct LearningStageDetailView: View {
     }
 
     private func wordRow(_ word: StudyWord) -> some View {
-        let mastery = progress.wordMastery[word.id] ?? .unlearned
+        let mastery = progress.effectiveWordMastery(word.id)
         return StudyCard(padding: 10) {
             HStack(spacing: 8) {
                 NavigationLink {

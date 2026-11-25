@@ -246,7 +246,6 @@ struct WordsView: View {
     private var filteredWords: [StudyWord] {
         let settings = preferences
         let favorites = Set(progress.favorites)
-        let mastery = progress.wordMastery
         let schedule = progress.schedule
         let query = settings.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let unpointedQuery = withoutHebrewMarks(query)
@@ -255,7 +254,7 @@ struct WordsView: View {
         let words = content.words.filter { word in
             let include = switch scope {
             case "favorites": favorites.contains(word.id)
-            case "needs_review": mastery[word.id] != .mastered
+            case "needs_review": progress.effectiveWordMastery(word.id) != .mastered
             case "due_srs": schedule[word.id]?.isDue == true
             default: true
             }
@@ -273,7 +272,6 @@ struct WordsView: View {
         let prefs = preferences
         let words = filteredWords
         let favorites = Set(progress.favorites)
-        let mastery = progress.wordMastery
         Text("\(words.count) 个单词")
             .font(.caption.weight(.medium))
             .foregroundStyle(progress.theme.mutedInk)
@@ -294,14 +292,14 @@ struct WordsView: View {
         } else if prefs.usesCards {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 152), spacing: 8)], spacing: 8) {
                 ForEach(words) { word in
-                    wordRow(word, favorite: favorites.contains(word.id), mastery: mastery[word.id] ?? .unlearned,
+                    wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
                             stacked: true, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
                 }
             }
         } else {
             LazyVStack(spacing: 7) {
                 ForEach(words) { word in
-                    wordRow(word, favorite: favorites.contains(word.id), mastery: mastery[word.id] ?? .unlearned,
+                    wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
                             stacked: typeSize.isAccessibilitySize, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
                 }
             }
@@ -695,7 +693,7 @@ struct WordDetailView: View {
                         .disabled(isRecording)
                 }
             }
-            let wordMastery = progress.wordMastery[word.id] ?? .unlearned
+            let wordMastery = progress.effectiveWordMastery(word.id)
             StudyProficiencyCard(
                 proficiency: progress.wordProficiency(word.id),
                 schedule: progress.schedule[word.id],
@@ -1213,7 +1211,7 @@ struct WordQuizView: View {
                     StudyProficiencyCard(
                         proficiency: progress.wordProficiency(target.id),
                         schedule: schedule,
-                        mastery: progress.wordMastery[target.id] ?? .learning
+                        mastery: progress.effectiveWordMastery(target.id)
                     )
                 }
             }

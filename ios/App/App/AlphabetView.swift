@@ -11,9 +11,8 @@ struct AlphabetView: View {
 
     var body: some View {
         let options = content.letterDisplay(in: progress)
-        let mastery = progress.letterMastery
-        let letters = content.letters.filter { scope == "all" || mastery[$0.id] != .mastered }
-        let masteredCount = content.letters.filter { mastery[$0.id] == .mastered }.count
+        let letters = content.letters.filter { scope == "all" || progress.effectiveLetterMastery($0.id) != .mastered }
+        let masteredCount = content.letters.filter { progress.effectiveLetterMastery($0.id) == .mastered }.count
         let streakDays = progress.statistics.activeStreakDays()
         let focusedLetter = continueLetter
         StudyPage(maxWidth: LetterGridLayout.maximumWidth) {
@@ -89,7 +88,7 @@ struct AlphabetView: View {
                 LazyVGrid(columns: LetterGridLayout.columns(options: options, typeSize: typeSize, quickActions: quickActions),
                           spacing: LetterGridLayout.spacing) {
                     ForEach(letters) { letter in
-                        letterTile(letter, options: options, mastery: mastery[letter.id] ?? .unlearned,
+                        letterTile(letter, options: options, mastery: progress.effectiveLetterMastery(letter.id),
                                    isFocused: letter.id == focusedLetter?.id)
                     }
                 }
@@ -117,7 +116,7 @@ struct AlphabetView: View {
     private var continueLetter: StudyLetter? {
         let last = progress.read("alef.selectedLetterId.v1", default: "")
         return content.letters.first { $0.id == last }
-            ?? content.letters.first { progress.letterMastery[$0.id] != .mastered }
+            ?? content.letters.first { progress.effectiveLetterMastery($0.id) != .mastered }
             ?? content.letters.first
     }
 
@@ -712,7 +711,7 @@ struct LetterStudyView: View {
                 }
             }
             .buttonStyle(.plain)
-            let letterMastery = progress.letterMastery[letter.id] ?? .unlearned
+            let letterMastery = progress.effectiveLetterMastery(letter.id)
             StudyProficiencyCard(
                 proficiency: progress.letterProficiency(letter.id),
                 schedule: progress.letterSchedule[letter.id],
