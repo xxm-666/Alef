@@ -600,6 +600,7 @@ struct StudyProficiencyCard: View {
     let proficiency: Int
     let schedule: ReviewSchedule?
     let mastery: Mastery
+    var onToggleRemembered: (() -> Void)? = nil
 
     private var tint: Color {
         StudyProficiencyStyle.color(for: proficiency)
@@ -635,9 +636,29 @@ struct StudyProficiencyCard: View {
                 .background(tint.opacity(0.14), in: Capsule())
             }
             StudyProficiencyMeter(proficiency: proficiency, height: 8)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(schedule?.isDue == true ? progress.theme.reminder : progress.theme.mutedInk)
+            HStack(alignment: .center, spacing: 8) {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(schedule?.isDue == true ? progress.theme.reminder : progress.theme.mutedInk)
+                if let onToggleRemembered {
+                    Spacer(minLength: 4)
+                    let remembered = mastery == .mastered
+                    Button(action: onToggleRemembered) {
+                        Label(remembered ? "已记住" : "标记已记住",
+                              systemImage: remembered ? "checkmark.seal.fill" : "checkmark.seal")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(remembered ? progress.theme.success : progress.theme.accent)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                remembered ? progress.theme.successSurface : progress.theme.accent.opacity(0.12),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(remembered ? "已记住，点按恢复常规练习" : "标记为已记住，30 天后再抽查")
+                }
+            }
         }
     }
 }

@@ -712,14 +712,14 @@ struct LetterStudyView: View {
                 }
             }
             .buttonStyle(.plain)
-            MasteryPicker(value: Binding(get: { progress.letterMastery[letter.id] ?? .unlearned }, set: {
-                if (progress.letterMastery[letter.id] ?? .unlearned) != $0 { progress.setLetter(letter.id, mastery: $0) }
-            }))
+            let letterMastery = progress.letterMastery[letter.id] ?? .unlearned
             StudyProficiencyCard(
                 proficiency: progress.letterProficiency(letter.id),
                 schedule: progress.letterSchedule[letter.id],
-                mastery: progress.letterMastery[letter.id] ?? .unlearned
-            )
+                mastery: letterMastery
+            ) {
+                progress.setLetter(letter.id, mastery: letterMastery == .mastered ? .learning : .mastered)
+            }
             if let variants = letter.begadkefat { soundComparison(variants) }
             if showsFinalForm, let form = letter.sofitInfo { finalFormDetails(form) }
             if let example = letter.examples.first {

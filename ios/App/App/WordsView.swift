@@ -695,14 +695,14 @@ struct WordDetailView: View {
                         .disabled(isRecording)
                 }
             }
-            MasteryPicker(value: Binding(get: { progress.wordMastery[word.id] ?? .unlearned }, set: {
-                progress.setWord(word.id, mastery: $0)
-            }))
+            let wordMastery = progress.wordMastery[word.id] ?? .unlearned
             StudyProficiencyCard(
                 proficiency: progress.wordProficiency(word.id),
                 schedule: progress.schedule[word.id],
-                mastery: progress.wordMastery[word.id] ?? .unlearned
-            )
+                mastery: wordMastery
+            ) {
+                progress.setWord(word.id, mastery: wordMastery == .mastered ? .learning : .mastered)
+            }
             StudyCard {
                 DisclosureGroup("跟读录音对比") {
                     ShadowingPracticeCard(hebrew: word.hebrew, recordingState: $isRecording)
@@ -1297,7 +1297,8 @@ struct WordQuizView: View {
             target = pool.indices.contains(reviewIndex) ? pool[reviewIndex] : nil
         } else {
             let others = pool.filter { $0.id != target?.id }
-            target = (others.isEmpty ? pool : others).randomElement()
+            let activePool = others.isEmpty ? pool : others
+            target = progress.weightedRandom(from: activePool, weight: { progress.quizWeight(forWord: $0.id) })
         }
         result = nil
         selectedOption = nil

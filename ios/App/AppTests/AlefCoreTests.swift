@@ -95,17 +95,18 @@ final class AlefCoreTests: XCTestCase {
 
         progress.setWord("shalom", mastery: .mastered, date: day1)
         let initialWordSchedule = progress.schedule["shalom"]
-        XCTAssertEqual(initialWordSchedule?.intervalDays, 3)
+        XCTAssertEqual(initialWordSchedule?.intervalDays, ReviewSchedule.rememberedIntervalDays)
 
         // Tapping mastered repeatedly does not extend interval
         progress.setWord("shalom", mastery: .mastered, date: day2)
         XCTAssertEqual(progress.schedule["shalom"], initialWordSchedule)
 
-        // Real quiz progression reaches 7 days, manual toggle to mastered preserves existing non-due schedule
+        // Real quiz progression extends beyond 30 days, manual toggle preserves existing non-due >= 30d schedule
         progress.completeReview("shalom", grade: .good, date: day2)
-        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 7)
+        let advancedWordInterval = progress.schedule["shalom"]?.intervalDays ?? 0
+        XCTAssertGreaterThan(advancedWordInterval, ReviewSchedule.rememberedIntervalDays)
         progress.setWord("shalom", mastery: .mastered, date: day2)
-        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, 7)
+        XCTAssertEqual(progress.schedule["shalom"]?.intervalDays, advancedWordInterval)
 
         // Setting unlearned clears schedule
         progress.setWord("shalom", mastery: .unlearned, date: day2)
@@ -113,11 +114,12 @@ final class AlefCoreTests: XCTestCase {
 
         // Same manual protection applies to letters
         progress.setLetter("alef", mastery: .mastered, date: day1)
-        XCTAssertEqual(progress.letterSchedule["alef"]?.intervalDays, 3)
+        XCTAssertEqual(progress.letterSchedule["alef"]?.intervalDays, ReviewSchedule.rememberedIntervalDays)
         progress.completeLetterReview("alef", grade: .good, date: day2)
-        XCTAssertEqual(progress.letterSchedule["alef"]?.intervalDays, 7)
+        let advancedLetterInterval = progress.letterSchedule["alef"]?.intervalDays ?? 0
+        XCTAssertGreaterThan(advancedLetterInterval, ReviewSchedule.rememberedIntervalDays)
         progress.setLetter("alef", mastery: .mastered, date: day2)
-        XCTAssertEqual(progress.letterSchedule["alef"]?.intervalDays, 7)
+        XCTAssertEqual(progress.letterSchedule["alef"]?.intervalDays, advancedLetterInterval)
         progress.setLetter("alef", mastery: .unlearned, date: day2)
         XCTAssertNil(progress.letterSchedule["alef"])
     }
@@ -1228,7 +1230,7 @@ final class AlefCoreTests: XCTestCase {
             let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
             XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: words[i], input: "שלום", date: today)?.correct, true)
             XCTAssertEqual(progress.wordMastery[words[i].id], .learning)
-            XCTAssertEqual(progress.wordProficiency(words[i].id, at: today), 25)
+            XCTAssertEqual(progress.wordProficiency(words[i].id, at: today), 18)
             XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         }
 
@@ -1256,15 +1258,17 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 0)
         XCTAssertEqual(progress.letterProficiency("alef", at: day0), 0)
 
-        // 4 normal good reviews climb 25% -> 50% -> 75% -> 100%
+        // Consecutive good reviews accelerate: +18 -> +25 -> +32 -> +38 (capped at 100)
         progress.completeReview("shalom", grade: .good, date: day0)
-        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 25)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 18)
         progress.completeReview("shalom", grade: .good, date: day0)
-        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 50)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 43)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 75)
         progress.completeReview("shalom", grade: .good, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 100)
+        XCTAssertEqual(progress.quizWeight(forWord: "shalom", at: day0), 1)
+        XCTAssertEqual(progress.quizWeight(forWord: "unseen", at: day0), 10)
 
         // Even at 100%, long idle period causes proficiency to decay below 100%
         let longLater = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 60, to: day0))
@@ -1272,13 +1276,13 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertLessThan(decayed, 100)
         XCTAssertGreaterThanOrEqual(decayed, 10)
 
-        // A spelling/review mistake drops proficiency further
+        // A spelling/review mistake drops proficiency further and resets acceleration
         progress.completeLetterReview("alef", grade: .easy, date: day0)
         progress.completeLetterReview("alef", grade: .easy, date: day0)
         let beforeMistake = progress.letterProficiency("alef", at: day0)
-        XCTAssertEqual(beforeMistake, 70)
+        XCTAssertEqual(beforeMistake, 57)
         progress.completeLetterReview("alef", grade: .again, date: day0)
-        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 45)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 32)
     }
 
     private func makeWord(id: String, hebrew: String, unpointed: String,

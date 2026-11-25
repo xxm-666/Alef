@@ -777,7 +777,8 @@ private struct FlashQuizView: View {
                 }
             }
             let candidates = pool.filter { $0.id != question?.letter.id }
-            guard let picked = (candidates.isEmpty ? pool : candidates).randomElement() else { return }
+            let activePool = candidates.isEmpty ? pool : candidates
+            guard let picked = progress.weightedRandom(from: activePool, weight: { progress.quizWeight(forLetter: $0.id) }) else { return }
             target = picked
         }
 

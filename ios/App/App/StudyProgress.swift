@@ -76,6 +76,7 @@ struct ReviewSchedule: Codable, Equatable {
     static let minEase = 1.3
     static let maxEase = 3.0
     static let maxIntervalDays = 180
+    static let rememberedIntervalDays = 30
 
     let nextReviewAt: Int64
     let intervalDays: Int
@@ -178,6 +179,7 @@ struct ReviewSchedule: Codable, Equatable {
         let lapses = max(0, current?.lapses ?? 0)
         let prevInterval = max(1, current?.intervalDays ?? 1)
         let currentStrength = current.map { Double($0.proficiency(at: date)) } ?? 0
+        let streakBonus = Double(min(20, reps * 7))
 
         let outcome: (interval: Int, newEase: Double, newReps: Int, newLapses: Int, strengthDelta: Double)
         switch grade {
@@ -187,19 +189,19 @@ struct ReviewSchedule: Codable, Equatable {
             let interval = reps == 0
                 ? 1
                 : min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * 1.2))))
-            outcome = (interval, max(minEase, ease - 0.15), reps + 1, lapses, 15)
+            outcome = (interval, max(minEase, ease - 0.15), reps + 1, lapses, 12 + streakBonus)
         case .good:
             let interval: Int = switch reps {
             case 0: 3
             case 1: 7
             default: min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * ease))))
             }
-            outcome = (interval, ease, reps + 1, lapses, 25)
+            outcome = (interval, ease, reps + 1, lapses, 18 + streakBonus)
         case .easy:
             let interval = reps == 0
                 ? 5
                 : min(maxIntervalDays, max(prevInterval + 2, Int(round(Double(prevInterval) * ease * 1.3))))
-            outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses, 35)
+            outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses, 25 + streakBonus)
         }
 
         let newStrength = grade == .again
@@ -233,11 +235,11 @@ struct ReviewSchedule: Codable, Equatable {
                 repetitions: 0,
                 lapses: existing?.lapses ?? 0,
                 lastReview: existing?.lastReview,
-                strength: max(35, currentStrength),
+                strength: min(65, max(25, currentStrength)),
                 updatedAt: date
             )
         case .mastered:
-            if let existing, !existing.isDue(at: date), existing.repetitions >= 1 {
+            if let existing, !existing.isDue(at: date), existing.intervalDays >= rememberedIntervalDays {
                 return ReviewSchedule(
                     nextReviewAt: existing.nextReviewAt,
                     intervalDays: existing.intervalDays,
@@ -249,12 +251,12 @@ struct ReviewSchedule: Codable, Equatable {
                     updatedAt: date
                 )
             }
-            let nextDate = calendar.date(byAdding: .day, value: 3, to: date) ?? date
+            let nextDate = calendar.date(byAdding: .day, value: rememberedIntervalDays, to: date) ?? date
             return ReviewSchedule(
                 nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
-                intervalDays: 3,
+                intervalDays: rememberedIntervalDays,
                 easeFactor: existing?.easeFactor ?? defaultEase,
-                repetitions: 1,
+                repetitions: max(3, existing?.repetitions ?? 3),
                 lapses: existing?.lapses ?? 0,
                 lastReview: existing?.lastReview,
                 strength: 100,
@@ -756,6 +758,34 @@ struct StudyReviewBatch: Codable, Hashable {
         case .learning: return 35
         case .mastered: return 100
         }
+    }
+
+    func quizWeight(forWord id: String, at date: Date = .now) -> Int {
+        let proficiency = wordProficiency(id, at: date)
+        if wordMastery[id] == .mastered && proficiency >= 80 { return 1 }
+        if proficiency >= 80 { return 2 }
+        if proficiency >= 40 { return 5 }
+        return 10
+    }
+
+    func quizWeight(forLetter id: String, at date: Date = .now) -> Int {
+        let proficiency = letterProficiency(id, at: date)
+        if letterMastery[id] == .mastered && proficiency >= 80 { return 1 }
+        if proficiency >= 80 { return 2 }
+        if proficiency >= 40 { return 5 }
+        return 10
+    }
+
+    func weightedRandom<T>(from items: [T], weight: (T) -> Int) -> T? {
+        let total = items.reduce(0) { $0 + max(1, weight($1)) }
+        guard total > 0 else { return items.first }
+        var target = Int.random(in: 0..<total)
+        for item in items {
+            let w = max(1, weight(item))
+            if target < w { return item }
+            target -= w
+        }
+        return items.last
     }
 
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
