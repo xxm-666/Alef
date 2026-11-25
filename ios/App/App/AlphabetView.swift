@@ -185,26 +185,20 @@ struct AlphabetView: View {
                     PronunciationButton(hebrew: letter.nameHebrew, iconOnly: true,
                                         title: "朗读\(letter.nameChinese)")
                     Spacer(minLength: 0)
-                    Menu {
-                        ForEach(Mastery.allCases) { level in
-                            Button(level.title, systemImage: level == mastery ? "checkmark" : level.symbol) {
-                                if level != mastery { progress.setLetter(letter.id, mastery: level) }
-                            }
+                    let proficiency = progress.letterProficiency(letter.id)
+                    let tint = proficiency > 0 ? StudyProficiencyStyle.color(for: proficiency) : progress.theme.mutedInk
+                    HStack(spacing: 4) {
+                        Image(systemName: mastery.symbol)
+                        if detailed {
+                            Text(mastery.title)
+                                .font(.caption2.weight(.bold))
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: mastery.symbol)
-                            if detailed {
-                                Text(mastery.title)
-                                    .font(.caption2.weight(.bold))
-                            }
-                        }
-                        .foregroundStyle(masteryColor(mastery))
-                        .padding(.horizontal, detailed ? 8 : 0)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("\(letter.nameChinese)的掌握度")
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, detailed ? 8 : 6)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(letter.nameChinese)的状态")
                     .accessibilityValue(mastery.title)
                 }
                 .padding(.horizontal, 4)

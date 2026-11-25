@@ -389,24 +389,19 @@ struct WordsView: View {
     }
 
     private func wordMasteryMenu(_ word: StudyWord, mastery: Mastery) -> some View {
-        Menu {
-            ForEach(Mastery.allCases) { level in
-                Button(level.title, systemImage: level == mastery ? "checkmark" : level.symbol) {
-                    progress.setWord(word.id, mastery: level)
-                }
-            }
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: mastery.symbol).font(.subheadline)
-                Text(mastery.title).font(.caption2.weight(.semibold))
-            }
-            .foregroundStyle(masteryTint(mastery))
-            .padding(.horizontal, 6)
-            .frame(minWidth: 46, minHeight: 46)
-            .background(masterySurface(mastery), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .contentShape(Rectangle())
+        let proficiency = progress.wordProficiency(word.id)
+        let tint = proficiency > 0 ? StudyProficiencyStyle.color(for: proficiency) : progress.theme.mutedInk
+        let surface = proficiency > 0 ? tint.opacity(0.14) : progress.theme.insetSurface
+        return VStack(spacing: 3) {
+            Image(systemName: mastery.symbol).font(.subheadline)
+            Text(mastery.title).font(.caption2.weight(.semibold))
         }
-        .accessibilityLabel("\(word.meaningZh)的掌握度")
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6)
+        .frame(minWidth: 46, minHeight: 46)
+        .background(surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(word.meaningZh)的状态")
         .accessibilityValue(mastery.title)
     }
 
