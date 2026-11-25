@@ -509,6 +509,92 @@ struct StudyNotice: View {
     }
 }
 
+enum StudyProficiencyStyle {
+    private static let stops: [(t: Double, r: Double, g: Double, b: Double)] = [
+        (0.00, 0.58, 0.64, 0.72), // 柔和灰
+        (0.18, 0.94, 0.27, 0.27), // 珊瑚红
+        (0.38, 0.96, 0.62, 0.04), // 琥珀黄
+        (0.58, 0.23, 0.51, 0.96), // 天青蓝
+        (0.78, 0.55, 0.36, 0.96), // 优雅紫
+        (0.90, 0.08, 0.72, 0.65), // 青碧过渡
+        (1.00, 0.06, 0.73, 0.51)  // 翡翠绿
+    ]
+
+    static var spectrumGradient: LinearGradient {
+        LinearGradient(
+            stops: stops.map {
+                Gradient.Stop(color: Color(red: $0.r, green: $0.g, blue: $0.b), location: $0.t)
+            },
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    static func color(for proficiency: Int) -> Color {
+        let t = min(1.0, max(0.0, Double(proficiency) / 100.0))
+        guard let upperIndex = stops.firstIndex(where: { $0.t >= t }) else {
+            let last = stops[stops.count - 1]
+            return Color(red: last.r, green: last.g, blue: last.b)
+        }
+        if upperIndex == 0 {
+            let first = stops[0]
+            return Color(red: first.r, green: first.g, blue: first.b)
+        }
+        let low = stops[upperIndex - 1]
+        let high = stops[upperIndex]
+        let span = max(0.0001, high.t - low.t)
+        let ratio = (t - low.t) / span
+        return Color(
+            red: low.r + (high.r - low.r) * ratio,
+            green: low.g + (high.g - low.g) * ratio,
+            blue: low.b + (high.b - low.b) * ratio
+        )
+    }
+
+    static func stageTitle(for proficiency: Int) -> String {
+        switch min(100, max(0, proficiency)) {
+        case 0: "未开始"
+        case 1..<25: "初识"
+        case 25..<45: "初记"
+        case 45..<65: "巩固"
+        case 65..<85: "熟悉"
+        case 85..<100: "熟练"
+        default: "牢记"
+        }
+    }
+}
+
+struct StudyProficiencyMeter: View {
+    @Environment(StudyProgress.self) private var progress
+    let proficiency: Int
+    var width: CGFloat? = nil
+    var height: CGFloat = 7
+
+    var body: some View {
+        let clamped = min(100, max(0, proficiency))
+        let fraction = Double(clamped) / 100.0
+        Capsule()
+            .fill(progress.theme.insetSurface)
+            .frame(width: width, height: height)
+            .frame(maxWidth: width == nil ? .infinity : nil)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    let filledWidth = clamped == 0 ? 0 : max(height, proxy.size.width * fraction)
+                    StudyProficiencyStyle.spectrumGradient
+                        .frame(width: proxy.size.width, height: height)
+                        .mask(alignment: .leading) {
+                            Capsule()
+                                .frame(width: filledWidth, height: height)
+                        }
+                }
+            }
+            .clipShape(Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("记忆熟练度 \(StudyProficiencyStyle.stageTitle(for: clamped))")
+            .accessibilityValue("\(clamped)%")
+    }
+}
+
 struct StudyProficiencyCard: View {
     @Environment(StudyProgress.self) private var progress
     let proficiency: Int
@@ -516,17 +602,7 @@ struct StudyProficiencyCard: View {
     let mastery: Mastery
 
     private var tint: Color {
-        if proficiency >= 80 { return progress.theme.success }
-        if proficiency >= 40 { return progress.theme.learningAction }
-        if proficiency > 0 { return progress.theme.reminder }
-        return progress.theme.mutedInk
-    }
-
-    private var badgeSurface: Color {
-        if proficiency >= 80 { return progress.theme.successSurface }
-        if proficiency >= 40 { return progress.theme.learningAction.opacity(0.14) }
-        if proficiency > 0 { return progress.theme.reminderSurface }
-        return progress.theme.insetSurface
+        StudyProficiencyStyle.color(for: proficiency)
     }
 
     private var subtitle: String {
@@ -536,7 +612,7 @@ struct StudyProficiencyCard: View {
             }
             return "下次复习 · \(schedule.displayDate)（间隔 \(schedule.intervalLabel)）"
         }
-        return proficiency == 0 ? "正常拼读或复习会自动累积熟练度" : "继续练习可提升至 100%"
+        return proficiency == 0 ? "正常拼读或复习会自动累积熟练度" : "继续练习颜色会逐步过渡到绿色"
     }
 
     var body: some View {
@@ -546,17 +622,19 @@ struct StudyProficiencyCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(progress.theme.ink)
                 Spacer(minLength: 4)
-                Text("\(proficiency)%")
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(badgeSurface, in: Capsule())
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 8, height: 8)
+                    Text(StudyProficiencyStyle.stageTitle(for: proficiency))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(tint)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(tint.opacity(0.14), in: Capsule())
             }
-            ProgressView(value: Double(proficiency), total: 100)
-                .tint(tint)
-                .accessibilityLabel("记忆熟练度 \(proficiency)%")
+            StudyProficiencyMeter(proficiency: proficiency, height: 8)
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(schedule?.isDue == true ? progress.theme.reminder : progress.theme.mutedInk)

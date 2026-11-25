@@ -324,16 +324,7 @@ struct WordsView: View {
                                 Text(word.transliteration).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
                                 let proficiency = progress.wordProficiency(word.id)
                                 if proficiency > 0 {
-                                    Text("\(proficiency)%")
-                                        .font(.caption2.weight(.bold))
-                                        .monospacedDigit()
-                                        .foregroundStyle(proficiency >= 80 ? progress.theme.success : progress.theme.accent)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(
-                                            (proficiency >= 80 ? progress.theme.successSurface : progress.theme.accent.opacity(0.12)),
-                                            in: Capsule()
-                                        )
+                                    StudyProficiencyMeter(proficiency: proficiency, width: 34, height: 5)
                                 }
                             }
                             Text(word.meaningZh).font(.caption).foregroundStyle(progress.theme.mutedInk)
@@ -1183,9 +1174,16 @@ struct WordQuizView: View {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
             if reviewing, let schedule = progress.schedule[target.id] {
-                let proficiency = progress.wordProficiency(target.id)
-                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "记忆熟练度 \(proficiency)%", symbol: "brain.head.profile",
-                            note: "下次复习 · \(schedule.displayDate)")
+                if isRetryAnswer {
+                    StudyNotice(title: "已记录本轮补练", symbol: "calendar.badge.checkmark",
+                                note: "下次复习 · \(schedule.displayDate)")
+                } else {
+                    StudyProficiencyCard(
+                        proficiency: progress.wordProficiency(target.id),
+                        schedule: schedule,
+                        mastery: progress.wordMastery[target.id] ?? .learning
+                    )
+                }
             }
         }
     }

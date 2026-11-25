@@ -296,12 +296,14 @@ struct LetterTileContent: View {
                     }
                     Spacer(minLength: 0)
                     if showMasteryBadge, let mastery {
+                        let tint = proficiency.map { StudyProficiencyStyle.color(for: $0) } ?? masteryForeground(mastery)
+                        let surface = proficiency.map { $0 > 0 ? tint.opacity(0.16) : progress.theme.insetSurface } ?? masteryBackground(mastery)
                         Image(systemName: mastery.symbol)
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(masteryForeground(mastery))
+                            .foregroundStyle(tint)
                             .frame(width: 20, height: 20)
-                            .background(masteryBackground(mastery), in: Circle())
-                            .accessibilityLabel(mastery.title)
+                            .background(surface, in: Circle())
+                            .accessibilityLabel(proficiency.map { "\(mastery.title)，记忆熟练度 \(StudyProficiencyStyle.stageTitle(for: $0))" } ?? mastery.title)
                     }
                 }
             }
@@ -364,19 +366,32 @@ struct LetterTileContent: View {
                     }
                     Spacer(minLength: 4)
                     if showMasteryBadge, let mastery {
-                        let label = if let proficiency, proficiency > 0 { "\(proficiency)%" } else { mastery.title }
-                        HStack(spacing: 3) {
-                            Image(systemName: mastery.symbol)
-                            Text(label)
-                                .monospacedDigit()
+                        if let proficiency, proficiency > 0 {
+                            let tint = StudyProficiencyStyle.color(for: proficiency)
+                            HStack(spacing: 4) {
+                                Image(systemName: mastery.symbol)
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(tint)
+                                StudyProficiencyMeter(proficiency: proficiency, width: 26, height: 5)
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(tint.opacity(0.14), in: Capsule())
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(mastery.title)，记忆熟练度 \(StudyProficiencyStyle.stageTitle(for: proficiency))")
+                        } else {
+                            HStack(spacing: 3) {
+                                Image(systemName: mastery.symbol)
+                                Text(mastery.title)
+                            }
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(masteryForeground(mastery))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(masteryBackground(mastery), in: Capsule())
+                            .lineLimit(1)
+                            .accessibilityLabel(mastery.title)
                         }
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(masteryForeground(mastery))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(masteryBackground(mastery), in: Capsule())
-                        .lineLimit(1)
-                        .accessibilityLabel(proficiency.map { "\(mastery.title)，熟练度 \($0)%" } ?? mastery.title)
                     }
                 }
             }

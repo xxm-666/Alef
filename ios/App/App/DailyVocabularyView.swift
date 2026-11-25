@@ -338,8 +338,11 @@ private struct DailyVocabularyView: View {
                 StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input,
                                   combo: plan.answerCombo)
                 if let schedule = progress.schedule[word.id] {
-                    StudyNotice(title: "记忆熟练度 \(proficiency)%", symbol: "brain.head.profile",
-                                note: "下次复习 · \(schedule.displayDate)（间隔 \(schedule.intervalLabel)）")
+                    StudyProficiencyCard(
+                        proficiency: proficiency,
+                        schedule: schedule,
+                        mastery: progress.wordMastery[word.id] ?? .learning
+                    )
                 }
                 PronunciationButton(hebrew: word.hebrew, title: "听正确发音")
             }
