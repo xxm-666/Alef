@@ -494,6 +494,10 @@ private struct StudySyllablesView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .body) private var previewCardHeight: CGFloat = 196
+    @ScaledMetric(relativeTo: .body) private var previewGlyphHeight: CGFloat = 84
+    @ScaledMetric(relativeTo: .body) private var tileHeight: CGFloat = 84
+    @ScaledMetric(relativeTo: .body) private var tileGlyphHeight: CGFloat = 40
     let consonants: [StudyConsonant]
     let vowels: [StudyVowel]
     @State private var consonantID = "bet"
@@ -568,45 +572,75 @@ private struct StudySyllablesView: View {
             }
         }
         StudyCard(highlighted: true) {
-            HStack {
-                Spacer(minLength: 0)
-                VStack(spacing: 3) {
-                    HebrewText(text: word(consonant, vowel), size: 64, style: .largeTitle)
-                    Text("\(roman(consonant, vowel)) · \(ipa(consonant, vowel))")
-                        .font(.headline).foregroundStyle(progress.theme.accent)
-                    Text("\(vowel.name) · \(vowel.nameZh)").font(.subheadline)
-                    Text(vowel.tip).font(.caption).foregroundStyle(progress.theme.mutedInk)
+            VStack(spacing: 4) {
+                HebrewText(text: word(consonant, vowel), size: 64, style: .largeTitle)
+                    .frame(height: typeSize.isAccessibilitySize ? nil : previewGlyphHeight)
+                Text("\(roman(consonant, vowel)) · \(ipa(consonant, vowel))")
+                    .font(.headline)
+                    .foregroundStyle(progress.theme.accent)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .minimumScaleFactor(0.85)
+                Text("\(vowel.name) · \(vowel.nameZh)")
+                    .font(.subheadline)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .minimumScaleFactor(0.85)
+                Text(vowel.tip)
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 3, reservesSpace: !typeSize.isAccessibilitySize)
+                    .minimumScaleFactor(0.88)
+                    .padding(.horizontal, 4)
+                if typeSize.isAccessibilitySize && vowel.id != "shva" {
+                    PronunciationButton(hebrew: word(consonant, vowel), iconOnly: true, bundledOnly: true)
+                        .padding(.top, 4)
                 }
-                .multilineTextAlignment(.center)
-                Spacer(minLength: 0)
-                if vowel.id != "shva" {
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity,
+                   minHeight: previewCardHeight,
+                   maxHeight: typeSize.isAccessibilitySize ? nil : previewCardHeight,
+                   alignment: .center)
+            .overlay(alignment: .topTrailing) {
+                if !typeSize.isAccessibilitySize && vowel.id != "shva" {
                     PronunciationButton(hebrew: word(consonant, vowel), iconOnly: true, bundledOnly: true)
                 }
             }
         }
         LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 190 : 98), spacing: 7)], spacing: 7) {
             ForEach(vowels) { item in
+                let selected = item.id == vowelID
                 Button {
                     vowelID = item.id
                     if item.id != "shva" {
                         audio.speak(word(consonant, item), rate: progress.speechRate, bundledOnly: true)
                     }
                 } label: {
-                    StudyCard(highlighted: item.id == vowelID, padding: 6) {
+                    StudyCard(highlighted: selected, padding: 6) {
                         VStack(spacing: 4) {
                             HebrewText(text: word(consonant, item), size: 31)
+                                .frame(height: typeSize.isAccessibilitySize ? nil : tileGlyphHeight)
                             Text(item.id == "shva" ? "Shva" : roman(consonant, item))
                                 .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Image(systemName: item.id == "shva" ? "info.circle" : "speaker.wave.2")
                                 .font(.caption).foregroundStyle(progress.theme.accent).accessibilityHidden(true)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .frame(maxWidth: .infinity,
+                               minHeight: tileHeight,
+                               maxHeight: typeSize.isAccessibilitySize ? nil : tileHeight)
                         .contentShape(Rectangle())
+                    }
+                    .overlay {
+                        if selected {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(progress.theme.accent.opacity(0.65), lineWidth: 1.5)
+                        }
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(item.nameZh)，\(roman(consonant, item))")
-                .accessibilityAddTraits(item.id == vowelID ? .isSelected : [])
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         StudyCard {
