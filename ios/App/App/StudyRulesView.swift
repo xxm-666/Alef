@@ -584,12 +584,19 @@ private struct StudySyllablesView: View {
                     .font(.subheadline)
                     .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                     .minimumScaleFactor(0.85)
-                Text(vowel.tip)
-                    .font(.caption)
-                    .foregroundStyle(progress.theme.mutedInk)
-                    .lineLimit(typeSize.isAccessibilitySize ? nil : 3, reservesSpace: !typeSize.isAccessibilitySize)
-                    .minimumScaleFactor(0.88)
-                    .padding(.horizontal, 4)
+                if typeSize.isAccessibilitySize {
+                    Text(vowel.tip)
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .padding(.horizontal, 4)
+                } else {
+                    Text(vowel.tip)
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .lineLimit(3, reservesSpace: true)
+                        .minimumScaleFactor(0.88)
+                        .padding(.horizontal, 4)
+                }
                 if typeSize.isAccessibilitySize && vowel.id != "shva" {
                     PronunciationButton(hebrew: word(consonant, vowel), iconOnly: true, bundledOnly: true)
                         .padding(.top, 4)
