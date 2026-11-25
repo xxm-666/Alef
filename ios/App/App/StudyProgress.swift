@@ -391,16 +391,19 @@ struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
     var studied = 0
     var answers: [DailySpellingAnswer] = []
     var feedbackPending = false
+    var practiceRound: Int? = nil
 
     var id: String { wordIds.first ?? "" }
-    var hasStarted: Bool { studied > 0 }
+    var roundCount: Int { max(0, practiceRound ?? 0) }
+    var hasStarted: Bool { studied > 0 || roundCount > 0 }
     var isComplete: Bool { answers.count == wordIds.count && !feedbackPending }
     var correctCount: Int { answers.filter(\.correct).count }
     var answerCombo: Int { answers.reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count }
     var status: String {
         if isComplete { return "拼对 \(correctCount) / \(wordIds.count)" }
         if studied == wordIds.count { return "拼写 \(answers.count) / \(wordIds.count)" }
-        return hasStarted ? "认读 \(studied) / \(wordIds.count)" : "先认读，再拼写"
+        if studied > 0 { return "认读 \(studied) / \(wordIds.count)" }
+        return roundCount > 0 ? "第 \(roundCount + 1) 轮 · 准备重练" : "先认读，再拼写"
     }
 }
 
@@ -857,6 +860,7 @@ struct StudyReviewBatch: Codable, Hashable {
         plan.groups[index].studied = 0
         plan.groups[index].answers = []
         plan.groups[index].feedbackPending = false
+        plan.groups[index].practiceRound = expected.roundCount + 1
         write(plan, for: DailyVocabularyPlan.storageKey)
         return true
     }

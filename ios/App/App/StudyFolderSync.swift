@@ -220,9 +220,10 @@ enum StudySyncMerger {
     }
 
     private static func dailyScore(_ plan: DailyVocabularyPlan) -> Int {
+        let rounds = plan.groups.reduce(0) { $0 + $1.roundCount * 10_000 }
         let completed = plan.completedCount * 1_000
         let steps = plan.groups.reduce(0) { $0 + $1.studied + $1.answers.count + ($1.isComplete ? 1 : 0) }
-        return completed + steps
+        return rounds + completed + steps
     }
 
     private static func decode<T: Decodable>(_ type: T.Type, from data: Data?) -> T? {

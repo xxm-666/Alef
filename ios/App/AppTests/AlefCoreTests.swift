@@ -1349,8 +1349,25 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(progress.restartDailyVocabularyGroup(completedGroup, day: day))
         XCTAssertFalse(progress.dailyVocabulary.groups[0].isComplete)
         XCTAssertEqual(progress.dailyVocabulary.groups[0].studied, 0)
+        XCTAssertEqual(progress.dailyVocabulary.groups[0].roundCount, 1)
+        XCTAssertTrue(progress.dailyVocabulary.groups[0].hasStarted)
         XCTAssertEqual(progress.dailyVocabulary.groups[0].wordIds, completedGroup.wordIds)
         XCTAssertTrue(progress.dailyVocabulary.isValid)
+
+        // Syncing against an older remote snapshot with the completed round must NOT revert the restart
+        var olderRemote = progress.dailyVocabulary
+        olderRemote.groups[0] = completedGroup
+        let localData = try JSONEncoder().encode(progress.dailyVocabulary)
+        let remoteData = try JSONEncoder().encode(olderRemote)
+        let merged = StudySyncMerger.merge(
+            local: [DailyVocabularyPlan.storageKey: localData],
+            remote: [DailyVocabularyPlan.storageKey: remoteData],
+            localUpdatedAt: 2_000,
+            remoteUpdatedAt: 1_000
+        )
+        let decodedMerged = try JSONDecoder().decode(DailyVocabularyPlan.self, from: XCTUnwrap(merged[DailyVocabularyPlan.storageKey]))
+        XCTAssertFalse(decodedMerged.groups[0].isComplete)
+        XCTAssertEqual(decodedMerged.groups[0].roundCount, 1)
     }
 
     private func makeWord(id: String, hebrew: String, unpointed: String,
