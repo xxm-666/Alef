@@ -320,7 +320,22 @@ struct WordsView: View {
                     let textLayout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5)) : AnyLayout(HStackLayout(spacing: 6))
                     textLayout {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(word.transliteration).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
+                            HStack(spacing: 6) {
+                                Text(word.transliteration).font(.subheadline.weight(.semibold)).foregroundStyle(progress.theme.ink)
+                                let proficiency = progress.wordProficiency(word.id)
+                                if proficiency > 0 {
+                                    Text("\(proficiency)%")
+                                        .font(.caption2.weight(.bold))
+                                        .monospacedDigit()
+                                        .foregroundStyle(proficiency >= 80 ? progress.theme.success : progress.theme.accent)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(
+                                            (proficiency >= 80 ? progress.theme.successSurface : progress.theme.accent.opacity(0.12)),
+                                            in: Capsule()
+                                        )
+                                }
+                            }
                             Text(word.meaningZh).font(.caption).foregroundStyle(progress.theme.mutedInk)
                         }
                         if !stacked { Spacer(minLength: 4) }
@@ -660,11 +675,11 @@ struct WordDetailView: View {
             MasteryPicker(value: Binding(get: { progress.wordMastery[word.id] ?? .unlearned }, set: {
                 progress.setWord(word.id, mastery: $0)
             }))
-            if let schedule = progress.schedule[word.id] {
-                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalLabel)",
-                            reminder: schedule.isDue)
-            }
+            StudyProficiencyCard(
+                proficiency: progress.wordProficiency(word.id),
+                schedule: progress.schedule[word.id],
+                mastery: progress.wordMastery[word.id] ?? .unlearned
+            )
             StudyCard {
                 DisclosureGroup("跟读录音对比") {
                     ShadowingPracticeCard(hebrew: word.hebrew, recordingState: $isRecording)
@@ -1168,7 +1183,8 @@ struct WordQuizView: View {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
             if reviewing, let schedule = progress.schedule[target.id] {
-                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "已记录本次复习", symbol: "calendar.badge.checkmark",
+                let proficiency = progress.wordProficiency(target.id)
+                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "记忆熟练度 \(proficiency)%", symbol: "brain.head.profile",
                             note: "下次复习 · \(schedule.displayDate)")
             }
         }

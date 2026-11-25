@@ -272,7 +272,8 @@ struct StudyWord: Decodable, Identifiable {
 
     func acceptsSpelling(_ input: String) -> Bool {
         func normalized(_ value: String) -> String {
-            value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            value.precomposedStringWithCanonicalMapping
+                .split(whereSeparator: \.isWhitespace).joined(separator: " ")
                 .replacingOccurrences(of: "\"", with: "״")
         }
         let answer = normalized(input)

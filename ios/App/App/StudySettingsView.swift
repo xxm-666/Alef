@@ -548,7 +548,8 @@ struct StudyLetterDisplayView: View {
                     Spacer(minLength: 0)
                     StudyCard(highlighted: true, padding: detailed ? 10 : 8) {
                         LetterTileContent(letter: example, options: config,
-                                          mastery: progress.letterMastery[example.id] ?? .unlearned)
+                                          mastery: progress.letterMastery[example.id] ?? .unlearned,
+                                          proficiency: progress.letterProficiency(example.id))
                     }
                     .frame(maxWidth: detailed ? 210 : 116)
                     .overlay {

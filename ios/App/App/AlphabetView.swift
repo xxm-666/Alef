@@ -168,7 +168,9 @@ struct AlphabetView: View {
             NavigationLink {
                 LetterStudyView(letter: letter, content: content)
             } label: {
-                LetterTileContent(letter: letter, options: options, mastery: quickActions ? nil : mastery)
+                LetterTileContent(letter: letter, options: options,
+                                  mastery: quickActions ? nil : mastery,
+                                  proficiency: progress.letterProficiency(letter.id))
                     .frame(maxWidth: .infinity, minHeight: detailed ? 148 : 78, maxHeight: .infinity, alignment: .top)
                     .padding(detailed ? 10 : 7)
                     .contentShape(Rectangle())
@@ -250,6 +252,7 @@ struct LetterTileContent: View {
     let letter: StudyLetter
     let options: [String: Bool]
     var mastery: Mastery? = nil
+    var proficiency: Int? = nil
 
     static func isDetailed(_ options: [String: Bool]) -> Bool {
         let extraCount = ["showChineseName", "showEnglishName", "showHebrewName",
@@ -361,9 +364,11 @@ struct LetterTileContent: View {
                     }
                     Spacer(minLength: 4)
                     if showMasteryBadge, let mastery {
+                        let label = if let proficiency, proficiency > 0 { "\(proficiency)%" } else { mastery.title }
                         HStack(spacing: 3) {
                             Image(systemName: mastery.symbol)
-                            Text(mastery.title)
+                            Text(label)
+                                .monospacedDigit()
                         }
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(masteryForeground(mastery))
@@ -371,7 +376,7 @@ struct LetterTileContent: View {
                         .padding(.vertical, 3)
                         .background(masteryBackground(mastery), in: Capsule())
                         .lineLimit(1)
-                        .accessibilityLabel(mastery.title)
+                        .accessibilityLabel(proficiency.map { "\(mastery.title)，熟练度 \($0)%" } ?? mastery.title)
                     }
                 }
             }
@@ -695,11 +700,11 @@ struct LetterStudyView: View {
             MasteryPicker(value: Binding(get: { progress.letterMastery[letter.id] ?? .unlearned }, set: {
                 if (progress.letterMastery[letter.id] ?? .unlearned) != $0 { progress.setLetter(letter.id, mastery: $0) }
             }))
-            if let schedule = progress.letterSchedule[letter.id] {
-                StudyNotice(title: "下次复习 · \(schedule.displayDate)", symbol: "calendar",
-                            note: "当前间隔 \(schedule.intervalLabel)",
-                            reminder: schedule.isDue)
-            }
+            StudyProficiencyCard(
+                proficiency: progress.letterProficiency(letter.id),
+                schedule: progress.letterSchedule[letter.id],
+                mastery: progress.letterMastery[letter.id] ?? .unlearned
+            )
             if let variants = letter.begadkefat { soundComparison(variants) }
             if showsFinalForm, let form = letter.sofitInfo { finalFormDetails(form) }
             if let example = letter.examples.first {

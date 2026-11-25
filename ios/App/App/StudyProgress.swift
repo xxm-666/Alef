@@ -83,19 +83,24 @@ struct ReviewSchedule: Codable, Equatable {
     let repetitions: Int
     let lapses: Int
     let lastReview: Attempt?
+    let strength: Double?
+    let updatedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case nextReviewAt, intervalDays, easeFactor, repetitions, lapses, lastReview
+        case nextReviewAt, intervalDays, easeFactor, repetitions, lapses, lastReview, strength, updatedAt
     }
 
     init(nextReviewAt: Int64, intervalDays: Int, easeFactor: Double = defaultEase,
-         repetitions: Int = 0, lapses: Int = 0, lastReview: Attempt? = nil) {
+         repetitions: Int = 0, lapses: Int = 0, lastReview: Attempt? = nil,
+         strength: Double? = nil, updatedAt: Date? = nil) {
         self.nextReviewAt = nextReviewAt
         self.intervalDays = intervalDays
         self.easeFactor = easeFactor
         self.repetitions = repetitions
         self.lapses = lapses
         self.lastReview = lastReview
+        self.strength = strength
+        self.updatedAt = updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -108,6 +113,8 @@ struct ReviewSchedule: Codable, Equatable {
         self.repetitions = try container.decodeIfPresent(Int.self, forKey: .repetitions) ?? (intervalDays >= 3 ? 1 : 0)
         self.lapses = try container.decodeIfPresent(Int.self, forKey: .lapses) ?? 0
         self.lastReview = try container.decodeIfPresent(Attempt.self, forKey: .lastReview)
+        self.strength = try container.decodeIfPresent(Double.self, forKey: .strength)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
     }
 
     var reviewDate: Date { Date(timeIntervalSince1970: Double(nextReviewAt) / 1_000) }
@@ -129,8 +136,39 @@ struct ReviewSchedule: Codable, Equatable {
     var intervalLabel: String { "\(intervalDays) 天" }
 
     var isValid: Bool {
-        nextReviewAt >= 0 && intervalDays >= 0 && easeFactor.isFinite
-            && (1.0...5.0).contains(easeFactor) && repetitions >= 0 && lapses >= 0
+        let validStrength = strength.map { $0.isFinite && (0...100).contains($0) } ?? true
+        return nextReviewAt >= 0 && intervalDays >= 0 && easeFactor.isFinite
+            && (1.0...5.0).contains(easeFactor) && repetitions >= 0 && lapses >= 0 && validStrength
+    }
+
+    func resolvedStrength(mastery: Mastery = .learning) -> Double {
+        if let strength, strength.isFinite {
+            return min(100, max(0, strength))
+        }
+        if mastery == .unlearned && repetitions == 0 { return 0 }
+        if mastery == .mastered && repetitions == 0 { return 85 }
+        return min(100, Double(25 + repetitions * 25))
+    }
+
+    func proficiency(at now: Date = .now, mastery: Mastery = .learning) -> Int {
+        let base = resolvedStrength(mastery: mastery)
+        guard base > 0 else { return 0 }
+        let reference = updatedAt ?? lastReview?.date
+            ?? reviewDate.addingTimeInterval(-Double(max(1, intervalDays)) * 86_400)
+        let elapsedDays = max(0, now.timeIntervalSince(reference) / 86_400)
+        let stabilityDays = Double(max(1, intervalDays))
+        let graceDays = stabilityDays * 0.5
+        if elapsedDays <= graceDays {
+            return Int(round(base))
+        }
+        let overdue = elapsedDays - graceDays
+        let retention = exp(-0.35 * (overdue / stabilityDays))
+        return max(10, min(100, Int(round(base * retention))))
+    }
+
+    func isDecayed(at now: Date = .now, mastery: Mastery = .learning) -> Bool {
+        let base = Int(round(resolvedStrength(mastery: mastery)))
+        return base > 0 && proficiency(at: now, mastery: mastery) < base
     }
 
     static func next(from current: ReviewSchedule?, grade: ReviewGrade, on date: Date,
@@ -139,30 +177,34 @@ struct ReviewSchedule: Codable, Equatable {
         let reps = max(0, current?.repetitions ?? 0)
         let lapses = max(0, current?.lapses ?? 0)
         let prevInterval = max(1, current?.intervalDays ?? 1)
+        let currentStrength = current.map { Double($0.proficiency(at: date)) } ?? 0
 
-        let outcome: (interval: Int, newEase: Double, newReps: Int, newLapses: Int)
+        let outcome: (interval: Int, newEase: Double, newReps: Int, newLapses: Int, strengthDelta: Double)
         switch grade {
         case .again:
-            outcome = (1, max(minEase, ease - 0.2), 0, lapses + 1)
+            outcome = (1, max(minEase, ease - 0.2), 0, lapses + 1, -25)
         case .hard:
             let interval = reps == 0
                 ? 1
                 : min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * 1.2))))
-            outcome = (interval, max(minEase, ease - 0.15), reps + 1, lapses)
+            outcome = (interval, max(minEase, ease - 0.15), reps + 1, lapses, 15)
         case .good:
             let interval: Int = switch reps {
             case 0: 3
             case 1: 7
             default: min(maxIntervalDays, max(prevInterval + 1, Int(round(Double(prevInterval) * ease))))
             }
-            outcome = (interval, ease, reps + 1, lapses)
+            outcome = (interval, ease, reps + 1, lapses, 25)
         case .easy:
             let interval = reps == 0
                 ? 5
                 : min(maxIntervalDays, max(prevInterval + 2, Int(round(Double(prevInterval) * ease * 1.3))))
-            outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses)
+            outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses, 35)
         }
 
+        let newStrength = grade == .again
+            ? max(10, currentStrength + outcome.strengthDelta)
+            : min(100, max(10, currentStrength + outcome.strengthDelta))
         let nextDate = calendar.date(byAdding: .day, value: outcome.interval, to: date) ?? date
         return ReviewSchedule(
             nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
@@ -170,7 +212,9 @@ struct ReviewSchedule: Codable, Equatable {
             easeFactor: outcome.newEase,
             repetitions: outcome.newReps,
             lapses: outcome.newLapses,
-            lastReview: recordsReview ? Attempt(date: date, grade: grade) : current?.lastReview
+            lastReview: recordsReview ? Attempt(date: date, grade: grade) : current?.lastReview,
+            strength: newStrength,
+            updatedAt: date
         )
     }
 
@@ -180,6 +224,7 @@ struct ReviewSchedule: Codable, Equatable {
         case .unlearned:
             return nil
         case .learning:
+            let currentStrength = existing.map { Double($0.proficiency(at: date, mastery: .learning)) } ?? 0
             let nextDate = calendar.date(byAdding: .day, value: 1, to: date) ?? date
             return ReviewSchedule(
                 nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
@@ -187,11 +232,22 @@ struct ReviewSchedule: Codable, Equatable {
                 easeFactor: existing?.easeFactor ?? defaultEase,
                 repetitions: 0,
                 lapses: existing?.lapses ?? 0,
-                lastReview: existing?.lastReview
+                lastReview: existing?.lastReview,
+                strength: max(35, currentStrength),
+                updatedAt: date
             )
         case .mastered:
             if let existing, !existing.isDue(at: date), existing.repetitions >= 1 {
-                return existing
+                return ReviewSchedule(
+                    nextReviewAt: existing.nextReviewAt,
+                    intervalDays: existing.intervalDays,
+                    easeFactor: existing.easeFactor,
+                    repetitions: existing.repetitions,
+                    lapses: existing.lapses,
+                    lastReview: existing.lastReview,
+                    strength: 100,
+                    updatedAt: date
+                )
             }
             let nextDate = calendar.date(byAdding: .day, value: 3, to: date) ?? date
             return ReviewSchedule(
@@ -200,7 +256,9 @@ struct ReviewSchedule: Codable, Equatable {
                 easeFactor: existing?.easeFactor ?? defaultEase,
                 repetitions: 1,
                 lapses: existing?.lapses ?? 0,
-                lastReview: existing?.lastReview
+                lastReview: existing?.lastReview,
+                strength: 100,
+                updatedAt: date
             )
         }
     }
@@ -353,6 +411,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     var completedCount: Int { groups.filter(\.isComplete).count }
     var nextGroup: DailyVocabularyGroup? { groups.first { !$0.isComplete } }
     var hasStarted: Bool { groups.contains(where: \.hasStarted) }
+    var answerCombo: Int { groups.flatMap(\.answers).reversed().prefix(while: \.correct).count }
 
     static func dayKey(for date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
@@ -365,9 +424,20 @@ struct DailyVocabularyPlan: Codable, Equatable {
         let today = Self.dayKey(for: date)
         let available = Set(words.map(\.id))
         let valid = groups.filter { $0.wordIds.allSatisfy(available.contains) }
-        if day == today, valid.count == groups.count { return self }
+        let isEligibleUnstarted: (DailyVocabularyGroup) -> Bool = { group in
+            group.wordIds.allSatisfy { mastery[$0] != .mastered && schedule[$0] == nil }
+        }
+        if day == today, valid.count == groups.count,
+           valid.allSatisfy({ $0.hasStarted || isEligibleUnstarted($0) }) {
+            return self
+        }
 
-        var assignments = valid.filter { day == today || ($0.hasStarted && !$0.isComplete) }
+        var assignments = valid.filter { group in
+            if day == today {
+                return group.hasStarted || isEligibleUnstarted(group)
+            }
+            return group.hasStarted && !group.isComplete
+        }
         let assigned = Set(assignments.flatMap(\.wordIds))
         let newIds = words.filter { !assigned.contains($0.id) && mastery[$0.id] != .mastered && schedule[$0.id] == nil }.map(\.id)
         for offset in stride(from: 0, to: newIds.count, by: Self.groupSize) {
@@ -664,6 +734,30 @@ struct StudyReviewBatch: Codable, Hashable {
         completeReview(id, grade: grade, mistakeKind: mistakeKind, isRetry: isRetry, date: date)
     }
 
+    func wordProficiency(_ id: String, at date: Date = .now) -> Int {
+        let mastery = wordMastery[id] ?? .unlearned
+        if let existing = schedule[id] {
+            return existing.proficiency(at: date, mastery: mastery)
+        }
+        switch mastery {
+        case .unlearned: return 0
+        case .learning: return 35
+        case .mastered: return 100
+        }
+    }
+
+    func letterProficiency(_ id: String, at date: Date = .now) -> Int {
+        let mastery = letterMastery[id] ?? .unlearned
+        if let existing = letterSchedule[id] {
+            return existing.proficiency(at: date, mastery: mastery)
+        }
+        switch mastery {
+        case .unlearned: return 0
+        case .learning: return 35
+        case .mastered: return 100
+        }
+    }
+
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
         dailyVocabulary.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
     }
@@ -717,7 +811,7 @@ struct StudyReviewBatch: Codable, Hashable {
         saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
                    base: schedule[word.id], grade: attempt.correct ? .good : .again,
                    recordStats: true, date: date, dailyPlan: plan, mistakeKind: .spelling,
-                   answerCombo: plan.groups[index].answerCombo)
+                   answerCombo: plan.answerCombo)
         return attempt
     }
 
@@ -749,7 +843,7 @@ struct StudyReviewBatch: Codable, Hashable {
         }
         var values: [String: Mastery] = read(masteryKey, default: [:])
         var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
-        values[id] = grade.mastery
+        values[id] = dailyPlan != nil ? .learning : grade.mastery
         dates[id] = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
         var stats = statistics
         if recordStats { stats.record(on: date) }

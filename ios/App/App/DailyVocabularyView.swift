@@ -63,8 +63,9 @@ private struct DailyVocabularyView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var activeId: String?
-    @State private var revealed = false
     @State private var spelling = ""
+    @State private var retryingMistake = false
+    @State private var retryMatched = false
     @State private var celebration: StudyAnswerCelebration?
     @State private var reviewingGroup: DailyVocabularyGroup?
 
@@ -153,15 +154,49 @@ private struct DailyVocabularyView: View {
 
     @ViewBuilder private func actionBar(group: DailyVocabularyGroup?, day: String) -> some View {
         if let group, !group.isComplete, let word = currentWord(group) {
+            let layout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 8))
             StudyActionBar {
                 if group.studied < group.wordIds.count {
-                    groupAction(group, word: word, day: day)
+                    if group.studied > 0 {
+                        layout {
+                            reviewWordsButton(group)
+                            groupAction(group, word: word, day: day)
+                        }
+                    } else {
+                        groupAction(group, word: word, day: day)
+                    }
+                } else if group.feedbackPending {
+                    let answer = group.answers.last
+                    if let answer, !answer.correct, !retryingMistake {
+                        layout {
+                            Button {
+                                audio.stop()
+                                retryingMistake = true
+                                retryMatched = false
+                                spelling = ""
+                            } label: {
+                                Label("再拼一次", systemImage: "arrow.counterclockwise")
+                            }
+                            .buttonStyle(StudyButtonStyle())
+                            groupAction(group, word: word, day: day)
+                        }
+                    } else if retryingMistake && !retryMatched {
+                        layout {
+                            PronunciationButton(hebrew: word.hebrew, title: "听发音")
+                            primaryButton("核对订正", symbol: "checkmark") { checkMistakeRetry(word: word) }
+                                .disabled(spelling.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    } else {
+                        layout {
+                            reviewWordsButton(group)
+                            groupAction(group, word: word, day: day)
+                        }
+                    }
                 } else {
-                    let layout = typeSize.isAccessibilitySize
-                        ? AnyLayout(VStackLayout(spacing: 8))
-                        : AnyLayout(HStackLayout(spacing: 8))
                     layout {
-                        reviewWordsButton(group)
+                        PronunciationButton(hebrew: word.hebrew, title: "听发音")
                         groupAction(group, word: word, day: day)
                     }
                 }
@@ -275,25 +310,36 @@ private struct DailyVocabularyView: View {
         let index = group.answers.count - (group.feedbackPending ? 1 : 0)
         let title = "拼写 · 第 \(index + 1) / \(total) 词"
         let answer = group.feedbackPending ? group.answers.last : nil
-        let input = Binding<String>(get: { answer?.input ?? spelling }, set: { spelling = $0 })
+        let isRetrying = retryingMistake && answer?.correct == false
+        let input = Binding<String>(get: { isRetrying ? spelling : (answer?.input ?? spelling) }, set: { spelling = $0 })
 
         meter(title, value: group.answers.count, total: total, label: "拼写进度")
         StudyCard {
-            StudySectionTitle("写出「\(word.meaningZh)」")
+            StudySectionTitle(isRetrying ? "订正拼写「\(word.meaningZh)」" : "写出「\(word.meaningZh)」")
             Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-            Text("可输入带点写法或无点全拼").font(.caption).foregroundStyle(progress.theme.mutedInk)
+            Text("屏内键盘输入无点全拼即可，系统键盘也支持带点写法").font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
-        WordSpellingInput(content: content, wordId: word.id, spelling: input, submitted: answer != nil) {
-            submit(group, word: word, day: day)
+        WordSpellingInput(content: content, wordId: word.id, spelling: input,
+                          submitted: isRetrying ? retryMatched : answer != nil) {
+            if isRetrying {
+                checkMistakeRetry(word: word)
+            } else {
+                submit(group, word: word, day: day)
+            }
         }
-        if let answer {
+        if isRetrying && retryMatched {
+            StudyNotice(title: "订正成功，印象更牢了", symbol: "checkmark.circle.fill",
+                        note: "\(word.hebrew) · \(word.hebrewUnpointed)")
+                .id(ScrollTarget.feedback)
+        } else if let answer, !isRetrying {
             let solution = "\(word.hebrew) · \(word.hebrewUnpointed)"
+            let proficiency = progress.wordProficiency(word.id)
             VStack(alignment: .leading, spacing: 8) {
                 StudyQuizFeedback(correct: answer.correct, solution: solution, response: answer.input,
-                                  combo: group.answerCombo)
+                                  combo: plan.answerCombo)
                 if let schedule = progress.schedule[word.id] {
-                    StudyNotice(title: "已安排下次复习", symbol: "calendar.badge.checkmark",
-                                note: schedule.displayDate)
+                    StudyNotice(title: "记忆熟练度 \(proficiency)%", symbol: "brain.head.profile",
+                                note: "下次复习 · \(schedule.displayDate)（间隔 \(schedule.intervalLabel)）")
                 }
                 PronunciationButton(hebrew: word.hebrew, title: "听正确发音")
             }
@@ -306,11 +352,35 @@ private struct DailyVocabularyView: View {
             VStack(spacing: 10) {
                 HebrewText(text: word.hebrew, size: 52, style: .largeTitle)
                 PronunciationButton(hebrew: word.hebrew, title: "听发音")
-                if revealed {
-                    Text(word.meaningZh).font(.title3.bold())
-                    Text(word.transliteration).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                } else {
-                    Text("先回想词义，再翻看答案。").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                Text(word.meaningZh)
+                    .font(.title3.bold())
+                HStack(spacing: 6) {
+                    Text("\(word.transliteration) · \(word.ipa)")
+                        .font(.subheadline)
+                        .foregroundStyle(progress.theme.mutedInk)
+                    if !word.partOfSpeech.isEmpty {
+                        Text(word.partOfSpeech)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(progress.theme.accent.opacity(0.12), in: Capsule())
+                    }
+                }
+                if !word.note.isEmpty {
+                    Text(word.note)
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .padding(.top, 2)
+                }
+                if let sentence = word.sentence {
+                    Divider()
+                    VStack(spacing: 4) {
+                        HebrewText(text: sentence.hebrew, size: 22)
+                        Text(sentence.meaningZh)
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
                 }
             }
             .padding(.vertical, 12)
@@ -356,7 +426,7 @@ private struct DailyVocabularyView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(group.isComplete ? "返回结果" : "继续拼写") { reviewingGroup = nil }
+                    Button(group.isComplete ? "返回结果" : "继续学习") { reviewingGroup = nil }
                 }
             }
         }
@@ -366,12 +436,8 @@ private struct DailyVocabularyView: View {
     @ViewBuilder private func groupAction(_ group: DailyVocabularyGroup, word: StudyWord, day: String) -> some View {
         let total = group.wordIds.count
         if group.studied < total {
-            if revealed {
-                primaryButton(group.studied + 1 == total ? "开始本组拼写" : "下一词", symbol: "arrow.right") {
-                    advance(group, day: day)
-                }
-            } else {
-                primaryButton("显示释义", symbol: "eye") { revealed = true }
+            primaryButton(group.studied + 1 == total ? "开始本组拼写" : "下一词", symbol: "arrow.right") {
+                advance(group, day: day)
             }
         } else if group.feedbackPending {
             primaryButton(group.answers.count == total ? "查看本组结果" : "下一题", symbol: "arrow.right") {
@@ -416,7 +482,8 @@ private struct DailyVocabularyView: View {
         audio.stop()
         activeId = id
         celebration = nil
-        revealed = false
+        retryingMistake = false
+        retryMatched = false
         spelling = ""
     }
 
@@ -424,13 +491,27 @@ private struct DailyVocabularyView: View {
         guard progress.advanceDailyVocabulary(group, day: day) else { return }
         audio.stop()
         celebration = nil
-        revealed = false
+        retryingMistake = false
+        retryMatched = false
         spelling = ""
     }
 
     private func submit(_ group: DailyVocabularyGroup, word: StudyWord, day: String) {
         guard let answer = progress.answerDailyVocabulary(group, day: day, word: word, input: spelling) else { return }
-        celebration = answer.correct ? StudyAnswerCelebration(combo: group.answerCombo + 1) : nil
+        retryingMistake = false
+        retryMatched = false
+        celebration = answer.correct ? StudyAnswerCelebration(combo: progress.dailyVocabulary.answerCombo) : nil
         audio.playFeedback(answer.correct ? .correct : .wrong)
+    }
+
+    private func checkMistakeRetry(word: StudyWord) {
+        let trimmed = spelling.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if word.acceptsSpelling(trimmed) {
+            retryMatched = true
+            audio.playFeedback(.correct)
+        } else {
+            audio.playFeedback(.wrong)
+        }
     }
 }

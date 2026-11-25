@@ -1197,6 +1197,90 @@ final class AlefCoreTests: XCTestCase {
         gregorianUtc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
 
+    func testDailyVocabularyRefreshesUnstartedGroupWhenExternallyMastered() throws {
+        let words = (1...12).map { makeWord(id: "w\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        progress.prepareDailyVocabulary(words: words, date: today)
+
+        let initial = progress.dailyVocabulary
+        XCTAssertEqual(initial.groups.count, 2)
+        XCTAssertEqual(initial.groups[0].wordIds, ["w1", "w2", "w3", "w4", "w5"])
+
+        // Externally master w1 before starting today's plan -> unstarted group refreshes cleanly
+        progress.setWord("w1", mastery: .mastered, date: today)
+        let refreshed = progress.dailyVocabularyPlan(words: words, date: today)
+        XCTAssertFalse(refreshed.groups.flatMap(\.wordIds).contains("w1"))
+        XCTAssertEqual(refreshed.groups.count, 2)
+        XCTAssertTrue(refreshed.isValid)
+    }
+
+    func testDailyVocabularyInitialSpellingSetsLearningAndCrossGroupCombo() throws {
+        let words = (1...10).map { makeWord(id: "w\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
+        let today = makeDate(year: 2026, month: 11, day: 1)
+        let day = DailyVocabularyPlan.dayKey(for: today)
+        progress.prepareDailyVocabulary(words: words, date: today)
+
+        // Complete group 0 (5/5 correct)
+        for _ in 0..<5 {
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+        for i in 0..<5 {
+            let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+            XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: words[i], input: "שלום", date: today)?.correct, true)
+            XCTAssertEqual(progress.wordMastery[words[i].id], .learning)
+            XCTAssertEqual(progress.wordProficiency(words[i].id, at: today), 25)
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+
+        // Start group 1 and answer word 5 correctly -> cross-group combo reaches 6
+        for _ in 0..<5 {
+            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        }
+        let group1 = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertEqual(progress.answerDailyVocabulary(group1, day: day, word: words[5], input: "שלום", date: today)?.correct, true)
+        XCTAssertEqual(progress.dailyVocabulary.answerCombo, 6)
+        XCTAssertEqual(progress.achievementProgress.bestAnswerCombo, 6)
+    }
+
+    func testWordSpellingCanonicalUnicodeNormalization() {
+        // Reordered Dagesh (\u{05BC}) + Kamatz (\u{05B8}) should still match
+        let canonical = "ב\u{05BC}\u{05B8}"
+        let reordered = "ב\u{05B8}\u{05BC}"
+        let word = makeWord(id: "ba", hebrew: canonical, unpointed: "ב")
+        XCTAssertTrue(word.acceptsSpelling(canonical))
+        XCTAssertTrue(word.acceptsSpelling(reordered))
+    }
+
+    func testMemoryProficiencyIncreasesDecaysOverTimeAndDropsOnMistake() throws {
+        let day0 = makeDate(year: 2026, month: 11, day: 1)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 0)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 0)
+
+        // 4 normal good reviews climb 25% -> 50% -> 75% -> 100%
+        progress.completeReview("shalom", grade: .good, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 25)
+        progress.completeReview("shalom", grade: .good, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 50)
+        progress.completeReview("shalom", grade: .good, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 75)
+        progress.completeReview("shalom", grade: .good, date: day0)
+        XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 100)
+
+        // Even at 100%, long idle period causes proficiency to decay below 100%
+        let longLater = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 60, to: day0))
+        let decayed = progress.wordProficiency("shalom", at: longLater)
+        XCTAssertLessThan(decayed, 100)
+        XCTAssertGreaterThanOrEqual(decayed, 10)
+
+        // A spelling/review mistake drops proficiency further
+        progress.completeLetterReview("alef", grade: .easy, date: day0)
+        progress.completeLetterReview("alef", grade: .easy, date: day0)
+        let beforeMistake = progress.letterProficiency("alef", at: day0)
+        XCTAssertEqual(beforeMistake, 70)
+        progress.completeLetterReview("alef", grade: .again, date: day0)
+        XCTAssertEqual(progress.letterProficiency("alef", at: day0), 45)
+    }
+
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil) -> StudyWord {
         StudyWord(

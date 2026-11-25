@@ -509,6 +509,61 @@ struct StudyNotice: View {
     }
 }
 
+struct StudyProficiencyCard: View {
+    @Environment(StudyProgress.self) private var progress
+    let proficiency: Int
+    let schedule: ReviewSchedule?
+    let mastery: Mastery
+
+    private var tint: Color {
+        if proficiency >= 80 { return progress.theme.success }
+        if proficiency >= 40 { return progress.theme.learningAction }
+        if proficiency > 0 { return progress.theme.reminder }
+        return progress.theme.mutedInk
+    }
+
+    private var badgeSurface: Color {
+        if proficiency >= 80 { return progress.theme.successSurface }
+        if proficiency >= 40 { return progress.theme.learningAction.opacity(0.14) }
+        if proficiency > 0 { return progress.theme.reminderSurface }
+        return progress.theme.insetSurface
+    }
+
+    private var subtitle: String {
+        if let schedule {
+            if schedule.isDecayed(mastery: mastery) {
+                return "久未复习记忆有所回落 · 下次复习 \(schedule.displayDate)"
+            }
+            return "下次复习 · \(schedule.displayDate)（间隔 \(schedule.intervalLabel)）"
+        }
+        return proficiency == 0 ? "正常拼读或复习会自动累积熟练度" : "继续练习可提升至 100%"
+    }
+
+    var body: some View {
+        StudyCard(padding: 12, spacing: 8) {
+            HStack(spacing: 8) {
+                Label("记忆熟练度", systemImage: "brain.head.profile")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(progress.theme.ink)
+                Spacer(minLength: 4)
+                Text("\(proficiency)%")
+                    .font(.caption.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(badgeSurface, in: Capsule())
+            }
+            ProgressView(value: Double(proficiency), total: 100)
+                .tint(tint)
+                .accessibilityLabel("记忆熟练度 \(proficiency)%")
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(schedule?.isDue == true ? progress.theme.reminder : progress.theme.mutedInk)
+        }
+    }
+}
+
 struct StudyMemoryCurveEntry: View {
     enum Item {
         case letter, word
