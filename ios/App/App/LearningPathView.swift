@@ -218,13 +218,18 @@ private struct LearningStageDetailView: View {
         .studyDetail("第 \(stage.stage) 关")
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !stageWords.isEmpty {
+                let remaining = stageWords.filter { progress.effectiveWordMastery($0.id) != .mastered }.count
                 StudyActionBar {
                     NavigationLink {
-                        WordQuizView(content: content, words: stageWords, kind: .meaning)
+                        WordQuizView(content: content, words: stageWords, kind: .meaning, untilMastered: true)
                     } label: {
-                        Label("本阶单词测验", systemImage: "play.fill").frame(maxWidth: .infinity)
+                        Label(
+                            remaining > 0 ? "本阶单词测验（剩 \(remaining) 词）" : "本阶单词已全部记住",
+                            systemImage: remaining > 0 ? "play.fill" : "checkmark.seal.fill"
+                        )
+                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(StudyButtonStyle(prominent: true))
+                    .buttonStyle(StudyButtonStyle(prominent: remaining > 0))
                 }
             }
         }

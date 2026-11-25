@@ -1064,8 +1064,12 @@ struct WordQuizView: View {
     let kind: WordQuizKind
     var reviewing = false
     var mistakePractice = false
+    var untilMastered = false
 
     private var usesQueue: Bool { reviewing || mistakePractice }
+    private var remainingMasteryWords: [StudyWord] {
+        words.filter { progress.effectiveWordMastery($0.id) != .mastered }
+    }
 
     @State private var target: StudyWord?
     @State private var options: [StudyWord] = []
@@ -1110,9 +1114,15 @@ struct WordQuizView: View {
                         feedback(target, correct: result).id("word-result")
                     }
                 } else if started {
-                    ContentUnavailableView(reviewing ? "没有到期的单词" : "没有可用的单词",
-                                           systemImage: reviewing ? "calendar.badge.checkmark" : "character.book.closed",
-                                           description: Text(reviewing ? "在词库标记掌握度后，这里会显示到期的单词。" : "可以返回练习中心选择其他题型。"))
+                    ContentUnavailableView(
+                        untilMastered ? "本阶单词已全部记住" : (reviewing ? "没有到期的单词" : "没有可用的单词"),
+                        systemImage: untilMastered ? "checkmark.seal.fill" : (reviewing ? "calendar.badge.checkmark" : "character.book.closed"),
+                        description: Text(
+                            untilMastered
+                                ? "本阶全部 \(words.count) 个单词均已掌握，可返回查看学习进度。"
+                                : (reviewing ? "在词库标记掌握度后，这里会显示到期的单词。" : "可以返回练习中心选择其他题型。")
+                        )
+                    )
                 }
             }
             .onChange(of: target?.id) { _, _ in scroll.scrollTo("word-question", anchor: .top) }
@@ -1120,7 +1130,7 @@ struct WordQuizView: View {
                 if value != nil { scroll.scrollTo("word-result", anchor: .bottom) }
             }
         }
-        .studyDetail(reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : "\(kind.title)练习"))
+        .studyDetail(reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : (untilMastered ? "本阶单词测验" : "\(kind.title)练习")))
         .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if !reviewing && answered > 0 && !showsSummary {
@@ -1148,7 +1158,7 @@ struct WordQuizView: View {
                 VStack(alignment: .leading, spacing: 5) { quizStatus }
             }
             Spacer(minLength: 0)
-            if !usesQueue && result == nil {
+            if !usesQueue && result == nil && (!untilMastered || remainingMasteryWords.count > 1) {
                 Button { next(play: true) } label: {
                     Image(systemName: "arrow.clockwise").frame(minWidth: 24)
                 }
@@ -1166,10 +1176,17 @@ struct WordQuizView: View {
                 .tint(progress.theme.accent)
                 .frame(minWidth: 38, maxWidth: 160)
                 .accessibilityLabel("复习进度")
+        } else if untilMastered {
+            let masteredCount = max(0, words.count - remainingMasteryWords.count)
+            Text("已牢记 \(masteredCount) / \(words.count)").font(.subheadline.weight(.semibold))
+            ProgressView(value: Double(masteredCount), total: Double(max(1, words.count)))
+                .tint(progress.theme.success)
+                .frame(minWidth: 38, maxWidth: 140)
+                .accessibilityLabel("本阶掌握进度")
         }
         Label("得分 \(correct) / \(answered)", systemImage: "star")
             .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.mutedInk)
-        if !usesQueue {
+        if !usesQueue && !untilMastered {
             Label("连击 \(answerRun.combo)", systemImage: "bolt.fill")
                 .font(.caption.weight(.semibold)).foregroundStyle(progress.theme.reminder)
         }
@@ -1212,6 +1229,9 @@ struct WordQuizView: View {
             if reviewing && !correct && requeuedThisTurn {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
+            if untilMastered && correct && progress.effectiveWordMastery(target.id) == .mastered {
+                StudyNotice(title: "已牢记，已移出本轮测试", symbol: "checkmark.seal.fill")
+            }
             if let schedule = progress.schedule[target.id] {
                 if reviewing && isRetryAnswer {
                     StudyNotice(title: "已记录本轮补练", symbol: "calendar.badge.checkmark",
@@ -1233,8 +1253,10 @@ struct WordQuizView: View {
         } else if target == nil {
             primaryButton("返回", symbol: "chevron.backward") { dismiss() }
         } else if result != nil {
-            let finishing = usesQueue && reviewIndex + 1 >= queue.count
-            primaryButton(finishing ? "查看本组结果" : "下一题", symbol: "arrow.right", learningAction: true) {
+            let finishing = (usesQueue && reviewIndex + 1 >= queue.count)
+                || (untilMastered && remainingMasteryWords.isEmpty)
+            primaryButton(finishing ? (untilMastered ? "查看本阶结果" : "查看本组结果") : "下一题",
+                          symbol: "arrow.right", learningAction: true) {
                 if finishing { showsSummary = true }
                 else {
                     if usesQueue { reviewIndex += 1 }
@@ -1252,9 +1274,18 @@ struct WordQuizView: View {
 
     private var summary: some View {
         let nextReview = queue.compactMap { progress.schedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
-        let title = reviewing ? "完成到期复习" : (mistakePractice ? "完成错题练习" : "完成练习")
-        return StudyQuizSummary(title: title, correct: correct, answered: answered,
-                                message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
+        let allMastered = untilMastered && remainingMasteryWords.isEmpty
+        let title = reviewing ? "完成到期复习" : (mistakePractice ? "完成错题练习" : (allMastered ? "本阶单词已全部记住" : "完成练习"))
+        let message: String? = if reviewing {
+            nextReview.map { "下次复习 · \($0.displayDate)" }
+        } else if allMastered {
+            "本阶 \(words.count) 个高频词均已牢记。"
+        } else if untilMastered {
+            "已牢记 \(max(0, words.count - remainingMasteryWords.count)) / \(words.count) 词，可随时继续巩固。"
+        } else {
+            nil
+        }
+        return StudyQuizSummary(title: title, correct: correct, answered: answered, message: message)
     }
 
     private func primaryButton(_ title: String, symbol: String, learningAction: Bool = false, action: @escaping () -> Void) -> some View {
@@ -1294,7 +1325,7 @@ struct WordQuizView: View {
 
     private func next(play: Bool) {
         answerRun.clearCelebration()
-        let source = usesQueue ? queue : words
+        let source = usesQueue ? queue : (untilMastered ? remainingMasteryWords : words)
         let pool = switch kind {
         case .spelling: usesQueue ? source : source.filter(\.canPracticeSpelling)
         case .listening: source.filter { content.audio[$0.hebrew] != nil }
