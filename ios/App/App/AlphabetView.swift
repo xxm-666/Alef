@@ -163,30 +163,23 @@ struct AlphabetView: View {
     }
 
     private func letterTile(_ letter: StudyLetter, options: [String: Bool], mastery: Mastery, isFocused: Bool) -> some View {
-        StudyCard(highlighted: isFocused, padding: 0) {
+        let detailed = LetterTileContent.isDetailed(options)
+        return StudyCard(highlighted: isFocused, padding: 0, spacing: 0) {
             NavigationLink {
                 LetterStudyView(letter: letter, content: content)
             } label: {
-                VStack(spacing: 6) {
-                    LetterTileContent(letter: letter, options: options)
-                    if options["showMastery"] == true && !quickActions {
-                        Image(systemName: mastery.symbol)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(masteryColor(mastery))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(masteryBadgeSurface(mastery), in: Capsule())
-                            .accessibilityLabel(mastery.title)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: 74)
-                .padding(7)
-                .contentShape(Rectangle())
+                LetterTileContent(letter: letter, options: options, mastery: quickActions ? nil : mastery)
+                    .frame(maxWidth: .infinity, minHeight: detailed ? 148 : 78, maxHeight: .infinity, alignment: .top)
+                    .padding(detailed ? 10 : 7)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityHint("打开字母详情")
             if quickActions {
+                Rectangle()
+                    .fill(progress.theme.outline.opacity(0.6))
+                    .frame(height: 1)
                 HStack(spacing: 0) {
                     PronunciationButton(hebrew: letter.nameHebrew, iconOnly: true,
                                         title: "朗读\(letter.nameChinese)")
@@ -198,20 +191,28 @@ struct AlphabetView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: mastery.symbol)
-                            .foregroundStyle(masteryColor(mastery))
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                        HStack(spacing: 4) {
+                            Image(systemName: mastery.symbol)
+                            if detailed {
+                                Text(mastery.title)
+                                    .font(.caption2.weight(.bold))
+                            }
+                        }
+                        .foregroundStyle(masteryColor(mastery))
+                        .padding(.horizontal, detailed ? 8 : 0)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityLabel("\(letter.nameChinese)的掌握度")
                     .accessibilityValue(mastery.title)
                 }
+                .padding(.horizontal, 4)
             }
         }
         .overlay {
             if isFocused {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(progress.theme.accent.opacity(0.65), lineWidth: 1.5)
+                    .strokeBorder(progress.theme.accent.opacity(0.72), lineWidth: 1.5)
                     .allowsHitTesting(false)
             }
         }
@@ -226,14 +227,6 @@ struct AlphabetView: View {
         }
     }
 
-    private func masteryBadgeSurface(_ mastery: Mastery) -> Color {
-        switch mastery {
-        case .mastered: progress.theme.successSurface
-        case .learning: progress.theme.highlightedSurface
-        case .unlearned: progress.theme.insetSurface
-        }
-    }
-
 }
 
 enum LetterGridLayout {
@@ -243,7 +236,7 @@ enum LetterGridLayout {
     static func columns(options: [String: Bool], typeSize: DynamicTypeSize, quickActions: Bool = false) -> [GridItem] {
         if typeSize.isAccessibilitySize { return [GridItem(.flexible(), alignment: .top)] }
         let minimum: CGFloat
-        if LetterTileContent.isDetailed(options) { minimum = typeSize >= .xxLarge ? 180 : 130 }
+        if LetterTileContent.isDetailed(options) { minimum = typeSize >= .xxLarge ? 185 : 150 }
         else if quickActions || typeSize >= .xxLarge { minimum = 102 }
         else { minimum = 76 }
         return [GridItem(.adaptive(minimum: minimum), spacing: spacing, alignment: .top)]
@@ -253,104 +246,409 @@ enum LetterGridLayout {
 struct LetterTileContent: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric private var glyphHeight: CGFloat = 37
+    @ScaledMetric private var glyphHeight: CGFloat = 38
     let letter: StudyLetter
     let options: [String: Bool]
+    var mastery: Mastery? = nil
 
     static func isDetailed(_ options: [String: Bool]) -> Bool {
-        options["showBiblicalDiff"] == true || options["showCategoryBadges"] == true
+        let extraCount = ["showChineseName", "showEnglishName", "showHebrewName",
+                          "showModernSound", "showTransliteration", "showGematria"]
+            .filter { options[$0] == true }.count
+        return options["showBiblicalDiff"] == true
+            || options["showCategoryBadges"] == true
+            || options["showBegadkefat"] == true
             || (options["showBlock"] == true && options["showCursive"] == true)
+            || extraCount >= 3
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            if options["showBlock"] == true || options["showCursive"] == true {
-                let showBoth = options["showBlock"] == true && options["showCursive"] == true
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if options["showBlock"] == true { glyph(cursive: false, labeled: showBoth) }
-                    if options["showCursive"] == true { glyph(cursive: true, labeled: showBoth) }
-                    if isCompact, options["showSofit"] == true, let sofit = letter.sofit {
-                        Group {
-                            if options["showBlock"] == true {
-                                HebrewText(text: sofit, size: 17)
-                            } else {
-                                StudyCursiveLetter(letter: letter, finalForm: true, size: 17)
-                            }
-                        }
-                        .foregroundStyle(progress.theme.mutedInk)
-                        .accessibilityLabel("词尾形 \(sofit)")
-                    }
-                }
-                .frame(minHeight: glyphHeight)
-            }
-            if options["showChineseName"] == true { cardLine(Text(letter.nameChinese).font(.subheadline.weight(.semibold))) }
-            if options["showEnglishName"] == true { cardLine(Text(isCompact ? letter.studyName : letter.nameEnglish).font(.caption).foregroundColor(.secondary)) }
-            if options["showHebrewName"] == true {
-                cardLine(Text(letter.nameHebrew).font(.caption))
-            }
-            if options["showModernSound"] == true || options["showTransliteration"] == true {
-                let sounds = [options["showModernSound"] == true ? letter.modernIpa : nil,
-                              options["showTransliteration"] == true ? letter.transliteration : nil].compactMap { $0 }
-                cardLine(Text(sounds.joined(separator: " · ")).font(.caption2).foregroundColor(.secondary), lines: 2)
-            }
-            if options["showBiblicalDiff"] == true {
-                cardLine(Text(letter.biblicalIpa).font(.caption2).foregroundColor(.secondary), lines: 2)
-            }
-            if options["showSofit"] == true || options["showBegadkefat"] == true || options["showGematria"] == true {
-                let detail = annotations(letter, options: options)
-                if !detail.isEmpty {
-                    cardLine(Text(detail).font(.caption2).foregroundColor(.secondary), lines: 2)
-                }
-            }
-            if options["showCategoryBadges"] == true {
-                let tags = [("sofit", "词尾变形"), ("begadkefat", "达盖什"), ("guttural", "喉音字母")]
-                    .filter { letter.categories.contains($0.0) }.map(\.1)
-                cardLine(Text(tags.isEmpty ? " " : tags.joined(separator: " · ")).font(.caption2), lines: 2)
-            }
+        if isCompact {
+            compactBody
+                .foregroundStyle(progress.theme.ink)
+        } else {
+            detailedBody
+                .foregroundStyle(progress.theme.ink)
         }
-        .foregroundStyle(.primary)
     }
 
     private var isCompact: Bool { !Self.isDetailed(options) }
 
-    private func glyph(cursive: Bool, labeled: Bool) -> some View {
-        VStack(spacing: 2) {
-            if cursive {
-                StudyCursiveLetter(letter: letter, size: 30)
-            } else {
-                HebrewText(text: letter.hebrew, size: 35)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
+    private var showMasteryBadge: Bool {
+        options["showMastery"] == true && mastery != nil
+    }
+
+    private var showCornerBar: Bool {
+        options["showGematria"] == true || showMasteryBadge
+    }
+
+    // MARK: - Compact 4-Column Tile
+
+    private var compactBody: some View {
+        VStack(spacing: 4) {
+            if showCornerBar {
+                HStack(spacing: 4) {
+                    if options["showGematria"] == true {
+                        gematriaBadge(compact: true)
+                    }
+                    Spacer(minLength: 0)
+                    if showMasteryBadge, let mastery {
+                        Image(systemName: mastery.symbol)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(masteryForeground(mastery))
+                            .frame(width: 20, height: 20)
+                            .background(masteryBackground(mastery), in: Circle())
+                            .accessibilityLabel(mastery.title)
+                    }
+                }
             }
-            if labeled {
-                Text(cursive ? "手写" : "印刷")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            if options["showBlock"] == true || options["showCursive"] == true {
+                ZStack {
+                    if options["showBlock"] == true {
+                        HebrewText(text: letter.hebrew, size: 32)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    } else {
+                        StudyCursiveLetter(letter: letter, size: 28, tint: progress.theme.accent)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: glyphHeight)
+                .overlay(alignment: .topTrailing) {
+                    if options["showSofit"] == true, let sofit = letter.sofit {
+                        Text(sofit)
+                            .font(.system(size: 13, weight: .semibold, design: .serif))
+                            .foregroundStyle(progress.theme.mutedInk)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            .accessibilityLabel("词尾形 \(sofit)")
+                    }
+                }
+            }
+            if options["showChineseName"] == true {
+                compactLine(Text(letter.nameChinese).font(.caption.weight(.bold)).foregroundStyle(progress.theme.ink))
+            }
+            if options["showEnglishName"] == true {
+                compactLine(Text(letter.studyName).font(.caption2.weight(.semibold)).foregroundStyle(progress.theme.mutedInk))
+            }
+            if options["showHebrewName"] == true {
+                compactLine(Text(letter.nameHebrew).font(.caption2).foregroundStyle(progress.theme.mutedInk))
+            }
+            if options["showModernSound"] == true || options["showTransliteration"] == true {
+                let sounds = [options["showModernSound"] == true ? letter.modernIpa : nil,
+                              options["showTransliteration"] == true ? letter.transliteration : nil].compactMap { $0 }
+                if !sounds.isEmpty {
+                    compactLine(Text(sounds.joined(separator: " · ")).font(.caption2).monospaced().foregroundStyle(progress.theme.mutedInk))
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+    }
+
+    // MARK: - 4-Zone Editorial Specimen Card
+
+    private var detailedBody: some View {
+        let hasNames = options["showChineseName"] == true || options["showEnglishName"] == true || options["showHebrewName"] == true
+        let hasPhonetics = options["showModernSound"] == true || options["showTransliteration"] == true || options["showBiblicalDiff"] == true
+        let categories = [("begadkefat", "达盖什"), ("sofit", "词尾"), ("guttural", "喉音")]
+            .filter { letter.categories.contains($0.0) }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            if showCornerBar {
+                HStack(spacing: 6) {
+                    if options["showGematria"] == true {
+                        gematriaBadge(compact: false)
+                    }
+                    Spacer(minLength: 4)
+                    if showMasteryBadge, let mastery {
+                        HStack(spacing: 3) {
+                            Image(systemName: mastery.symbol)
+                            Text(mastery.title)
+                        }
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(masteryForeground(mastery))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(masteryBackground(mastery), in: Capsule())
+                        .lineLimit(1)
+                        .accessibilityLabel(mastery.title)
+                    }
+                }
+            }
+
+            if options["showBlock"] == true || options["showCursive"] == true || (options["showBegadkefat"] == true && letter.begadkefat != nil) {
+                glyphStage
+            }
+
+            if hasNames {
+                identityRow
+            }
+
+            if hasPhonetics {
+                phoneticsBlock
+            }
+
+            if options["showCategoryBadges"] == true, !categories.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(categories, id: \.0) { category in
+                        Text(category.1)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(categoryForeground(category.0))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(categoryBackground(category.0), in: Capsule())
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var glyphStage: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let showBoth = options["showBlock"] == true && options["showCursive"] == true
+
+        return VStack(spacing: 6) {
+            if options["showBlock"] == true || options["showCursive"] == true {
+                if showBoth {
+                    HStack(spacing: 0) {
+                        VStack(spacing: 2) {
+                            HebrewText(text: letter.hebrew, size: 32)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .frame(minHeight: glyphHeight)
+                            Text("印刷")
+                                .font(.caption2)
+                                .foregroundStyle(progress.theme.mutedInk)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        Rectangle()
+                            .fill(progress.theme.outline.opacity(0.8))
+                            .frame(width: 1, height: 34)
+
+                        VStack(spacing: 2) {
+                            StudyCursiveLetter(letter: letter, size: 26, tint: progress.theme.accent)
+                                .frame(minHeight: glyphHeight)
+                            Text("手写")
+                                .font(.caption2)
+                                .foregroundStyle(progress.theme.mutedInk)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .padding(.top, options["showSofit"] == true && letter.sofit != nil && !typeSize.isAccessibilitySize ? 6 : 0)
+                } else {
+                    Group {
+                        if options["showBlock"] == true {
+                            HebrewText(text: letter.hebrew, size: 36)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        } else {
+                            StudyCursiveLetter(letter: letter, size: 30, tint: progress.theme.accent)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: glyphHeight)
+                }
+            }
+
+            if options["showBegadkefat"] == true, let variants = letter.begadkefat {
+                Rectangle()
+                    .fill(progress.theme.outline.opacity(0.65))
+                    .frame(height: 1)
+                HStack(spacing: 8) {
+                    dageshChip(glyph: variants.withDagesh.glyph, role: "重")
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(progress.theme.outline)
+                    dageshChip(glyph: variants.withoutDagesh.glyph, role: "轻")
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            if typeSize.isAccessibilitySize, options["showSofit"] == true, let sofit = letter.sofit {
+                sofitChip(sofit)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(progress.theme.insetSurface, in: shape)
+        .overlay {
+            shape.strokeBorder(progress.theme.outline.opacity(0.65), lineWidth: 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if !typeSize.isAccessibilitySize, options["showSofit"] == true, let sofit = letter.sofit {
+                sofitChip(sofit)
+                    .padding(5)
             }
         }
     }
 
-    @ViewBuilder private func cardLine(_ text: Text, lines: Int = 1) -> some View {
+    private func sofitChip(_ sofit: String) -> some View {
+        HStack(spacing: 3) {
+            Text("末")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(progress.theme.accent)
+            Text(sofit)
+                .font(.system(size: 13, weight: .bold, design: .serif))
+                .foregroundStyle(progress.theme.ink)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(progress.theme.outline.opacity(0.75), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("词尾形 \(sofit)")
+    }
+
+    private func dageshChip(glyph: String, role: String) -> some View {
+        HStack(spacing: 3) {
+            Text(glyph)
+                .font(.system(size: 14, weight: .bold, design: .serif))
+                .foregroundStyle(progress.theme.ink)
+            Text(role)
+                .font(.caption2)
+                .foregroundStyle(progress.theme.mutedInk)
+        }
+    }
+
+    private var identityRow: some View {
+        let englishLabel = options["showChineseName"] == true ? letter.studyName : letter.nameEnglish
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if options["showChineseName"] == true || options["showEnglishName"] == true {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    if options["showChineseName"] == true {
+                        Text(letter.nameChinese)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(progress.theme.ink)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    if options["showEnglishName"] == true {
+                        Text(englishLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                            .minimumScaleFactor(0.85)
+                    }
+                }
+            }
+            Spacer(minLength: 2)
+            if options["showHebrewName"] == true {
+                Text(letter.nameHebrew)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .environment(\.layoutDirection, .rightToLeft)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var phoneticsBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Rectangle()
+                .fill(progress.theme.outline.opacity(0.65))
+                .frame(height: 1)
+            if options["showModernSound"] == true || options["showTransliteration"] == true {
+                HStack(spacing: 4) {
+                    if options["showBiblicalDiff"] == true {
+                        Text("现代")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    if options["showModernSound"] == true {
+                        Text(letter.modernIpa)
+                            .font(.caption2.weight(.semibold))
+                            .monospaced()
+                            .foregroundStyle(progress.theme.ink)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 2)
+                    if options["showTransliteration"] == true {
+                        Text(letter.transliteration)
+                            .font(.caption2.weight(.bold))
+                            .monospaced()
+                            .foregroundStyle(progress.theme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(progress.theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            if options["showBiblicalDiff"] == true {
+                HStack(spacing: 4) {
+                    Text("古典")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(progress.theme.mutedInk)
+                    Text(letter.biblicalIpa)
+                        .font(.caption2)
+                        .monospaced()
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+        }
+    }
+
+    private func gematriaBadge(compact: Bool) -> some View {
+        Text("#\(letter.gematria)")
+            .font(.caption2.weight(.bold))
+            .monospaced()
+            .monospacedDigit()
+            .foregroundStyle(progress.theme.mutedInk)
+            .padding(.horizontal, compact ? 5 : 6)
+            .padding(.vertical, 2)
+            .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .accessibilityLabel("数值 \(letter.gematria)")
+    }
+
+    @ViewBuilder private func compactLine(_ text: Text) -> some View {
         if typeSize.isAccessibilitySize {
             text.fixedSize(horizontal: false, vertical: true)
         } else {
-            text.lineLimit(Self.isDetailed(options) ? max(2, lines) : lines, reservesSpace: true)
-                .minimumScaleFactor(0.82)
+            text.lineLimit(1).minimumScaleFactor(0.82)
         }
     }
 
-    private func annotations(_ letter: StudyLetter, options: [String: Bool]) -> String {
-        var details: [String] = []
-        if !isCompact, options["showSofit"] == true, let sofit = letter.sofit { details.append("末 \(sofit)") }
-        if options["showBegadkefat"] == true, let variants = letter.begadkefat {
-            details.append("\(variants.withDagesh.glyph)/\(variants.withoutDagesh.glyph)")
+    private func masteryForeground(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.success
+        case .learning: progress.theme.learningAction
+        case .unlearned: progress.theme.mutedInk
         }
-        if options["showGematria"] == true {
-            details.append(String(letter.gematria))
+    }
+
+    private func masteryBackground(_ mastery: Mastery) -> Color {
+        switch mastery {
+        case .mastered: progress.theme.successSurface
+        case .learning: progress.theme.learningAction.opacity(0.14)
+        case .unlearned: progress.theme.insetSurface
         }
-        return details.joined(separator: " · ")
+    }
+
+    private func categoryForeground(_ key: String) -> Color {
+        switch key {
+        case "begadkefat": progress.theme.accent
+        case "sofit": progress.theme.learningAction
+        default: progress.theme.reminder
+        }
+    }
+
+    private func categoryBackground(_ key: String) -> Color {
+        switch key {
+        case "begadkefat": progress.theme.accent.opacity(0.12)
+        case "sofit": progress.theme.learningAction.opacity(0.12)
+        default: progress.theme.reminderSurface
+        }
     }
 }
 
@@ -696,6 +994,7 @@ struct StudyCursiveLetter: View {
     let letter: StudyLetter
     var finalForm = false
     let size: CGFloat
+    var tint: Color? = nil
 
     var body: some View {
         let guide = letter.strokeGuide
@@ -706,7 +1005,7 @@ struct StudyCursiveLetter: View {
             let transform = CGAffineTransform(scaleX: unit, y: unit)
             let line = StrokeStyle(lineWidth: 5.5 * unit, lineCap: .round, lineJoin: .round)
             for stroke in strokes {
-                context.stroke(stroke.path.applying(transform), with: .color(progress.theme.ink), style: line)
+                context.stroke(stroke.path.applying(transform), with: .color(tint ?? progress.theme.ink), style: line)
             }
         }
         .frame(width: side, height: side)

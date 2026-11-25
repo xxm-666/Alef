@@ -816,12 +816,18 @@
   // =========================================================================
   // 6. MODULE 1 — ALPHABET + 13-OPTION DISPLAY + DETAIL + WRITING + SOFIT
   // =========================================================================
+  function isDetailedLetterCard(opts) {
+    const extraCount = ['showChineseName', 'showEnglishName', 'showHebrewName', 'showModernSound', 'showTransliteration', 'showGematria']
+      .filter(k => opts[k]).length;
+    return !!(opts.showBiblicalDiff || opts.showCategoryBadges || opts.showBegadkefat || (opts.showBlock && opts.showCursive) || extraCount >= 3);
+  }
+
   function renderAlphabetTab() {
     const mastered = LETTERS.filter(l => l.mastery === 'mastered').length;
     const pct = Math.round((mastered / 22) * 100);
     const focus = getLetter(state.activeLetterId);
     const opts = state.displayOpts;
-    const isDetailed = opts.showBiblicalDiff || opts.showCategoryBadges || (opts.showBlock && opts.showCursive);
+    const isDetailed = isDetailedLetterCard(opts);
     const list = LETTERS.filter(l => state.alphabetScope === 'all' || l.mastery !== 'mastered');
     const c = 2 * Math.PI * 21, off = c * (1 - mastered / 22);
 
@@ -890,33 +896,150 @@
     `;
   }
 
+  function renderCursiveSvg(l, size = 28) {
+    const paths = l.strokes?.cursive;
+    if (!paths || !paths.length) {
+      return `<span class="hebrew-cursive font-bold" style="font-size:${size}px; line-height:1;">${l.hebrew}</span>`;
+    }
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none" class="inline-block shrink-0" aria-hidden="true">${paths.map(d => `<path d="${d}" stroke="currentColor" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}</svg>`;
+  }
+
+  const CATEGORY_PILL_STYLES = {
+    begadkefat: { label: '达盖什', bg: 'rgba(15, 118, 130, 0.12)', color: 'var(--p-accent)' },
+    sofit: { label: '词尾', bg: 'rgba(99, 102, 241, 0.12)', color: 'var(--p-accent-2)' },
+    guttural: { label: '喉音', bg: 'var(--p-warn-bg)', color: 'var(--p-warn)' }
+  };
+
   function renderLetterTile(l, opts, isDetailed) {
     const b = masteryBadge(l.mastery);
     const focus = l.id === state.activeLetterId;
-    const tags = [['sofit', '词尾'], ['begadkefat', '达盖什'], ['guttural', '喉音']].filter(([k]) => l.categories.includes(k)).map(x => x[1]);
+    const focusStyle = focus
+      ? 'border: 1.5px solid var(--p-accent); background: color-mix(in srgb, var(--p-accent) 6%, var(--p-surface));'
+      : '';
+    const catKeys = ['begadkefat', 'sofit', 'guttural'].filter(k => l.categories.includes(k));
+    const showCornerBar = opts.showGematria || (opts.showMastery && !state.quickActions);
+
+    const quickFooter = state.quickActions ? `
+      <div class="flex items-center justify-between w-full pt-1.5 mt-1.5 border-t" style="border-color: var(--p-border);">
+        <button data-speak-letter="${l.id}" class="spring-tap w-7 h-7 rounded-full text-xs flex items-center justify-center" style="background: var(--p-inset); color: var(--p-accent);">🔊</button>
+        <button data-cycle-letter="${l.id}" class="spring-tap px-2 h-7 rounded-full text-[10.5px] font-bold flex items-center gap-1" style="background: ${b.bg}; color: ${b.color};">${b.icon} ${isDetailed ? b.label : ''}</button>
+      </div>
+    ` : '';
+
+    if (!isDetailed) {
+      const sounds = [opts.showModernSound ? l.ipa.split(' ')[0] : '', opts.showTransliteration ? l.translit : ''].filter(Boolean).join(' · ');
+      return `
+        <div class="alef-card h-full p-2 flex flex-col justify-between text-center" dir="ltr" style="${focusStyle}">
+          <div class="flex flex-col flex-1">
+            ${showCornerBar ? `
+              <div class="flex items-center justify-between gap-1 mb-1 min-h-[18px]">
+                ${opts.showGematria ? `<span class="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-semibold tabular-nums" style="background: var(--p-inset); color: var(--p-muted);">${l.gematria}</span>` : '<span></span>'}
+                ${(opts.showMastery && !state.quickActions) ? `<span class="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full text-[10px] font-bold" style="background: ${b.bg}; color: ${b.color};">${b.icon}</span>` : '<span></span>'}
+              </div>
+            ` : ''}
+            <button data-open-letter="${l.id}" class="spring-tap w-full flex-1 flex flex-col items-center justify-center gap-0.5 py-0.5">
+              ${(opts.showBlock || opts.showCursive) ? `
+                <div class="relative w-full flex items-center justify-center min-h-[38px]">
+                  ${opts.showBlock ? `<span class="hebrew-print text-[30px] font-bold leading-none">${l.hebrew}</span>` : renderCursiveSvg(l, 28)}
+                  ${(opts.showSofit && l.sofit) ? `<span class="absolute top-0 right-0 px-1 rounded text-[10px] hebrew-print font-semibold" style="background: var(--p-inset); color: var(--p-muted);">${l.sofit.glyph}</span>` : ''}
+                </div>
+              ` : ''}
+              ${opts.showChineseName ? `<span class="text-xs font-bold leading-tight">${l.nameZh}</span>` : ''}
+              ${opts.showEnglishName ? `<span class="text-[11px] font-semibold truncate max-w-full" style="color: var(--p-muted);">${l.nameEn}</span>` : ''}
+              ${opts.showHebrewName ? `<span class="hebrew-print text-xs" style="color: var(--p-muted);">${l.nameHe}</span>` : ''}
+              ${sounds ? `<span class="text-[10px] font-mono" style="color: var(--p-muted);">${sounds}</span>` : ''}
+              ${(opts.showBegadkefat && l.dagesh) ? `<span class="text-[10px] hebrew-print" style="color: var(--p-accent);">${l.dagesh.with} / ${l.dagesh.without}</span>` : ''}
+            </button>
+          </div>
+          ${quickFooter}
+        </div>
+      `;
+    }
+
+    const showNamesRow = opts.showChineseName || opts.showEnglishName || opts.showHebrewName;
+    const showPhonetics = opts.showModernSound || opts.showTransliteration || opts.showBiblicalDiff;
+    const hasBothGlyphs = opts.showBlock && opts.showCursive;
+
     return `
-      <div class="alef-card p-2 flex flex-col items-center justify-between text-center ${focus ? 'ring-2' : ''}" dir="ltr" style="${focus ? 'border-color: var(--p-accent);' : ''}">
-        <button data-open-letter="${l.id}" class="spring-tap w-full flex flex-col items-center gap-0.5 py-0.5">
-          <div class="flex items-baseline justify-center gap-1.5 min-h-[38px]">
-            ${opts.showBlock ? `<span class="hebrew-print text-[28px] font-bold">${l.hebrew}</span>` : ''}
-            ${opts.showCursive ? `<span class="hebrew-cursive text-[22px] opacity-80">${l.hebrew}</span>` : ''}
-            ${opts.showSofit && l.sofit ? `<span class="hebrew-print text-sm font-semibold" style="color: var(--p-muted);">${l.sofit.glyph}</span>` : ''}
-          </div>
-          ${opts.showChineseName ? `<span class="text-xs font-bold">${l.nameZh}</span>` : ''}
-          ${opts.showEnglishName ? `<span class="text-[11px] font-semibold truncate max-w-full" style="color: var(--p-muted);">${l.nameEn}</span>` : ''}
-          ${opts.showHebrewName ? `<span class="hebrew-print text-xs">${l.nameHe}</span>` : ''}
-          ${(opts.showModernSound || opts.showTransliteration) ? `<span class="text-[10px]" style="color: var(--p-muted);">${[opts.showModernSound ? l.ipa.split(' ')[0] : '', opts.showTransliteration ? l.translit : ''].filter(Boolean).join(' · ')}</span>` : ''}
-          ${opts.showBiblicalDiff ? `<span class="text-[10px]" style="color: var(--p-muted);">古 ${l.bibIpa}</span>` : ''}
-          ${(opts.showBegadkefat && l.dagesh) ? `<span class="text-[10px]">${l.dagesh.with}/${l.dagesh.without}</span>` : ''}
-          ${opts.showGematria ? `<span class="text-[10px] font-mono px-1 rounded bg-black/5">${l.gematria}</span>` : ''}
-          ${(opts.showCategoryBadges && tags.length) ? `<span class="text-[10px]" style="color: var(--p-accent);">${tags.join('·')}</span>` : ''}
+      <div class="alef-card h-full p-2.5 flex flex-col justify-between text-left" dir="ltr" style="${focusStyle}">
+        <button data-open-letter="${l.id}" class="spring-tap w-full flex-1 flex flex-col gap-2 text-left">
+          ${showCornerBar ? `
+            <div class="flex items-center justify-between gap-1 w-full">
+              ${opts.showGematria ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold tabular-nums" style="background: var(--p-inset); color: var(--p-muted);">#${l.gematria}</span>` : '<span></span>'}
+              ${(opts.showMastery && !state.quickActions) ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold" style="background: ${b.bg}; color: ${b.color};">${b.icon} ${b.label}</span>` : '<span></span>'}
+            </div>
+          ` : ''}
+
+          ${(opts.showBlock || opts.showCursive || (opts.showBegadkefat && l.dagesh)) ? `
+            <div class="relative w-full rounded-2xl px-2 pt-2.5 pb-2 border" style="background: var(--p-inset); border-color: var(--p-border);">
+              ${(opts.showSofit && l.sofit) ? `<span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold" style="background: var(--p-surface); color: var(--p-accent); border: 1px solid var(--p-border);">末 <span class="hebrew-print font-bold">${l.sofit.glyph}</span></span>` : ''}
+              ${(opts.showBlock || opts.showCursive) ? (hasBothGlyphs ? `
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 pt-0.5">
+                  <div class="flex flex-col items-center gap-0.5">
+                    <span class="hebrew-print text-[30px] font-bold leading-none h-[34px] flex items-center">${l.hebrew}</span>
+                    <span class="text-[9px] font-medium" style="color: var(--p-muted);">印刷</span>
+                  </div>
+                  <div class="w-px h-8 self-center" style="background: var(--p-border);"></div>
+                  <div class="flex flex-col items-center gap-0.5">
+                    <span class="h-[34px] flex items-center" style="color: var(--p-accent);">${renderCursiveSvg(l, 28)}</span>
+                    <span class="text-[9px] font-medium" style="color: var(--p-muted);">手写</span>
+                  </div>
+                </div>
+              ` : `
+                <div class="flex items-center justify-center h-[38px]">
+                  ${opts.showBlock ? `<span class="hebrew-print text-[34px] font-bold leading-none">${l.hebrew}</span>` : `<span style="color: var(--p-accent);">${renderCursiveSvg(l, 32)}</span>`}
+                </div>
+              `) : ''}
+              ${(opts.showBegadkefat && l.dagesh) ? `
+                <div class="mt-1.5 pt-1.5 border-t flex items-center justify-center gap-2 text-[10.5px]" style="border-color: var(--p-border);">
+                  <span class="inline-flex items-center gap-0.5"><span class="hebrew-print font-bold text-xs">${l.dagesh.with}</span><span style="color: var(--p-muted);">重</span></span>
+                  <span style="color: var(--p-border);">·</span>
+                  <span class="inline-flex items-center gap-0.5"><span class="hebrew-print font-bold text-xs">${l.dagesh.without}</span><span style="color: var(--p-muted);">轻</span></span>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+
+          ${showNamesRow ? `
+            <div class="flex items-baseline justify-between gap-1.5 w-full px-0.5">
+              <div class="flex items-baseline gap-1 min-w-0 truncate">
+                ${opts.showChineseName ? `<span class="text-[13.5px] font-extrabold leading-tight truncate">${l.nameZh}</span>` : ''}
+                ${opts.showEnglishName ? `<span class="text-[11px] font-semibold truncate" style="color: var(--p-muted);">${l.nameEn}</span>` : ''}
+              </div>
+              ${opts.showHebrewName ? `<span class="hebrew-print text-[13px] font-semibold shrink-0" style="color: var(--p-muted);">${l.nameHe}</span>` : ''}
+            </div>
+          ` : ''}
+
+          ${showPhonetics ? `
+            <div class="w-full pt-1.5 border-t space-y-1 text-[10.5px]" style="border-color: var(--p-border);">
+              ${(opts.showModernSound || opts.showTransliteration) ? `
+                <div class="flex items-center justify-between gap-1">
+                  <div class="flex items-center gap-1 min-w-0">
+                    ${opts.showBiblicalDiff ? `<span class="text-[9.5px] font-semibold shrink-0" style="color: var(--p-muted);">现代</span>` : ''}
+                    ${opts.showModernSound ? `<span class="font-mono font-semibold truncate">${l.ipa}</span>` : ''}
+                  </div>
+                  ${opts.showTransliteration ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-bold shrink-0" style="background: rgba(15, 118, 130, 0.12); color: var(--p-accent);">${l.translit}</span>` : ''}
+                </div>
+              ` : ''}
+              ${opts.showBiblicalDiff ? `
+                <div class="flex items-center gap-1" style="color: var(--p-muted);">
+                  <span class="text-[9.5px] font-semibold shrink-0">古典</span>
+                  <span class="font-mono text-[10px] truncate">${l.bibIpa}</span>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+
+          ${(opts.showCategoryBadges && catKeys.length) ? `
+            <div class="flex flex-wrap gap-1 pt-0.5">
+              ${catKeys.map(k => {
+                const st = CATEGORY_PILL_STYLES[k];
+                return `<span class="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold" style="background: ${st.bg}; color: ${st.color};">${st.label}</span>`;
+              }).join('')}
+            </div>
+          ` : ''}
         </button>
-        ${state.quickActions ? `
-          <div class="flex items-center justify-between w-full pt-1 mt-1 border-t" style="border-color: var(--p-border);">
-            <button data-speak-letter="${l.id}" class="spring-tap w-7 h-7 rounded-full text-xs" style="background: var(--p-inset); color: var(--p-accent);">🔊</button>
-            <button data-cycle-letter="${l.id}" class="spring-tap px-2 h-7 rounded-full text-[11px] font-bold" style="background: ${b.bg}; color: ${b.color};">${b.icon}</button>
-          </div>
-        ` : (opts.showMastery ? `<span class="mt-0.5 inline-flex px-1.5 py-0.2 rounded-full text-[10px] font-bold" style="background: ${b.bg}; color: ${b.color};">${b.icon}</span>` : '')}
+        ${quickFooter}
       </div>
     `;
   }
@@ -960,7 +1083,7 @@
               <button data-extra-preset="quiz" class="px-2 py-0.5 rounded-full text-[10px] font-semibold" style="background: var(--p-inset);">自测遮罩</button>
             </div>
           </div>
-          <div class="max-w-[180px] mx-auto">${renderLetterTile(previewLetter, o, true)}</div>
+          <div class="max-w-[200px] mx-auto">${renderLetterTile(previewLetter, o, isDetailedLetterCard(o))}</div>
         </div>
 
         <div class="alef-card p-3 divide-y" style="border-color: var(--p-border);">

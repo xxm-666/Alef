@@ -534,19 +534,20 @@ struct StudyLetterDisplayView: View {
                 if preset == "scholar" { draft = scholar }
             }))
             if let example = content.letters.first(where: { $0.id == "kaf" }) ?? content.letters.first {
+                let detailed = LetterTileContent.isDetailed(config)
                 StudySectionTitle("卡片预览")
-                StudyCard {
-                    HStack(spacing: 10) {
-                        Spacer(minLength: 0)
-                        LetterTileContent(letter: example, options: config)
-                        if config["showMastery"] == true {
-                            let level = progress.letterMastery[example.id] ?? .unlearned
-                            Label(level.title, systemImage: level.symbol)
-                                .font(.caption)
-                                .foregroundStyle(progress.theme.accent)
-                        }
-                        Spacer(minLength: 0)
+                HStack {
+                    Spacer(minLength: 0)
+                    StudyCard(highlighted: true, padding: detailed ? 10 : 8) {
+                        LetterTileContent(letter: example, options: config,
+                                          mastery: progress.letterMastery[example.id] ?? .unlearned)
                     }
+                    .frame(maxWidth: detailed ? 210 : 116)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(progress.theme.accent.opacity(0.72), lineWidth: 1.5)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
             StudyCard {
