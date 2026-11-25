@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct DailyVocabularyEntry: View {
     @Environment(StudyProgress.self) private var progress
@@ -63,6 +64,7 @@ private struct DailyVocabularyView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     @State private var activeId: String?
+    @State private var browsingIndex: Int?
     @State private var spelling = ""
     @State private var retryingMistake = false
     @State private var retryMatched = false
@@ -116,6 +118,9 @@ private struct DailyVocabularyView: View {
                 .onChange(of: group?.studied) { _, _ in
                     scroll.scrollTo(ScrollTarget.question, anchor: .top)
                 }
+                .onChange(of: browsingIndex) { _, _ in
+                    scroll.scrollTo(ScrollTarget.question, anchor: .top)
+                }
                 .onChange(of: group?.feedbackPending) { _, pending in
                     if pending == true {
                         scroll.scrollTo(ScrollTarget.feedback, anchor: .bottom)
@@ -159,12 +164,17 @@ private struct DailyVocabularyView: View {
                 : AnyLayout(HStackLayout(spacing: 8))
             StudyActionBar {
                 if group.studied < group.wordIds.count {
-                    if group.studied > 0 {
-                        layout {
-                            reviewWordsButton(group)
-                            groupAction(group, word: word, day: day)
+                    let displayedIndex = studyWordIndex(for: group)
+                    layout {
+                        Button {
+                            stepPrevious(group)
+                        } label: {
+                            Label("上一词", systemImage: "arrow.left")
+                                .frame(maxWidth: .infinity)
                         }
-                    } else {
+                        .buttonStyle(StudyButtonStyle())
+                        .disabled(displayedIndex == 0)
+
                         groupAction(group, word: word, day: day)
                     }
                 } else if group.feedbackPending {
@@ -338,7 +348,31 @@ private struct DailyVocabularyView: View {
         } else if let word = currentWord(group) {
             let total = group.wordIds.count
             if group.studied < total {
-                meter("认读 · 第 \(group.studied + 1) / \(total) 词", value: group.studied, total: total, label: "认读进度")
+                let displayedIndex = studyWordIndex(for: group)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("认读 · 第 \(displayedIndex + 1) / \(total) 词")
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                        Spacer(minLength: 4)
+                        Button {
+                            audio.stop()
+                            celebration = nil
+                            reviewingGroup = group
+                        } label: {
+                            Label("本组词表", systemImage: "book")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(progress.theme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("查看本组全部单词")
+                    }
+                    if total > 0 {
+                        ProgressView(value: Double(displayedIndex + 1), total: Double(total))
+                            .tint(progress.theme.accent)
+                            .accessibilityLabel("认读进度")
+                    }
+                }
                 wordCard(word)
             } else {
                 spellingContent(group, word: word, day: day)
@@ -493,8 +527,9 @@ private struct DailyVocabularyView: View {
     @ViewBuilder private func groupAction(_ group: DailyVocabularyGroup, word: StudyWord, day: String) -> some View {
         let total = group.wordIds.count
         if group.studied < total {
-            primaryButton(group.studied + 1 == total ? "开始本组拼写" : "下一词", symbol: "arrow.right") {
-                advance(group, day: day)
+            let displayedIndex = studyWordIndex(for: group)
+            primaryButton(displayedIndex + 1 == total ? "开始本组拼写" : "下一词", symbol: "arrow.right") {
+                stepNext(group, day: day)
             }
         } else if group.feedbackPending {
             primaryButton(group.answers.count == total ? "查看本组结果" : "下一题", symbol: "arrow.right") {
@@ -524,8 +559,42 @@ private struct DailyVocabularyView: View {
         .buttonStyle(StudyButtonStyle(learningAction: true))
     }
 
+    private func studyWordIndex(for group: DailyVocabularyGroup) -> Int {
+        guard !group.wordIds.isEmpty else { return 0 }
+        let maxIndex = min(group.studied, group.wordIds.count - 1)
+        let candidate = browsingIndex ?? group.studied
+        return min(max(0, candidate), maxIndex)
+    }
+
+    private func stepPrevious(_ group: DailyVocabularyGroup) {
+        let current = studyWordIndex(for: group)
+        guard current > 0 else { return }
+        audio.stop()
+        if progress.hapticsEnabled {
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+        browsingIndex = current - 1
+    }
+
+    private func stepNext(_ group: DailyVocabularyGroup, day: String) {
+        let current = studyWordIndex(for: group)
+        if current < group.studied {
+            audio.stop()
+            if progress.hapticsEnabled {
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+            let next = current + 1
+            browsingIndex = next >= group.studied ? nil : next
+        } else {
+            browsingIndex = nil
+            advance(group, day: day)
+        }
+    }
+
     private func currentWord(_ group: DailyVocabularyGroup) -> StudyWord? {
-        let index = group.studied < group.wordIds.count ? group.studied : group.answers.count - (group.feedbackPending ? 1 : 0)
+        let index = group.studied < group.wordIds.count
+            ? studyWordIndex(for: group)
+            : group.answers.count - (group.feedbackPending ? 1 : 0)
         guard group.wordIds.indices.contains(index) else { return nil }
         return word(group.wordIds[index])
     }
@@ -538,6 +607,7 @@ private struct DailyVocabularyView: View {
         if id == nil { progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress)) }
         audio.stop()
         activeId = id
+        browsingIndex = nil
         celebration = nil
         retryingMistake = false
         retryMatched = false
@@ -558,6 +628,7 @@ private struct DailyVocabularyView: View {
     private func advance(_ group: DailyVocabularyGroup, day: String) {
         guard progress.advanceDailyVocabulary(group, day: day) else { return }
         audio.stop()
+        browsingIndex = nil
         celebration = nil
         retryingMistake = false
         retryMatched = false
