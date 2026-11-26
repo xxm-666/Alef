@@ -8,7 +8,7 @@ struct DailyVocabularyEntry: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let plan = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress), date: timeline.date)
+            let plan = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress, at: timeline.date), date: timeline.date)
             let status = plan.groups.isEmpty ? "暂无待学新词" : "已完成 \(plan.completedCount) / \(plan.groups.count) 组"
             NavigationLink {
                 DailyVocabularyView(content: content)
@@ -186,7 +186,7 @@ private struct DailyVocabularyView: View {
 
     private var planTimeline: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let today = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress), date: timeline.date)
+            let today = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress, at: timeline.date), date: timeline.date)
             planContent(today)
         }
     }
@@ -262,7 +262,7 @@ private struct DailyVocabularyView: View {
         return VStack(alignment: .leading, spacing: 16) {
             StudyCard {
                 StudySectionTitle("今日计划")
-                Text("每组最多 \(DailyVocabularyPlan.groupSize) 词。认读后练习看词选义、听音选词和听音选义，最后拼写。")
+                Text("每组最多 \(DailyVocabularyPlan.groupSize) 词。先学入门词，其余词按常用、较常用、扩展的顺序选取。")
                     .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                 meter("已完成 \(today.completedCount) / \(today.groups.count) 组",
                       value: today.completedCount, total: today.groups.count, label: "今日分组进度")
@@ -776,7 +776,7 @@ private struct DailyVocabularyView: View {
     private func actionDay(_ displayedDay: String, on date: Date = .now) -> String {
         let today = DailyVocabularyPlan.dayKey(for: date)
         if displayedDay != today && plan.day != today {
-            progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress), date: date)
+            progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress, at: date), date: date)
         }
         return today
     }

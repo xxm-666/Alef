@@ -1416,6 +1416,50 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(refreshed.isValid)
     }
 
+    func testDailyVocabularyUsesBeginnerFirstThenFrequencyAcrossTheWholeLibrary() throws {
+        let content = try StudyContent.load()
+        let date = makeDate(year: 2026, month: 11, day: 1)
+        let words = content.dailyVocabularyWords(in: progress, at: date)
+        let beginners = words.filter { $0.difficulty == .beginner }
+        let remaining = words.filter { $0.difficulty != .beginner }
+        let tiers = [beginners] + WordFrequency.allCases.map { frequency in
+            remaining.filter { $0.frequency == frequency }
+        }
+        XCTAssertEqual(words.map(\.id), tiers.flatMap { $0.map(\.id) })
+        XCTAssertTrue(beginners.prefix(DailyVocabularyPlan.groupSize).allSatisfy { $0.frequency == .common })
+
+        let scheduled = ReviewSchedule(nextReviewAt: 0, intervalDays: 1, strength: 0)
+        var schedule: [String: ReviewSchedule] = [:]
+        for tier in tiers {
+            let plan = progress.dailyVocabularyPlan(words: words, date: date)
+            let firstGroup = try XCTUnwrap(plan.nextGroup)
+            XCTAssertEqual(firstGroup.wordIds, Array(tier.prefix(DailyVocabularyPlan.groupSize)).map(\.id))
+            for word in tier { schedule[word.id] = scheduled }
+            progress.write(schedule, for: "alef.wordSrs.v1")
+        }
+        XCTAssertNil(progress.dailyVocabularyPlan(words: words, date: date).nextGroup)
+    }
+
+    func testDailyVocabularyUpgradeReselectsOnlyUnstartedGroupsAndKeepsExtraGroupCount() throws {
+        let content = try StudyContent.load()
+        let date = makeDate(year: 2026, month: 11, day: 1)
+        let words = content.dailyVocabularyWords(in: progress, at: date)
+        let advanced = words.filter { $0.difficulty == .advanced }
+        let started = DailyVocabularyGroup(wordIds: advanced.prefix(2).map(\.id), studied: 1)
+        let old = DailyVocabularyPlan(day: DailyVocabularyPlan.dayKey(for: date), groups: [
+            started,
+            DailyVocabularyGroup(wordIds: [advanced[2].id]),
+            DailyVocabularyGroup(wordIds: [advanced[3].id]),
+        ])
+
+        let updated = old.plan(for: date, words: words, mastery: [:], schedule: [:])
+        XCTAssertEqual(updated.groups.count, 3)
+        XCTAssertEqual(updated.groups.first, started)
+        XCTAssertEqual(updated.groups[1].wordIds, words.prefix(DailyVocabularyPlan.groupSize).map(\.id))
+        XCTAssertTrue(updated.isValid)
+        XCTAssertEqual(updated.plan(for: date, words: Array(words.reversed()), mastery: [:], schedule: [:]), updated)
+    }
+
     func testDailyVocabularyInitialSpellingSetsLearningAndCrossGroupCombo() throws {
         let words = (1...10).map { makeWord(id: "w\($0)", hebrew: "שָׁלוֹם", unpointed: "שלום") }
         let today = makeDate(year: 2026, month: 11, day: 1)

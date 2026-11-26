@@ -98,10 +98,14 @@ struct StudyContent: Decodable {
         }
     }
 
-    func dailyVocabularyWords(in progress: StudyProgress) -> [StudyWord] {
-        guard let stage = recommendedStage(in: progress) else { return words }
-        let stageIDs = Set(stage.wordIds)
-        return words.filter { stageIDs.contains($0.id) } + words.filter { !stageIDs.contains($0.id) }
+    func dailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
+        let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
+        let ranked = words.map { word in
+            let priority = (word.difficulty == .beginner ? 0 : 1, word.frequency.rank,
+                            word.difficulty.rank, stageIDs.contains(word.id) ? 0 : 1)
+            return (word, priority)
+        }
+        return ranked.sorted { $0.1 < $1.1 }.map { $0.0 }
     }
 
     func reminderReviews(in progress: StudyProgress) -> StudyReminderReviews {
@@ -272,6 +276,14 @@ struct StudyExample: Decodable {
 enum WordFrequency: String, Codable, CaseIterable {
     case common, regular, extended
 
+    fileprivate var rank: Int {
+        switch self {
+        case .common: 0
+        case .regular: 1
+        case .extended: 2
+        }
+    }
+
     var label: String {
         switch self {
         case .common: "常用"
@@ -283,6 +295,14 @@ enum WordFrequency: String, Codable, CaseIterable {
 
 enum WordDifficulty: String, Codable, CaseIterable {
     case beginner, intermediate, advanced
+
+    fileprivate var rank: Int {
+        switch self {
+        case .beginner: 0
+        case .intermediate: 1
+        case .advanced: 2
+        }
+    }
 
     var label: String {
         switch self {

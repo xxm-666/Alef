@@ -467,6 +467,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     var groupsPerDay = 2
     var groups: [DailyVocabularyGroup] = []
     var spellingCombo: Int? = nil
+    var usesBeginnerFirstSelection: Bool? = nil
 
     var completedCount: Int { groups.filter(\.isComplete).count }
     var nextGroup: DailyVocabularyGroup? { groups.first { !$0.isComplete } }
@@ -484,30 +485,34 @@ struct DailyVocabularyPlan: Codable, Equatable {
 
     func plan(for date: Date, words: [StudyWord], mastery: [String: Mastery], schedule: [String: ReviewSchedule]) -> Self {
         let today = Self.dayKey(for: date)
+        let isToday = day == today
+        // Rebuild older plans once so their unopened groups use the new priority.
+        let shouldReselect = isToday && usesBeginnerFirstSelection != true
         let available = Set(words.map(\.id))
         let valid = groups.filter { $0.wordIds.allSatisfy(available.contains) }
         let isEligibleUnstarted: (DailyVocabularyGroup) -> Bool = { group in
             group.wordIds.allSatisfy { mastery[$0] != .mastered && schedule[$0] == nil }
         }
-        if day == today, valid.count == groups.count,
+        if isToday, !shouldReselect, valid.count == groups.count,
            valid.allSatisfy({ $0.hasStarted || isEligibleUnstarted($0) }) {
             return self
         }
 
         var assignments = valid.filter { group in
-            if day == today {
-                return group.hasStarted || isEligibleUnstarted(group)
+            if isToday {
+                return group.hasStarted || (!shouldReselect && isEligibleUnstarted(group))
             }
             return group.hasStarted && !group.isComplete
         }
         let assigned = Set(assignments.flatMap(\.wordIds))
         let newIds = words.filter { !assigned.contains($0.id) && mastery[$0.id] != .mastered && schedule[$0.id] == nil }.map(\.id)
+        let groupLimit = shouldReselect ? max(groups.count, groupsPerDay) : groupsPerDay
         for offset in stride(from: 0, to: newIds.count, by: Self.groupSize) {
-            guard assignments.count < groupsPerDay else { break }
+            guard assignments.count < groupLimit else { break }
             assignments.append(DailyVocabularyGroup(wordIds: Array(newIds.dropFirst(offset).prefix(Self.groupSize))))
         }
         return Self(day: today, groupsPerDay: groupsPerDay, groups: assignments,
-                    spellingCombo: day == today ? spellingCombo : 0)
+                    spellingCombo: isToday ? spellingCombo : 0, usesBeginnerFirstSelection: true)
     }
 
     func remainingNewWordIds(from words: [StudyWord], mastery: [String: Mastery], schedule: [String: ReviewSchedule]) -> [String] {
