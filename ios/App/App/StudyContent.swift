@@ -99,8 +99,9 @@ struct StudyContent: Decodable {
     }
 
     func dailyVocabularyWords(in progress: StudyProgress, packId: String?, at date: Date = .now) -> [StudyWord] {
+        guard let packId, let pack = wordPack(id: packId), pack.kind == .words else { return [] }
         let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
-        let pool = packId.map { words(inPack: $0) } ?? words
+        let pool = words(inPack: pack.id)
         let ranked = pool.map { word in
             let priority = (word.difficulty == .beginner ? 0 : 1, word.frequency.rank,
                             word.frequencyRank ?? Int.max, word.difficulty.rank,

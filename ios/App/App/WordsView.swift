@@ -67,29 +67,62 @@ struct WordsView: View {
     @State private var phraseCategory = "all"
     @State private var hidePhraseTranslation = false
     @State private var shadowingPhraseId: String?
-    @State private var displayLimit = 60
+    @State private var displayLimit = 40
+
+    private var pinnedPacks: [StudyWordPack] {
+        progress.pinnedWordPackIds.compactMap { content.wordPack(id: $0) }
+    }
+
+    private var currentPack: StudyWordPack? {
+        if let id = preferences.activePackId,
+           let matched = pinnedPacks.first(where: { $0.id == id }) {
+            return matched
+        }
+        return pinnedPacks.first
+    }
 
     var body: some View {
-        let activePack = preferences.activePackId.flatMap { content.wordPack(id: $0) }
+        let activePack = currentPack
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize) {
             StudyHeading(title: "内容库",
                          eyebrow: "LIBRARY · \(content.words.count) 词 · \(content.phrases.count) 短语 · \(content.readings.count) 阅读")
-            frequencyTierBar
-            switch activePack?.kind {
-            case .phrases:
-                phraseLibrary
-            case .readings:
-                StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
-            default:
+            if activePack != nil {
                 searchControls
-                quickTogglesBar
-                if hasFilters { activeFilters }
-                wordLibrary
+            }
+            frequencyTierBar
+            if let activePack {
+                switch activePack.kind {
+                case .phrases:
+                    phraseLibrary
+                case .readings:
+                    StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive),
+                                        searchQuery: preferences.searchQuery)
+                case .words:
+                    quickTogglesBar
+                    if hasFilters { activeFilters }
+                    wordLibrary
+                }
+            } else {
+                ContentUnavailableView {
+                    Label("还没有固定学习包", systemImage: "square.grid.2x2")
+                } description: {
+                    Text("前往包管理，点按图钉即可把常用词包、情景短语或阅读固定到这里。")
+                } actions: {
+                    NavigationLink("打开包管理") {
+                        StudyPackManagerView(content: content,
+                                             showNiqqud: setting(\.showNiqqud),
+                                             showCursive: setting(\.showCursive))
+                    }
+                    .buttonStyle(StudyButtonStyle(prominent: true))
+                }
             }
         }
         .studyHome()
-        .onChange(of: preferences.activePackId) { _, _ in searchFocused = false }
-        .onChange(of: filterSignature) { _, _ in displayLimit = 60 }
+        .onChange(of: currentPack?.id) { _, _ in
+            searchFocused = false
+            displayLimit = 40
+        }
+        .onChange(of: filterSignature) { _, _ in displayLimit = 40 }
         .onDisappear { searchFocused = false }
         .navigationDestination(item: $openedWordID) { id in
             if let word = content.words.first(where: { $0.id == id }) {
@@ -157,14 +190,14 @@ struct WordsView: View {
     private var searchField: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass").foregroundStyle(progress.theme.mutedInk).accessibilityHidden(true)
-            TextField("搜索单词", text: setting(\.searchQuery))
+            TextField(currentPack.map { "在「\($0.shortTitle)」中搜索" } ?? "搜索单词", text: setting(\.searchQuery))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { searchFocused = false }
-                .accessibilityLabel("搜索词库")
-                .accessibilityHint("可按希伯来语、中文、音译或词根搜索")
+                .accessibilityLabel("在当前学习包中搜索")
+                .accessibilityHint("仅在当前显示的学习包内按希伯来语、中文、音译或词根搜索")
             if !preferences.searchQuery.isEmpty {
                 Button {
                     setting(\.searchQuery).wrappedValue = ""
@@ -202,16 +235,9 @@ struct WordsView: View {
     }
 
     private var frequencyTierBar: some View {
-        let selected = preferences.activePackId
-        let pinnedPacks = progress.pinnedWordPackIds.compactMap { content.wordPack(id: $0) }
+        let selected = currentPack?.id
         return ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                packBarPill("全部单词", symbol: nil, active: selected == nil) {
-                    var state = preferences
-                    state.selectedPackId = nil
-                    state.frequencyTier = nil
-                    progress.write(state, for: "alef.wordsState.v1")
-                }
                 ForEach(pinnedPacks) { pack in
                     packBarPill(pack.shortTitle, symbol: pack.symbol, active: selected == pack.id) {
                         var state = preferences
@@ -346,6 +372,7 @@ struct WordsView: View {
     }
 
     private var filteredWords: [StudyWord] {
+        guard let activePack = currentPack, activePack.kind == .words else { return [] }
         let settings = preferences
         let favorites = Set(progress.favorites)
         let schedule = progress.schedule
@@ -353,8 +380,7 @@ struct WordsView: View {
         let unpointedQuery = withoutHebrewMarks(query)
         let scope = settings.scope
         let topic = settings.selectedTopic
-        let activePackId = settings.activePackId
-        let sourceWords = activePackId.map { content.words(inPack: $0) } ?? content.words
+        let sourceWords = content.words(inPack: activePack.id)
         let words = sourceWords.filter { word in
             let include = switch scope {
             case "favorites": favorites.contains(word.id)
@@ -374,21 +400,12 @@ struct WordsView: View {
         switch settings.sortOrder {
         case "alpha":
             return words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed }
-        case "frequency":
+        default:
             return words.sorted {
                 let lhs = ($0.frequencyRank ?? Int.max, $0.frequency.rank, $0.hebrewUnpointed)
                 let rhs = ($1.frequencyRank ?? Int.max, $1.frequency.rank, $1.hebrewUnpointed)
                 return lhs < rhs
             }
-        default:
-            if activePackId != nil {
-                return words.sorted {
-                    let lhs = ($0.frequencyRank ?? Int.max, $0.frequency.rank, $0.hebrewUnpointed)
-                    let rhs = ($1.frequencyRank ?? Int.max, $1.frequency.rank, $1.hebrewUnpointed)
-                    return lhs < rhs
-                }
-            }
-            return words
         }
     }
 
@@ -399,7 +416,7 @@ struct WordsView: View {
         let masteredCount = words.reduce(into: 0) { count, word in
             if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
         }
-        let activePack = prefs.activePackId.flatMap { content.wordPack(id: $0) }
+        let activePack = currentPack
         let showRank = activePack != nil || prefs.sortOrder == "frequency"
         let visibleWords = Array(words.prefix(displayLimit))
         HStack(spacing: 8) {
@@ -424,7 +441,7 @@ struct WordsView: View {
             ContentUnavailableView {
                 Label("没有匹配的单词", systemImage: "magnifyingglass")
             } description: {
-                Text("可以更换搜索词或清除筛选。")
+                Text("当前仅在「\(activePack?.shortTitle ?? "当前包")」中检索，可更换搜索词或切换其他学习包。")
             } actions: {
                 Button("清除搜索和筛选") {
                     var state = prefs
@@ -451,24 +468,18 @@ struct WordsView: View {
                 }
             }
             if visibleWords.count < words.count {
-                Button {
-                    displayLimit = min(words.count, displayLimit + 60)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("已显示 \(visibleWords.count) / \(words.count) 词")
-                        Text("·")
-                        Text("继续加载")
-                            .foregroundStyle(progress.theme.accent)
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(progress.theme.mutedInk)
-                    .monospacedDigit()
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在加载更多… (\(visibleWords.count)/\(words.count))")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .monospacedDigit()
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .id("words-loader-\(visibleWords.count)")
                 .onAppear {
-                    displayLimit = min(words.count, displayLimit + 60)
+                    displayLimit = min(words.count, displayLimit + 40)
                 }
             }
         }
@@ -615,12 +626,20 @@ struct WordsView: View {
                 Label("短语显示", systemImage: "textformat").frame(minHeight: 44)
             }
             .buttonStyle(StudyButtonStyle())
+            let query = preferences.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unpointedQuery = withoutHebrewMarks(query)
             let phrases = content.phrases.filter { phrase in
-                phraseCategory == "all" || phrase.scenario == phraseCategory
+                let inCategory = phraseCategory == "all" || phrase.scenario == phraseCategory
                     || (phraseCategory == "favorites" && favorites.contains(phrase.id))
+                let matchesQuery = query.isEmpty
+                    || [phrase.hebrew, phrase.hebrewUnpointed, phrase.transliteration, phrase.meaningZh, phrase.note ?? ""]
+                        .contains { $0.localizedStandardContains(query) }
+                    || (!unpointedQuery.isEmpty && phrase.hebrewUnpointed.localizedStandardContains(unpointedQuery))
+                return inCategory && matchesQuery
             }
             if phrases.isEmpty {
-                ContentUnavailableView("还没有收藏短语", systemImage: "bookmark")
+                ContentUnavailableView(query.isEmpty ? "还没有收藏短语" : "没有匹配的短语",
+                                       systemImage: query.isEmpty ? "bookmark" : "magnifyingglass")
             }
             let prefs = preferences
             LazyVStack(spacing: 9) {
@@ -705,13 +724,6 @@ private struct WordFilterSheet: View {
                           selection: Binding(get: { preferences.scope }, set: {
                 preferences.topic = preferences.selectedTopic
                 preferences.activeFilter = $0
-            }))
-            StudySectionTitle("高频词表")
-            StudySegments(title: "高频词表",
-                          options: [(nil, "全部单词"), ("pack_beginner", "基础入门"), ("pack_top1000", "核心 1000"), ("pack_top1001_2000", "进阶 2000")],
-                          selection: Binding(get: { preferences.activePackId }, set: {
-                preferences.selectedPackId = $0
-                preferences.frequencyTier = nil
             }))
             StudySectionTitle("常用程度")
             StudySegments(title: "常用程度",
@@ -799,24 +811,42 @@ private struct StudyReadingLibrary: View {
     let content: StudyContent
     @Binding var showNiqqud: Bool
     @Binding var showCursive: Bool
+    var searchQuery: String = ""
 
     var body: some View {
-        ForEach(content.readingCategories.keys.sorted(), id: \.self) { category in
-            StudySectionTitle(content.readingCategories[category] ?? category)
-            StudyCard(padding: 10, spacing: 2) {
-                let readings = content.readings.filter { $0.category == category }
-                ForEach(readings) { reading in
-                    if reading.id != readings.first?.id { Divider() }
-                    NavigationLink {
-                        StudyReadingView(reading: reading, showNiqqud: $showNiqqud, showCursive: $showCursive)
-                    } label: {
-                        let details = ["\(reading.sentences.count) 句", "阅读理解"] + reading.audioStyles.map(\.title)
-                        StudyRow(title: reading.title, symbol: "text.book.closed",
-                                 subtitle: details.joined(separator: " · "))
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matchingCategories = content.readingCategories.keys.sorted().filter { category in
+            !readings(in: category, query: query).isEmpty
+        }
+        if matchingCategories.isEmpty {
+            ContentUnavailableView("没有匹配的阅读篇目", systemImage: "magnifyingglass")
+        } else {
+            ForEach(matchingCategories, id: \.self) { category in
+                StudySectionTitle(content.readingCategories[category] ?? category)
+                StudyCard(padding: 10, spacing: 2) {
+                    let items = readings(in: category, query: query)
+                    ForEach(items) { reading in
+                        if reading.id != items.first?.id { Divider() }
+                        NavigationLink {
+                            StudyReadingView(reading: reading, showNiqqud: $showNiqqud, showCursive: $showCursive)
+                        } label: {
+                            let details = ["\(reading.sentences.count) 句", "阅读理解"] + reading.audioStyles.map(\.title)
+                            StudyRow(title: reading.title, symbol: "text.book.closed",
+                                     subtitle: details.joined(separator: " · "))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    private func readings(in category: String, query: String) -> [StudyReading] {
+        content.readings.filter { reading in
+            guard reading.category == category else { return false }
+            if query.isEmpty { return true }
+            return reading.title.localizedStandardContains(query)
+                || (reading.source?.localizedStandardContains(query) ?? false)
         }
     }
 }
@@ -1623,7 +1653,7 @@ private struct TopicPackDetailView: View {
     @State private var searchQuery = ""
     @State private var sortByFrequency = true
     @State private var unmasteredOnly = false
-    @State private var displayLimit = 60
+    @State private var displayLimit = 40
 
     private var packWords: [StudyWord] {
         content.words(inPack: pack.id)
@@ -1803,30 +1833,25 @@ private struct TopicPackDetailView: View {
                     }
                 }
                 if visibleWords.count < words.count {
-                    Button {
-                        displayLimit = min(words.count, displayLimit + 60)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("已显示 \(visibleWords.count) / \(words.count) 词")
-                            Text("·")
-                            Text("继续加载").foregroundStyle(progress.theme.accent)
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(progress.theme.mutedInk)
-                        .monospacedDigit()
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在加载更多… (\(visibleWords.count)/\(words.count))")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(progress.theme.mutedInk)
+                            .monospacedDigit()
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .id("pack-loader-\(visibleWords.count)")
                     .onAppear {
-                        displayLimit = min(words.count, displayLimit + 60)
+                        displayLimit = min(words.count, displayLimit + 40)
                     }
                 }
             }
         }
         .studyDetail(pack.title)
-        .onChange(of: searchQuery) { _, _ in displayLimit = 60 }
-        .onChange(of: unmasteredOnly) { _, _ in displayLimit = 60 }
+        .onChange(of: searchQuery) { _, _ in displayLimit = 40 }
+        .onChange(of: unmasteredOnly) { _, _ in displayLimit = 40 }
     }
 
     private func togglePill(_ label: String, symbol: String? = nil, active: Bool, action: @escaping () -> Void) -> some View {
@@ -1934,7 +1959,7 @@ private struct StudyPackManagerView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("已固定 \(pinnedCount) 个学习包到内容库顶部")
                             .font(.subheadline.weight(.semibold))
-                        Text("今日记词：\(activeDailyPack?.title ?? "全部单词") · 点按图钉固定，点按卡片进入学习")
+                        Text("今日记词：\(activeDailyPack?.title ?? "未选择") · 点按图钉固定，点按卡片进入学习")
                             .font(.caption)
                             .foregroundStyle(progress.theme.mutedInk)
                     }
