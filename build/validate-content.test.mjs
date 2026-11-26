@@ -66,6 +66,18 @@ test('rejects invalid reading question.correctIndex', async () => {
   );
 });
 
+test('labels the classic reading recordings by their actual playback style', async () => {
+  const genesis = baseContent.readings.find(({ id }) => id === 'genesis');
+  const psalm = baseContent.readings.find(({ id }) => id === 'psalm-23');
+  assert.deepEqual(genesis.sentences.map(({ audio }) => audio.style), ['modernSynthesis', 'scriptureReading']);
+  assert.deepEqual(psalm.sentences.map(({ audio }) => audio.style), ['traditionalChant', 'traditionalChant']);
+  assert.ok(psalm.sentences.every(({ audio }) => audio.performer === 'Rabbi Dan Be’eri'));
+
+  const broken = cloneContent();
+  delete broken.readings.find(({ id }) => id === 'psalm-23').sentences[0].audio;
+  await assert.rejects(validateStudyContent(broken, { rootUrl }), /"psalm-23" sentence #1 is missing a valid audio style/);
+});
+
 test('rejects orphan inflection key', async () => {
   const broken = cloneContent();
   broken.inflections['nonexistent-word-id'] = { ...Object.values(broken.inflections)[0] };

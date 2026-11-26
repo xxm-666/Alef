@@ -500,6 +500,8 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 | `he_49d5109c62c2.mp3` | 《诗篇》23:2（传统吟诵） | 7.93–16.25 s | [录音来源](https://www.oakleys.org.uk/blog/2025/07/psalms_book_1_141_chanted_hebrew_rabbi_dan_beeri) |
 | `he_d9c66a85ff78.mp3` | 《诗篇》23:3（传统吟诵） | 16.91–25.33 s | [录音来源](https://www.oakleys.org.uk/blog/2025/07/psalms_book_1_141_chanted_hebrew_rabbi_dan_beeri) |
 
+《创世记》1:1 使用 `he_154104cc0bd0.mp3`，由 he-IL-HilaNeural 合成现代发音。
+
 ## Piper Noa 合成音频
 
 使用 thewh1teagle 的 [Piper Hebrew Noa 模型](https://huggingface.co/thewh1teagle/piper-he-noa)生成，模型采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。

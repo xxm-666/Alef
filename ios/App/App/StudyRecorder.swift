@@ -633,6 +633,7 @@ struct ShadowingPracticeCard: View {
     let hebrew: String
     var title = "跟读对比"
     var recordingState: Binding<Bool>? = nil
+    var referenceTitle: String? = nil
     @State private var recorder = StudyVoiceRecorder()
     @State private var comparison: (recording: URL, result: Result<StudyRhythmComparison, StudyRecordingIssue>)?
     @State private var showsComparisonDetails = false
@@ -762,9 +763,9 @@ struct ShadowingPracticeCard: View {
             Button {
                 recorder.pauseForReferencePlayback()
                 audio.speak(hebrew, rate: referenceURL == nil ? progress.speechRate : 1,
-                            bundledOnly: referenceURL != nil)
+                            bundledOnly: referenceURL != nil || referenceTitle != nil)
             } label: {
-                Label("原音", systemImage: "speaker.wave.2").frame(maxWidth: .infinity)
+                Label(referenceTitle ?? "原音", systemImage: "speaker.wave.2").frame(maxWidth: .infinity)
             }
             .buttonStyle(StudyButtonStyle())
             .disabled(recorder.state == .recording)

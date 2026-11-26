@@ -1,8 +1,11 @@
+import { CLASSIC_READING_RECORDINGS, type ReadingAudio } from './audioManifest';
+
 interface ReadingSentence {
   hebrew: string;
   unpointed: string;
   transliteration: string;
   chinese: string;
+  audio?: ReadingAudio;
 }
 
 export interface HebrewReading {
@@ -24,7 +27,7 @@ export const READING_CATEGORIES = {
   classic: '经典选读',
 } as const;
 
-export const HEBREW_READINGS: HebrewReading[] = [
+const readings: HebrewReading[] = [
   {
     id: 'introduction',
     title: '自我介绍',
@@ -442,3 +445,16 @@ export const HEBREW_READINGS: HebrewReading[] = [
     question: { prompt: '想请对方再重复一遍时怎么说？', choices: ['אֶפְשָׁר שׁוּב?', 'מָה זֹאת אוֹמֶרֶת?', 'כַּמָּה זֶה עוֹלֶה?'], correctIndex: 0 },
   },
 ];
+
+export const HEBREW_READINGS: HebrewReading[] = readings.map((reading) => {
+  if (reading.category !== 'classic') return reading;
+  return {
+    ...reading,
+    sentences: reading.sentences.map((sentence) => {
+      const recording = CLASSIC_READING_RECORDINGS[sentence.hebrew];
+      if (!recording) return sentence;
+      const { style, performer } = recording;
+      return { ...sentence, audio: { style, performer } };
+    }),
+  };
+});

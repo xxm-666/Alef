@@ -483,15 +483,40 @@ const LINGUA_LIBRE_AUDIO: Record<string, string> = {
   "צִיּוֹן": "audio/he_a85578734b2e.mp3",
 };
 
-const CLASSIC_READING_AUDIO: Record<string, string> = {
-  "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר, וַיְהִי אוֹר.": "audio/he_30cef0f280cb.mp3",
-  "בִּנְאוֹת דֶּשֶׁא יַרְבִּיצֵנִי, עַל־מֵי מְנֻחוֹת יְנַהֲלֵנִי.": "audio/he_49d5109c62c2.mp3",
-  "נַפְשִׁי יְשׁוֹבֵב, יַנְחֵנִי בְמַעְגְּלֵי־צֶדֶק לְמַעַן שְׁמוֹ.": "audio/he_d9c66a85ff78.mp3",
+export type ReadingAudioStyle = 'modernSynthesis' | 'scriptureReading' | 'traditionalChant';
+
+export interface ReadingAudio {
+  style: ReadingAudioStyle;
+  performer?: string;
+}
+
+export const CLASSIC_READING_RECORDINGS: Record<string, ReadingAudio & { file: string }> = {
+  "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ.": {
+    file: "audio/he_154104cc0bd0.mp3",
+    style: 'modernSynthesis',
+  },
+  "וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר, וַיְהִי אוֹר.": {
+    file: "audio/he_30cef0f280cb.mp3",
+    style: 'scriptureReading',
+    performer: 'Rabbi Dan Be’eri',
+  },
+  "בִּנְאוֹת דֶּשֶׁא יַרְבִּיצֵנִי, עַל־מֵי מְנֻחוֹת יְנַהֲלֵנִי.": {
+    file: "audio/he_49d5109c62c2.mp3",
+    style: 'traditionalChant',
+    performer: 'Rabbi Dan Be’eri',
+  },
+  "נַפְשִׁי יְשׁוֹבֵב, יַנְחֵנִי בְמַעְגְּלֵי־צֶדֶק לְמַעַן שְׁמוֹ.": {
+    file: "audio/he_d9c66a85ff78.mp3",
+    style: 'traditionalChant',
+    performer: 'Rabbi Dan Be’eri',
+  },
 };
 
 export const HUMAN_AUDIO_KEYS = new Set([
   ...Object.keys(LINGUA_LIBRE_AUDIO),
-  ...Object.keys(CLASSIC_READING_AUDIO),
+  ...Object.entries(CLASSIC_READING_RECORDINGS)
+    .filter(([, recording]) => recording.style !== 'modernSynthesis')
+    .map(([text]) => text),
 ]);
 
 export const AUDIO_FILE_MAP: Record<string, string> = {
@@ -730,7 +755,6 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "גָּר": "audio/he_6bb874af0540.mp3",
   "אֲנִי גָּר בְּבֵיגִ׳ינְג.": "audio/he_22d6707b850e.mp3",
   "אֱלֹהִים": "audio/he_9dfcd43a996c.mp3",
-  "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ.": "audio/he_154104cc0bd0.mp3",
   "וְרוּחַ אֱלֹהִים מְרַחֶפֶת עַל פְּנֵי הַמָּיִם.": "audio/he_8f92f6a1d1b8.mp3",
   "לְחַיִּים טוֹבִים וּלְשָׁלוֹם!": "audio/he_46bcddb71367.mp3",
   "אֱמֶת": "audio/he_129d54998165.mp3",
@@ -1753,5 +1777,5 @@ export const AUDIO_FILE_MAP: Record<string, string> = {
   "סִכּוּי": "audio/he_9708e465ca67.mp3",
   "אֶפְשָׁרוּת": "audio/he_24a0e3e528b2.mp3",
   ...LINGUA_LIBRE_AUDIO,
-  ...CLASSIC_READING_AUDIO,
+  ...Object.fromEntries(Object.entries(CLASSIC_READING_RECORDINGS).map(([text, recording]) => [text, recording.file])),
 };

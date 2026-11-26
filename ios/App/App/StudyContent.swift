@@ -575,11 +575,29 @@ struct StudyReading: Decodable, Identifiable {
         let definition: String
     }
 
+    struct Audio: Decodable {
+        enum Style: String, Decodable, Hashable {
+            case modernSynthesis, scriptureReading, traditionalChant
+
+            var title: String {
+                switch self {
+                case .modernSynthesis: "现代合成发音"
+                case .scriptureReading: "经文朗读"
+                case .traditionalChant: "传统吟诵"
+                }
+            }
+        }
+
+        let style: Style
+        let performer: String?
+    }
+
     struct Sentence: Decodable {
         let hebrew: String
         let unpointed: String
         let transliteration: String
         let chinese: String
+        var audio: Audio? = nil
     }
 
     struct Question: Decodable {
@@ -595,6 +613,11 @@ struct StudyReading: Decodable, Identifiable {
     let sentences: [Sentence]
     let glosses: [String: String]
     let question: Question
+
+    var audioStyles: [Audio.Style] {
+        var seen: Set<Audio.Style> = []
+        return sentences.compactMap { $0.audio?.style }.filter { seen.insert($0).inserted }
+    }
 
     private static let hebrewWords = try? NSRegularExpression(pattern: #"(?:[א-ת]\p{M}*)+"#)
 

@@ -643,8 +643,9 @@ private struct StudyReadingLibrary: View {
                     NavigationLink {
                         StudyReadingView(reading: reading, showNiqqud: $showNiqqud, showCursive: $showCursive)
                     } label: {
+                        let details = ["\(reading.sentences.count) 句", "阅读理解"] + reading.audioStyles.map(\.title)
                         StudyRow(title: reading.title, symbol: "text.book.closed",
-                                 subtitle: "\(reading.sentences.count) 句 · 阅读理解")
+                                 subtitle: details.joined(separator: " · "))
                     }
                     .buttonStyle(.plain)
                 }
@@ -880,7 +881,7 @@ struct StudyReadingView: View {
                 StudyNotice(title: "过渡模式：仅重点生词保留元音点", symbol: "eye",
                             note: "打开句子操作，可查看带点原文。")
             }
-            StudySectionTitle("原文与朗读")
+            StudySectionTitle("原文与音频")
             Text("点按带下划线的词查看释义。").font(.footnote).foregroundStyle(progress.theme.mutedInk)
             StudyCard {
                 ForEach(Array(reading.sentences.enumerated()), id: \.offset) { index, sentence in
@@ -954,8 +955,10 @@ struct StudyReadingView: View {
                         return .handled
                     })
                 HStack(spacing: 0) {
-                    PronunciationButton(hebrew: sentence.hebrew, iconOnly: true, title: "朗读第 \(index + 1) 句")
-                        .disabled(isRecording)
+                    if sentence.audio == nil {
+                        PronunciationButton(hebrew: sentence.hebrew, iconOnly: true, title: "朗读第 \(index + 1) 句")
+                            .disabled(isRecording)
+                    }
                     Button {
                         activeSentence = activeSentence == index ? nil : index
                         shadowingSentence = nil
@@ -969,6 +972,16 @@ struct StudyReadingView: View {
                     .disabled(isRecording)
                     .accessibilityLabel("第 \(index + 1) 句操作")
                     .accessibilityValue(activeSentence == index ? "已展开" : "已收起")
+                }
+            }
+            if let recording = sentence.audio {
+                PronunciationButton(hebrew: sentence.hebrew, title: "播放\(recording.style.title)", bundledOnly: true)
+                    .disabled(isRecording)
+                    .accessibilityHint("第 \(index + 1) 句")
+                if let performer = recording.performer {
+                    Text(performer)
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
                 }
             }
             if showingPointed {
@@ -1016,7 +1029,8 @@ struct StudyReadingView: View {
                     VStack(alignment: .leading, spacing: 6) { controls }
                 }
                 if shadowingSentence == index {
-                    ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句", recordingState: $isRecording)
+                    ShadowingPracticeCard(hebrew: sentence.hebrew, title: "跟读第 \(index + 1) 句", recordingState: $isRecording,
+                                          referenceTitle: sentence.audio?.style.title)
                 }
             }
         }

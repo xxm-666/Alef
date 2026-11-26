@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const AUDIO_FILE_PATTERN = /^audio\/he_[a-f0-9]{12}\.mp3$/;
+const CLASSIC_AUDIO_STYLES = new Set(['modernSynthesis', 'scriptureReading', 'traditionalChant']);
 
 export async function loadStudyContent(rootUrl = new URL('../', import.meta.url)) {
   const { outputFiles: [bundle] } = await build({
@@ -220,6 +221,9 @@ export async function validateStudyContent(
       totalSentences += 1;
       if (!isNonEmptyString(sentence?.hebrew) || !audioNfc.has(sentence.hebrew.normalize('NFC'))) {
         errors.push(`Reading "${reading.id}" sentence #${idx + 1} is missing an entry in audioManifest`);
+      }
+      if (reading.category === 'classic' && !CLASSIC_AUDIO_STYLES.has(sentence?.audio?.style)) {
+        errors.push(`Reading "${reading.id}" sentence #${idx + 1} is missing a valid audio style`);
       }
     }
     const q = reading.question;
