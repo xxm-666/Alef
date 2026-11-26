@@ -161,6 +161,12 @@ export async function validateStudyContent(
     if (!Object.prototype.hasOwnProperty.call(wordCategories, word.category)) {
       errors.push(`Word "${word.id}" has unknown category "${word.category}"`);
     }
+    if (!['common', 'regular', 'extended'].includes(word.frequency)) {
+      errors.push(`Word "${word.id}" has unknown frequency "${word.frequency}"`);
+    }
+    if (!['beginner', 'intermediate', 'advanced'].includes(word.difficulty)) {
+      errors.push(`Word "${word.id}" has unknown difficulty "${word.difficulty}"`);
+    }
     if (isNonEmptyString(word.hebrew) && !audioNfc.has(word.hebrew.normalize('NFC'))) {
       errors.push(`Word "${word.id}" (${word.hebrew}) is missing an entry in audioManifest`);
     }

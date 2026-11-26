@@ -269,6 +269,30 @@ struct StudyExample: Decodable {
     let note: String?
 }
 
+enum WordFrequency: String, Codable, CaseIterable {
+    case common, regular, extended
+
+    var label: String {
+        switch self {
+        case .common: "常用"
+        case .regular: "较常用"
+        case .extended: "扩展"
+        }
+    }
+}
+
+enum WordDifficulty: String, Codable, CaseIterable {
+    case beginner, intermediate, advanced
+
+    var label: String {
+        switch self {
+        case .beginner: "入门"
+        case .intermediate: "进阶"
+        case .advanced: "挑战"
+        }
+    }
+}
+
 struct StudyWord: Decodable, Identifiable {
     struct Sentence: Decodable {
         let hebrew: String
@@ -286,6 +310,8 @@ struct StudyWord: Decodable, Identifiable {
     let partOfSpeech: String
     let grammarTag: String
     let category: String
+    let frequency: WordFrequency
+    let difficulty: WordDifficulty
     let root: String?
     let note: String
     let sentence: Sentence?

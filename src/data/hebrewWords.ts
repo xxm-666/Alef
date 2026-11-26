@@ -1,10 +1,12 @@
-import { HebrewWord, WordCategory } from '../types/hebrew';
+import type { ClassifiedHebrewWord, HebrewWord, WordCategory } from '../types/hebrew';
 import { WORD_BATCH_1 } from './words/batch1';
 import { WORD_BATCH_2 } from './words/batch2';
 import { WORD_BATCH_3 } from './words/batch3';
 import { WORD_BATCH_4 } from './words/batch4';
 import { WORD_BATCH_5 } from './words/batch5';
 import { WORD_BATCH_6 } from './words/batch6';
+import { WORD_BATCH_7 } from './words/batch7';
+import { classifyWord } from './words/classification';
 
 export const WORD_CATEGORY_META: Record<WordCategory, { label: string; badge: string }> = {
   greetings: { label: '日常问候', badge: '问候' },
@@ -1803,11 +1805,12 @@ const ALL_RAW_WORDS: HebrewWord[] = [
   ...WORD_BATCH_4,
   ...WORD_BATCH_5,
   ...WORD_BATCH_6,
+  ...WORD_BATCH_7,
 ];
 
 const seenIds = new Set<string>();
-export const HEBREW_WORDS: HebrewWord[] = ALL_RAW_WORDS.filter((w) => {
+export const HEBREW_WORDS: ClassifiedHebrewWord[] = ALL_RAW_WORDS.filter((w) => {
   if (seenIds.has(w.id)) return false;
   seenIds.add(w.id);
   return true;
-});
+}).map(classifyWord);

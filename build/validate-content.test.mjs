@@ -31,6 +31,20 @@ test('rejects duplicate word IDs', async () => {
   );
 });
 
+test('classifies the vocabulary and rejects unrecognized classifications', async () => {
+  const shalom = baseContent.words.find(({ id }) => id === 'shalom');
+  assert.equal(shalom.frequency, 'common');
+  assert.equal(shalom.difficulty, 'beginner');
+  const boardingPass = baseContent.words.find(({ id }) => id === 'kartis-aliya-lamatos');
+  assert.equal(boardingPass.difficulty, 'advanced');
+  assert.equal(new Set(baseContent.words.map(({ frequency }) => frequency)).size, 3);
+  assert.equal(new Set(baseContent.words.map(({ difficulty }) => difficulty)).size, 3);
+
+  const broken = cloneContent();
+  broken.words[0].difficulty = 'expert';
+  await assert.rejects(validateStudyContent(broken, { rootUrl }), /unknown difficulty "expert"/);
+});
+
 test('rejects missing audio mapping for a word', async () => {
   const broken = cloneContent();
   broken.words[0] = { ...broken.words[0], hebrew: 'מִלָּה־חֲסֵרָה' };

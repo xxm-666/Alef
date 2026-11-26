@@ -44,6 +44,14 @@ export interface HebrewWord {
   sentence?: WordSentenceExample;
 }
 
+export type WordFrequency = 'common' | 'regular' | 'extended';
+export type WordDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface ClassifiedHebrewWord extends HebrewWord {
+  frequency: WordFrequency;
+  difficulty: WordDifficulty;
+}
+
 export type ThemeMode = 'dark' | 'parchment' | 'rose' | 'violet';
 
 export type AlphabetOrder = 'rtl' | 'ltr';

@@ -1757,6 +1757,8 @@ final class AlefCoreTests: XCTestCase {
             partOfSpeech: "名词",
             grammarTag: "阳性",
             category: "greetings",
+            frequency: .common,
+            difficulty: .beginner,
             root: nil,
             note: "",
             sentence: nil

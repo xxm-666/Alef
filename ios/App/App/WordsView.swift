@@ -14,6 +14,8 @@ struct WordPreferences: Codable {
     var scrollTop: Double = 0
     var topic: String?
     var cardLayout: Bool?
+    var frequency: WordFrequency?
+    var difficulty: WordDifficulty?
 
     static let scopes = [("all", "全部"), ("favorites", "收藏"), ("needs_review", "需复习"), ("due_srs", "到期复习")]
 
@@ -35,6 +37,8 @@ struct WordPreferences: Codable {
         activeFilter = "all"
         topic = nil
         initialLetter = "all"
+        frequency = nil
+        difficulty = nil
     }
 }
 
@@ -229,8 +233,9 @@ struct WordsView: View {
     }
 
     private var hasFilters: Bool {
-        let scope = preferences.scope
-        return (scope != "all" && scope != "favorites") || preferences.selectedTopic != nil || preferences.initialLetter != "all"
+        let settings = preferences
+        return (settings.scope != "all" && settings.scope != "favorites") || settings.selectedTopic != nil
+            || settings.initialLetter != "all" || settings.frequency != nil || settings.difficulty != nil
     }
 
     private var activeFilters: some View {
@@ -251,6 +256,8 @@ struct WordsView: View {
         let settings = preferences
         var labels = [WordPreferences.scopes.first { $0.0 == settings.scope }?.1 ?? "全部"]
         if let topic = settings.selectedTopic { labels.append(content.wordCategories[topic]?.label ?? topic) }
+        if let frequency = settings.frequency { labels.append(frequency.label) }
+        if let difficulty = settings.difficulty { labels.append(difficulty.label) }
         if settings.initialLetter != "all" { labels.append("首字母 \(settings.initialLetter)") }
         return labels.joined(separator: " · ")
     }
@@ -273,6 +280,8 @@ struct WordsView: View {
             let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
                 + (word.alternateSpellings ?? [])
             return include && (topic == nil || word.category == topic)
+                && (settings.frequency == nil || word.frequency == settings.frequency)
+                && (settings.difficulty == nil || word.difficulty == settings.difficulty)
                 && (settings.initialLetter == "all" || word.hebrewUnpointed.hasPrefix(settings.initialLetter))
                 && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) }
                     || (!unpointedQuery.isEmpty && word.hebrewUnpointed.localizedStandardContains(unpointedQuery)))
@@ -539,6 +548,14 @@ private struct WordFilterSheet: View {
                 preferences.topic = preferences.selectedTopic
                 preferences.activeFilter = $0
             }))
+            StudySectionTitle("常用程度")
+            StudySegments(title: "常用程度",
+                          options: [(nil, "不限")] + WordFrequency.allCases.map { (Optional($0), $0.label) },
+                          selection: $preferences.frequency)
+            StudySectionTitle("拼读难度")
+            StudySegments(title: "拼读难度",
+                          options: [(nil, "不限")] + WordDifficulty.allCases.map { (Optional($0), $0.label) },
+                          selection: $preferences.difficulty)
             StudySectionTitle("主题")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 245 : 100), spacing: 7)], spacing: 7) {
                 topicButton("不限主题", key: nil)
@@ -673,6 +690,9 @@ struct WordDetailView: View {
                                 .padding(.vertical, 4)
                                 .background(progress.theme.highlightedSurface, in: Capsule())
                         }
+                        Text("\(word.frequency.label) · \(word.difficulty.label)")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
                         HebrewText(text: displayedWord, cursive: showCursive,
                                    size: 56, style: .largeTitle)
                         Text("\(word.transliteration)  \(word.ipa)")

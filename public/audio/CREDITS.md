@@ -504,3 +504,8 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 使用 thewh1teagle 的 [Piper Hebrew Noa 模型](https://huggingface.co/thewh1teagle/piper-he-noa)生成，模型采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。
 输入为带重音的希伯来语 IPA。生成结果经过响度调整并转为 MP3，片段的 ID3 标签附有模型和许可链接。
+
+## eSpeak NG 合成音频
+
+第七批词汇中的 205 段补充发音由 [eSpeak NG 1.52](https://github.com/espeak-ng/espeak-ng) 的希伯来语语音生成。
+输入使用词条的现代希伯来语音素和重音，音频经静音裁剪后转为单声道 MP3，ID3 标签标注了合成来源。
