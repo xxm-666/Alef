@@ -277,7 +277,7 @@ struct StudyExample: Decodable {
 enum WordFrequency: String, Codable, CaseIterable {
     case common, regular, extended
 
-    fileprivate var rank: Int {
+    var rank: Int {
         switch self {
         case .common: 0
         case .regular: 1
@@ -297,7 +297,7 @@ enum WordFrequency: String, Codable, CaseIterable {
 enum WordDifficulty: String, Codable, CaseIterable {
     case beginner, intermediate, advanced
 
-    fileprivate var rank: Int {
+    var rank: Int {
         switch self {
         case .beginner: 0
         case .intermediate: 1
