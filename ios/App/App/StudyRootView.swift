@@ -287,24 +287,79 @@ extension StudyTheme {
 }
 
 struct StudyPage<Content: View>: View {
+    private enum ScrollTarget: Hashable { case top }
+
     @Environment(StudyProgress.self) private var progress
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var scrollSpace
+    @State private var isAwayFromTop = false
     var maxWidth: CGFloat = 620
     var keyboardDismissMode: ScrollDismissesKeyboardMode = .interactively
     var verticalBounce: ScrollBounceBehavior = .basedOnSize
+    var showsScrollToTop = false
     @ViewBuilder let content: () -> Content
 
+    @ViewBuilder
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16, content: content)
-                .frame(maxWidth: maxWidth, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity)
+        if showsScrollToTop {
+            ScrollViewReader { scroll in
+                scrollView
+                    .overlay(alignment: .bottomTrailing) {
+                        if isAwayFromTop {
+                            Button {
+                                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
+                                    scroll.scrollTo(ScrollTarget.top, anchor: .top)
+                                }
+                            } label: {
+                                Image(systemName: "arrow.up.to.line")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 48, height: 48)
+                                    .background(progress.theme.primaryButton, in: Circle())
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("回到顶部")
+                            .padding(16)
+                        }
+                    }
+            }
+        } else {
+            scrollView
         }
+    }
+
+    private var scrollView: some View {
+        let space = scrollSpace
+        return ScrollView {
+            if showsScrollToTop {
+                VStack(spacing: 0) {
+                    Color.clear
+                        .frame(height: 0)
+                        .accessibilityHidden(true)
+                        .id(ScrollTarget.top)
+                        .onGeometryChange(for: Bool.self) { geometry in
+                            geometry.frame(in: .named(space)).minY < -220
+                        } action: { isAwayFromTop = $0 }
+                    pageContent
+                }
+            } else {
+                pageContent
+            }
+        }
+        .coordinateSpace(name: space)
         .background(progress.theme.canvas.ignoresSafeArea())
         .scrollBounceBehavior(verticalBounce, axes: .vertical)
         .scrollDismissesKeyboard(keyboardDismissMode)
+    }
+
+    private var pageContent: some View {
+        VStack(alignment: .leading, spacing: 16, content: content)
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity)
     }
 }
 

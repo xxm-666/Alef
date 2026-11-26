@@ -417,10 +417,6 @@ private struct DailyVocabularyView: View {
                 }
             }
             let next = plan.nextGroup
-            let canAddGroup = plan.groups.count < DailyVocabularyPlan.maxGroupsPerDay
-                && !plan.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
-                                             mastery: progress.wordMastery,
-                                             schedule: progress.schedule).isEmpty
             HStack(spacing: 8) {
                 reviewWordsButton(group)
                 Button {
@@ -433,16 +429,6 @@ private struct DailyVocabularyView: View {
             }
             if let next {
                 primaryButton("开始下一组", symbol: "arrow.right") { openGroup(next.id) }
-            } else if canAddGroup {
-                primaryButton("加学一组新词", symbol: "plus.circle.fill") { addExtraGroup() }
-                Button {
-                    openGroup(nil)
-                } label: {
-                    Text("返回今日计划").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(StudyButtonStyle())
-            } else {
-                primaryButton("返回今日计划", symbol: "arrow.right") { openGroup(nil) }
             }
         } else if let word = currentWord(group) {
             let total = group.wordIds.count
