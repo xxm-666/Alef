@@ -1524,20 +1524,16 @@ struct WordQuizView: View {
 
 struct WordSpellingInput: View {
     @Environment(StudyProgress.self) private var progress
-    @EnvironmentObject private var audio: StudyAudio
     let wordId: String
     @Binding var spelling: String
     let submitted: Bool
     let onSubmit: () -> Void
-    @State private var systemInput = false
     @FocusState private var inputFocused: Bool
-    private let keySpacing: CGFloat = 4
-    private let keyHeight: CGFloat = 46
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            StudyCard {
-                if systemInput && !submitted {
+        StudyCard {
+            if !submitted {
+                HStack(spacing: 8) {
                     TextField("输入希伯来语单词", text: $spelling)
                         .font(.title2)
                         .autocorrectionDisabled()
@@ -1546,135 +1542,39 @@ struct WordSpellingInput: View {
                         .submitLabel(.done)
                         .onSubmit(onSubmit)
                         .multilineTextAlignment(.leading)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: 48)
                         .environment(\.layoutDirection, .rightToLeft)
-                } else if spelling.isEmpty {
-                    Text("在下方选择希伯来字母")
-                        .foregroundStyle(progress.theme.mutedInk)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                } else {
-                    HebrewText(text: spelling, size: 44, style: .largeTitle)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .textSelection(.enabled)
-                }
-            }
-            if !submitted {
-                if systemInput {
-                    Button("使用屏内键盘", systemImage: "keyboard") {
-                        systemInput = false
-                        inputFocused = false
+                    if !spelling.isEmpty {
+                        Button {
+                            spelling = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(progress.theme.mutedInk)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("清空输入")
                     }
-                    .buttonStyle(StudyButtonStyle())
-                } else {
-                    spellingKeyboard
                 }
-            }
-        }
-        .onChange(of: wordId) { _, _ in inputFocused = false }
-        .onChange(of: submitted) { _, done in if done { inputFocused = false } }
-    }
-
-    private var spellingKeyboard: some View {
-        GeometryReader { geometry in
-            let column = (geometry.size.width + keySpacing) / 10
-            let letterWidth = max(0, column - keySpacing)
-            let sideWidth = max(0, 2.5 * column - keySpacing)
-            let smallControlWidth = max(0, (sideWidth - keySpacing) / 2)
-            let spaceWidth = max(0, 5 * column - keySpacing)
-
-            // Key positions follow the standard Hebrew layout, listed from left to right.
-            VStack(spacing: keySpacing) {
-                HStack(spacing: keySpacing) {
-                    letterKeys("קראטוןםפ", width: letterWidth)
-                    key("退格", width: 2 * letterWidth + keySpacing, utility: true, action: {
-                        if !spelling.isEmpty { spelling.removeLast() }
-                    }) {
-                        Image(systemName: "delete.left")
-                    }
-                    .buttonRepeatBehavior(.enabled)
-                    .disabled(spelling.isEmpty)
-                }
-                HStack(spacing: keySpacing) {
-                    letterKeys("שדגכעיחלךף", width: letterWidth)
-                }
-                HStack(spacing: keySpacing) {
-                    letterKeys("זסבהנמצתץ", width: letterWidth)
-                }
-                HStack(spacing: keySpacing) {
-                    key("使用系统键盘", width: smallControlWidth, utility: true, action: {
-                        systemInput = true
-                        inputFocused = true
-                    }) {
-                        Image(systemName: "globe")
-                    }
-                    key("希伯来语双引号", width: smallControlWidth, utility: true, action: { spelling.append("״") }) {
-                        Text("״").font(.title3)
-                    }
-                    key("空格", width: spaceWidth, action: { spelling.append(" ") }) {
-                        Text("空格").font(.subheadline.weight(.medium))
-                    }
-                    key("清空", width: sideWidth, utility: true, action: { spelling.removeAll() }) {
-                        Text("清空").font(.subheadline.weight(.medium))
-                    }
-                    .disabled(spelling.isEmpty)
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .frame(height: 4 * keyHeight + 3 * keySpacing)
-        .environment(\.layoutDirection, .leftToRight)
-        .padding(6)
-        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 14))
-        .frame(maxWidth: 520)
-        .frame(maxWidth: .infinity)
-    }
-
-    private func letterKeys(_ letters: String, width: CGFloat) -> some View {
-        ForEach(Array(letters), id: \.self) { letter in
-            key(String(letter), width: width, action: { spelling.append(letter) }) {
-                Text(String(letter)).font(.title2.weight(.medium))
-                    .speechSpellsOutCharacters(true)
+            } else if spelling.isEmpty {
+                Text("未输入内容")
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+            } else {
+                HebrewText(text: spelling, size: 44, style: .largeTitle)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .textSelection(.enabled)
             }
         }
-    }
-
-    private func key<Label: View>(_ accessibilityName: String, width: CGFloat, utility: Bool = false,
-                                  action: @escaping () -> Void, @ViewBuilder label: () -> Label) -> some View {
-        Button {
-            audio.playSelectionHaptic()
-            action()
-        } label: {
-            label()
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .frame(width: width, height: keyHeight)
+        .onAppear {
+            if !submitted { inputFocused = true }
         }
-        .buttonStyle(WordSpellingKeyStyle(utility: utility))
-        .accessibilityLabel(Text(accessibilityName))
-    }
-}
-
-private struct WordSpellingKeyStyle: ButtonStyle {
-    @Environment(StudyProgress.self) private var progress
-    @Environment(\.isEnabled) private var enabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let utility: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        let pressed = enabled && configuration.isPressed
-        let theme = progress.theme
-        let shape = RoundedRectangle(cornerRadius: 7)
-        configuration.label
-            .foregroundStyle(theme.ink)
-            .background {
-                shape.fill(utility ? theme.highlightedSurface : theme.cardSurface)
-                    .overlay(shape.fill(theme.accent.opacity(pressed ? 0.24 : 0)))
-                    .overlay(shape.strokeBorder(theme.outline, lineWidth: 1))
-                    .shadow(color: theme.ink.opacity(0.17), radius: 0, y: pressed ? 0 : 1)
-            }
-            .opacity(enabled ? 1 : 0.52)
-            .scaleEffect(pressed && !reduceMotion ? 0.93 : 1)
-            .contentShape(Rectangle())
-            .animation(pressed || reduceMotion ? nil : .easeOut(duration: 0.14), value: pressed)
+        .onChange(of: wordId) { _, _ in
+            inputFocused = !submitted
+        }
+        .onChange(of: submitted) { _, done in
+            inputFocused = !done
+        }
     }
 }

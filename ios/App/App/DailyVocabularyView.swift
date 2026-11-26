@@ -496,7 +496,7 @@ private struct DailyVocabularyView: View {
         StudyCard {
             StudySectionTitle(isRetrying ? "订正拼写「\(word.meaningZh)」" : "写出「\(word.meaningZh)」")
             Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-            Text("屏内键盘输入无点全拼即可，系统键盘也支持带点写法").font(.caption).foregroundStyle(progress.theme.mutedInk)
+            Text("使用系统键盘输入，支持无点全拼或带点写法").font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
         WordSpellingInput(wordId: word.id, spelling: input,
                           submitted: isRetrying ? retryMatched : answer != nil) {
