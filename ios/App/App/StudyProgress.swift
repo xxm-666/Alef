@@ -164,7 +164,8 @@ struct ReviewSchedule: Codable, Equatable {
         }
         let overdue = elapsedDays - graceDays
         let retention = exp(-0.35 * (overdue / stabilityDays))
-        return max(10, min(100, Int(round(base * retention))))
+        let minimum = base >= 10 ? 10 : min(1, Int(round(base)))
+        return max(minimum, min(100, Int(round(base * retention))))
     }
 
     func isDecayed(at now: Date = .now, mastery: Mastery = .learning) -> Bool {
@@ -204,8 +205,9 @@ struct ReviewSchedule: Codable, Equatable {
             outcome = (interval, min(maxEase, ease + 0.15), reps + 1, lapses, 25 + streakBonus)
         }
 
+        let minimumAfterMistake = currentStrength > 0 ? min(10, currentStrength) : 10
         let newStrength = grade == .again
-            ? max(10, currentStrength + outcome.strengthDelta)
+            ? max(minimumAfterMistake, currentStrength + outcome.strengthDelta)
             : min(100, max(10, currentStrength + outcome.strengthDelta))
         let nextDate = calendar.date(byAdding: .day, value: outcome.interval, to: date) ?? date
         return ReviewSchedule(
@@ -386,12 +388,43 @@ struct DailySpellingAnswer: Codable, Equatable {
     var wasPeeked: Bool { peeked == true }
 }
 
+enum DailyVocabularyChoiceStage: Int, CaseIterable {
+    case writtenMeaning, spokenWord, spokenMeaning
+
+    var title: String {
+        switch self {
+        case .writtenMeaning: "看词选义"
+        case .spokenWord: "听音选词"
+        case .spokenMeaning: "听音选义"
+        }
+    }
+}
+
+struct DailyVocabularyChoices: Codable, Equatable {
+    let wordOrder: [[Int]]
+    var answered = 0
+    var selectedWordID: String?
+
+    init(wordCount: Int) {
+        wordOrder = DailyVocabularyChoiceStage.allCases.map { _ in (0..<wordCount).shuffled() }
+    }
+
+    func isValid(wordCount: Int) -> Bool {
+        wordOrder.count == DailyVocabularyChoiceStage.allCases.count
+            && (0...(wordOrder.count * wordCount)).contains(answered)
+            && (selectedWordID.map { !$0.isEmpty && answered < wordOrder.count * wordCount } ?? true)
+            && wordOrder.allSatisfy { $0.count == wordCount && Set($0) == Set(0..<wordCount) }
+    }
+}
+
 struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
     let wordIds: [String]
     var studied = 0
     var answers: [DailySpellingAnswer] = []
     var feedbackPending = false
     var practiceRound: Int? = nil
+    var choices: DailyVocabularyChoices? = nil
+    var spellingPeeked: Bool? = nil
 
     var id: String { wordIds.first ?? "" }
     var roundCount: Int { max(0, practiceRound ?? 0) }
@@ -399,11 +432,28 @@ struct DailyVocabularyGroup: Codable, Equatable, Identifiable {
     var isComplete: Bool { answers.count == wordIds.count && !feedbackPending }
     var correctCount: Int { answers.filter(\.correct).count }
     var answerCombo: Int { answers.reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count }
+    var choiceStage: DailyVocabularyChoiceStage? {
+        guard let choices, !wordIds.isEmpty else { return nil }
+        return DailyVocabularyChoiceStage(rawValue: choices.answered / wordIds.count)
+    }
+    var choiceOffset: Int { (choices?.answered ?? 0) % max(1, wordIds.count) }
+    var choiceWordID: String? {
+        guard let choices, let stage = choiceStage else { return nil }
+        return wordIds[choices.wordOrder[stage.rawValue][choiceOffset]]
+    }
+    var completedChoiceCount: Int {
+        // Existing groups with spelling answers resume at spelling.
+        choices?.answered ?? (answers.isEmpty ? 0 : DailyVocabularyChoiceStage.allCases.count * wordIds.count)
+    }
     var status: String {
         if isComplete { return "拼对 \(correctCount) / \(wordIds.count)" }
+        if let choiceStage {
+            let submitted = choiceOffset + (choices?.selectedWordID == nil ? 0 : 1)
+            return "\(choiceStage.title) \(submitted) / \(wordIds.count)"
+        }
         if studied == wordIds.count { return "拼写 \(answers.count) / \(wordIds.count)" }
         if studied > 0 { return "认读 \(studied) / \(wordIds.count)" }
-        return roundCount > 0 ? "第 \(roundCount + 1) 轮 · 准备重练" : "先认读，再拼写"
+        return roundCount > 0 ? "第 \(roundCount + 1) 轮 · 准备重练" : "准备认读"
     }
 }
 
@@ -416,11 +466,14 @@ struct DailyVocabularyPlan: Codable, Equatable {
     var day = ""
     var groupsPerDay = 2
     var groups: [DailyVocabularyGroup] = []
+    var spellingCombo: Int? = nil
 
     var completedCount: Int { groups.filter(\.isComplete).count }
     var nextGroup: DailyVocabularyGroup? { groups.first { !$0.isComplete } }
     var hasStarted: Bool { groups.contains(where: \.hasStarted) }
-    var answerCombo: Int { groups.flatMap(\.answers).reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count }
+    var answerCombo: Int {
+        spellingCombo ?? groups.flatMap(\.answers).reversed().prefix(while: { $0.correct && !$0.wasPeeked }).count
+    }
 
     static func dayKey(for date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
@@ -453,7 +506,8 @@ struct DailyVocabularyPlan: Codable, Equatable {
             guard assignments.count < groupsPerDay else { break }
             assignments.append(DailyVocabularyGroup(wordIds: Array(newIds.dropFirst(offset).prefix(Self.groupSize))))
         }
-        return Self(day: today, groupsPerDay: groupsPerDay, groups: assignments)
+        return Self(day: today, groupsPerDay: groupsPerDay, groups: assignments,
+                    spellingCombo: day == today ? spellingCombo : 0)
     }
 
     func remainingNewWordIds(from words: [StudyWord], mastery: [String: Mastery], schedule: [String: ReviewSchedule]) -> [String] {
@@ -462,7 +516,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
     }
 
     var isValid: Bool {
-        guard Self.groupOptions.contains(groupsPerDay), groups.count <= Self.maxGroupsPerDay,
+        guard Self.groupOptions.contains(groupsPerDay), groups.count <= Self.maxGroupsPerDay, (spellingCombo ?? 0) >= 0,
               day.isEmpty ? groups.isEmpty : day.range(of: #"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"#, options: .regularExpression) != nil
         else { return false }
         var ids = Set<String>()
@@ -471,9 +525,15 @@ struct DailyVocabularyPlan: Codable, Equatable {
                   (0...group.wordIds.count).contains(group.studied), group.answers.count <= group.wordIds.count,
                   group.studied == group.wordIds.count || group.answers.isEmpty,
                   !group.feedbackPending || !group.answers.isEmpty,
+                  group.spellingPeeked != true || (group.studied == group.wordIds.count && group.choiceStage == nil
+                                                     && !group.feedbackPending && group.answers.count < group.wordIds.count),
                   group.answers.allSatisfy({ !$0.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
                   group.wordIds.allSatisfy({ !$0.isEmpty && ids.insert($0).inserted })
             else { return false }
+            if let choices = group.choices {
+                guard choices.isValid(wordCount: group.wordIds.count), group.studied == group.wordIds.count,
+                      group.choiceStage == nil || group.answers.isEmpty else { return false }
+            }
         }
         return true
     }
@@ -530,6 +590,12 @@ struct StudyReviewBatch: Codable, Hashable {
     struct BackupUndo: Codable {
         let previous: [String: Data]
         let absent: [String]
+        var applied: [String: Data]? = nil
+        var appliedLearning: [String: Data]? = nil
+    }
+
+    enum BackupRestoreMode: Hashable {
+        case keepCurrent, restoreSnapshot
     }
 
     private static let storageKey = "alef.native.progress.v1"
@@ -540,6 +606,10 @@ struct StudyReviewBatch: Codable, Hashable {
     private static let achievementInputKeys: Set<String> = [
         "alef.mastery.v1", "alef.wordMastery.v1", "alef.studyStats.v1", DailyVocabularyPlan.storageKey, bestAnswerComboKey
     ]
+    private static let learningBackupKeys = achievementInputKeys.union([
+        "alef.wordSrs.v1", letterScheduleKey, StudyReviewBatch.storageKey,
+        StudyWordMistake.storageKey, StudyAchievement.storageKey
+    ])
     static let letterScheduleKey = "alef.native.letterSrs.v1"
     static let lastBackupAtKey = "alef.native.lastBackupAt.v1"
     static let nonSyncedKeys: Set<String> = [
@@ -849,7 +919,13 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func prepareDailyVocabulary(words: [StudyWord], date: Date = .now) {
         let current = dailyVocabulary
-        let plan = current.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+        var plan = current.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+        for index in plan.groups.indices {
+            let group = plan.groups[index]
+            if group.studied == group.wordIds.count && group.choices == nil && group.answers.isEmpty {
+                plan.groups[index].choices = DailyVocabularyChoices(wordCount: group.wordIds.count)
+            }
+        }
         if current != plan { write(plan, for: DailyVocabularyPlan.storageKey) }
     }
 
@@ -889,10 +965,13 @@ struct StudyReviewBatch: Codable, Hashable {
         var plan = dailyVocabulary
         guard plan.day == day, expected.isComplete,
               let index = plan.groups.firstIndex(of: expected) else { return false }
+        plan.spellingCombo = plan.answerCombo
         plan.groups[index].studied = 0
         plan.groups[index].answers = []
         plan.groups[index].feedbackPending = false
         plan.groups[index].practiceRound = expected.roundCount + 1
+        plan.groups[index].choices = nil
+        plan.groups[index].spellingPeeked = nil
         write(plan, for: DailyVocabularyPlan.storageKey)
         return true
     }
@@ -904,8 +983,14 @@ struct StudyReviewBatch: Codable, Hashable {
               let index = plan.groups.firstIndex(of: expected) else { return false }
         if expected.studied < expected.wordIds.count {
             plan.groups[index].studied += 1
+            if plan.groups[index].studied == expected.wordIds.count {
+                plan.groups[index].choices = DailyVocabularyChoices(wordCount: expected.wordIds.count)
+            }
         } else if expected.feedbackPending {
             plan.groups[index].feedbackPending = false
+        } else if expected.choices?.selectedWordID != nil {
+            plan.groups[index].choices?.selectedWordID = nil
+            plan.groups[index].choices?.answered += 1
         } else {
             return false
         }
@@ -913,24 +998,64 @@ struct StudyReviewBatch: Codable, Hashable {
         return true
     }
 
+    @discardableResult
+    func answerDailyVocabularyChoice(_ expected: DailyVocabularyGroup, day: String, selectedWordID: String,
+                                     date: Date = .now) -> Bool {
+        var plan = dailyVocabulary
+        guard plan.day == day, let wordID = expected.choiceWordID, expected.choices?.selectedWordID == nil,
+              !selectedWordID.isEmpty,
+              let index = plan.groups.firstIndex(of: expected) else { return false }
+        plan.groups[index].choices?.selectedWordID = selectedWordID
+        if selectedWordID == wordID {
+            savePractice(wordID, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                         correct: true, date: date, dailyPlan: plan)
+        } else {
+            saveDailyPractice(plan, on: date)
+        }
+        return true
+    }
+
+    func markDailyVocabularySpellingPeeked(_ expected: DailyVocabularyGroup, day: String) -> Bool {
+        var plan = dailyVocabulary
+        guard plan.day == day, expected.studied == expected.wordIds.count, expected.choiceStage == nil,
+              !expected.feedbackPending, !expected.isComplete,
+              let index = plan.groups.firstIndex(of: expected) else { return false }
+        plan.groups[index].spellingPeeked = true
+        write(plan, for: DailyVocabularyPlan.storageKey)
+        return true
+    }
+
+    private func saveDailyPractice(_ plan: DailyVocabularyPlan, on date: Date) {
+        var stats = statistics
+        stats.record(on: date)
+        update { entries, encoder in
+            entries["alef.studyStats.v1"] = try encoder.encode(stats)
+            entries[DailyVocabularyPlan.storageKey] = try encoder.encode(plan)
+        }
+    }
+
     func answerDailyVocabulary(_ expected: DailyVocabularyGroup, day: String, word: StudyWord, input: String,
-                               peeked: Bool = false, date: Date = .now) -> DailySpellingAnswer? {
+                               date: Date = .now) -> DailySpellingAnswer? {
         var plan = dailyVocabulary
         let answer = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard plan.day == day, !expected.isComplete, let index = plan.groups.firstIndex(of: expected),
-              !answer.isEmpty, expected.studied == expected.wordIds.count, !expected.feedbackPending,
+              !answer.isEmpty, expected.studied == expected.wordIds.count, expected.choiceStage == nil, !expected.feedbackPending,
               expected.wordIds.indices.contains(expected.answers.count), expected.wordIds[expected.answers.count] == word.id
         else { return nil }
-        let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer), peeked: peeked ? true : nil)
+        let usedHint = expected.spellingPeeked == true
+        let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer), peeked: usedHint ? true : nil)
+        plan.spellingCombo = attempt.correct && !usedHint ? min(plan.answerCombo, Int.max - 1) + 1 : 0
         plan.groups[index].answers.append(attempt)
         plan.groups[index].feedbackPending = true
-        if peeked && attempt.correct {
-            var stats = statistics
-            stats.record(on: date)
-            update { entries, encoder in
-                entries["alef.studyStats.v1"] = try encoder.encode(stats)
-                entries[DailyVocabularyPlan.storageKey] = try encoder.encode(plan)
-            }
+        plan.groups[index].spellingPeeked = nil
+        if usedHint && attempt.correct {
+            saveDailyPractice(plan, on: date)
+            return attempt
+        }
+        if expected.roundCount > 0, let existing = schedule[word.id],
+           existing.repetitions > 0 || existing.lapses > 0 || existing.lastReview != nil {
+            savePractice(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
+                         correct: attempt.correct, date: date, dailyPlan: plan, mistakeKind: .spelling)
             return attempt
         }
         saveReview(word.id, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
@@ -958,7 +1083,8 @@ struct StudyReviewBatch: Codable, Hashable {
         }
     }
 
-    private func savePractice(_ id: String, masteryKey: String, scheduleKey: String, correct: Bool, date: Date) {
+    private func savePractice(_ id: String, masteryKey: String, scheduleKey: String, correct: Bool, date: Date,
+                              dailyPlan: DailyVocabularyPlan? = nil, mistakeKind: StudyWordMistakeKind? = nil) {
         var values: [String: Mastery] = read(masteryKey, default: [:])
         var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
         let currentMastery = values[id] ?? .unlearned
@@ -973,9 +1099,10 @@ struct StudyReviewBatch: Codable, Hashable {
             }
         }
         let newStrength: Double = if correct {
-            currentStrength == 0 ? 25 : min(100, currentStrength + 15)
+            if dailyPlan != nil { min(100, currentStrength + 4) }
+            else { currentStrength == 0 ? 25 : min(100, currentStrength + 15) }
         } else {
-            max(10, currentStrength - 15)
+            max(currentStrength > 0 ? min(10, currentStrength) : 10, currentStrength - 15)
         }
         let nextSchedule: ReviewSchedule
         if let existing {
@@ -995,7 +1122,7 @@ struct StudyReviewBatch: Codable, Hashable {
                 nextReviewAt: Int64(nextDate.timeIntervalSince1970 * 1_000),
                 intervalDays: 1,
                 easeFactor: ReviewSchedule.defaultEase,
-                repetitions: correct ? 1 : 0,
+                repetitions: correct && dailyPlan == nil ? 1 : 0,
                 lapses: correct ? 0 : 1,
                 lastReview: nil,
                 strength: newStrength,
@@ -1006,10 +1133,20 @@ struct StudyReviewBatch: Codable, Hashable {
         dates[id] = nextSchedule
         var stats = statistics
         stats.record(on: date)
+        let mistakes = mistakeKind.map { updatedMistakes(wordID: id, kind: $0, failed: !correct, formal: false, date: date) }
         update { entries, encoder in
             entries[masteryKey] = try encoder.encode(values)
             entries[scheduleKey] = try encoder.encode(dates)
             entries["alef.studyStats.v1"] = try encoder.encode(stats)
+            if let mistakes, mistakes != wordMistakes {
+                entries[StudyWordMistake.storageKey] = try encoder.encode(mistakes)
+            }
+            if let dailyPlan {
+                entries[DailyVocabularyPlan.storageKey] = try encoder.encode(dailyPlan)
+                if dailyPlan.answerCombo > achievementProgress.bestAnswerCombo {
+                    entries[Self.bestAnswerComboKey] = try encoder.encode(dailyPlan.answerCombo)
+                }
+            }
         }
     }
 
@@ -1025,7 +1162,7 @@ struct StudyReviewBatch: Codable, Hashable {
         var dates: [String: ReviewSchedule] = read(scheduleKey, default: [:])
         let nextSchedule = ReviewSchedule.next(from: base, grade: grade, on: date, recordsReview: dailyPlan == nil)
         let nextProficiency = nextSchedule.proficiency(at: date, mastery: .learning)
-        values[id] = dailyPlan != nil ? .learning : Self.mastery(forProficiency: nextProficiency)
+        values[id] = Self.mastery(forProficiency: nextProficiency)
         dates[id] = nextSchedule
         var stats = statistics
         if recordStats { stats.record(on: date) }
@@ -1150,6 +1287,11 @@ struct StudyReviewBatch: Codable, Hashable {
         return restored
     }
 
+    func backupExportDate(_ data: Data) -> Date? {
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        return (root?["exportedAt"] as? String).flatMap(Self.parseIsoDate)
+    }
+
     private func decodeBackupEntries(_ data: Data) throws -> [String: Data] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               root["app"] as? String == "Alef", root["version"] as? Int == 1,
@@ -1165,12 +1307,70 @@ struct StudyReviewBatch: Codable, Hashable {
         return restored
     }
 
-    func backupChanges(_ restored: [String: Data]) -> [String] {
-        restored.keys.filter { key in
+    func backupRestoreEntries(_ backup: [String: Data], mode: BackupRestoreMode) -> [String: Data] {
+        let incoming = backup.filter { $0.key != StudySyncMerger.itemVersionsKey }
+        let hasIncomingLearning = incoming.keys.contains(where: Self.learningBackupKeys.contains)
+        if mode == .restoreSnapshot {
+            let base = hasIncomingLearning ? entries.filter { !Self.learningBackupKeys.contains($0.key) } : entries
+            return base.merging(incoming) { _, restored in restored }
+        }
+
+        let hasLocalLearning = dailyVocabulary.hasStarted || statistics.totalReviews > 0
+            || !wordMastery.isEmpty || !letterMastery.isEmpty || !schedule.isEmpty || !letterSchedule.isEmpty
+            || !wordMistakes.isEmpty || !earnedAchievements.isEmpty || achievementProgress.bestAnswerCombo > 0
+        guard hasLocalLearning else {
+            let base = hasIncomingLearning ? entries.filter { !Self.learningBackupKeys.contains($0.key) } : entries
+            return base.merging(incoming) { current, _ in current }
+        }
+        var restored = entries.merging(incoming.filter { !Self.learningBackupKeys.contains($0.key) }) { current, _ in current }
+        for (masteryKey, scheduleKey) in [("alef.wordMastery.v1", "alef.wordSrs.v1"), ("alef.mastery.v1", Self.letterScheduleKey)] {
+            var knownIDs = Set(backupRecords(entries[masteryKey]).keys).union(backupRecords(entries[scheduleKey]).keys)
+            if masteryKey == "alef.wordMastery.v1" {
+                let inProgress = dailyVocabulary.groups.filter { $0.hasStarted && !$0.isComplete }
+                knownIDs.formUnion(inProgress.flatMap(\.wordIds))
+            }
+            for key in [masteryKey, scheduleKey] {
+                let missing = backupRecords(incoming[key]).filter { !knownIDs.contains($0.key) }
+                let merged = backupRecords(entries[key]).merging(missing) { current, _ in current }
+                if !missing.isEmpty, let data = try? JSONSerialization.data(withJSONObject: merged, options: .sortedKeys) {
+                    restored[key] = data
+                }
+            }
+        }
+        return restored
+    }
+
+    func backupChanges(_ backup: [String: Data], mode: BackupRestoreMode = .keepCurrent) -> [String] {
+        changedBackupKeys(from: entries, to: backupRestoreEntries(backup, mode: mode)).sorted()
+    }
+
+    func backupRecordChanges(_ key: String, restored: Data?) -> (added: Int, replaced: Int, removed: Int)? {
+        guard ["alef.wordMastery.v1", "alef.wordSrs.v1", "alef.mastery.v1", Self.letterScheduleKey].contains(key) else {
+            return nil
+        }
+        let before = backupRecords(entries[key])
+        let after = backupRecords(restored)
+        let replaced = before.keys.filter { id in
+            guard let current = before[id], let incoming = after[id],
+                  let a = try? JSONSerialization.data(withJSONObject: current, options: [.fragmentsAllowed, .sortedKeys]),
+                  let b = try? JSONSerialization.data(withJSONObject: incoming, options: [.fragmentsAllowed, .sortedKeys])
+            else { return false }
+            return a != b
+        }.count
+        return (after.keys.filter { before[$0] == nil }.count, replaced, before.keys.filter { after[$0] == nil }.count)
+    }
+
+    private func backupRecords(_ data: Data?) -> [String: Any] {
+        guard let data else { return [:] }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
+    private func changedBackupKeys(from oldEntries: [String: Data], to newEntries: [String: Data]) -> Set<String> {
+        Set(oldEntries.keys).union(newEntries.keys).filter { key in
             guard key != StudySyncMerger.itemVersionsKey else { return false }
-            guard let old = entries[key], let new = restored[key] else { return true }
+            guard let old = oldEntries[key], let new = newEntries[key] else { return true }
             return canonicalJSON(old) != canonicalJSON(new)
-        }.sorted()
+        }
     }
 
     private func canonicalJSON(_ data: Data) -> Data {
@@ -1182,30 +1382,42 @@ struct StudyReviewBatch: Codable, Hashable {
         }
     }
 
-    func applyBackup(_ backup: [String: Data]) {
-        let restored = backup.filter { $0.key != StudySyncMerger.itemVersionsKey }
-        var affectedKeys = Set(restored.keys)
+    func applyBackup(_ backup: [String: Data], mode: BackupRestoreMode = .keepCurrent) {
+        let restored = backupRestoreEntries(backup, mode: mode)
+        var affectedKeys = changedBackupKeys(from: entries, to: restored)
+        guard !affectedKeys.isEmpty else { return }
         // Restored study records can unlock achievements that were absent from older backups.
         if !affectedKeys.isDisjoint(with: Self.achievementInputKeys) {
             affectedKeys.insert(StudyAchievement.storageKey)
         }
         let previous = entries.filter { affectedKeys.contains($0.key) }
         let absent = affectedKeys.filter { entries[$0] == nil }.sorted()
-        let undo = BackupUndo(previous: previous, absent: absent)
+        saveLocalEntries(restored)
+        let appliedLearning = affectedKeys.isDisjoint(with: Self.learningBackupKeys)
+            ? nil : entries.filter { Self.learningBackupKeys.contains($0.key) }
+        let undo = BackupUndo(previous: previous, absent: absent, applied: entries.filter { affectedKeys.contains($0.key) },
+                              appliedLearning: appliedLearning)
         guard let backupData = try? JSONEncoder().encode(undo) else { return }
         restorePoint = undo
         defaults.set(backupData, forKey: Self.restoreKey)
-        let merged = entries.merging(restored) { _, incoming in incoming }
-        saveLocalEntries(merged)
     }
 
-    func undoBackup() {
-        guard let restorePoint else { return }
+    @discardableResult
+    func undoBackup() -> Bool {
+        guard let restorePoint, let applied = restorePoint.applied else { return false }
+        let affected = Set(restorePoint.previous.keys).union(restorePoint.absent)
+        let current = entries.filter { affected.contains($0.key) }
+        guard changedBackupKeys(from: current, to: applied).isEmpty else { return false }
+        if let appliedLearning = restorePoint.appliedLearning {
+            let currentLearning = entries.filter { Self.learningBackupKeys.contains($0.key) }
+            guard changedBackupKeys(from: currentLearning, to: appliedLearning).isEmpty else { return false }
+        }
         var restored = entries.merging(restorePoint.previous) { _, incoming in incoming }
         for key in restorePoint.absent { restored.removeValue(forKey: key) }
         saveLocalEntries(restored)
         self.restorePoint = nil
         defaults.removeObject(forKey: Self.restoreKey)
+        return true
     }
 
     func syncSnapshot() -> [String: Data] {

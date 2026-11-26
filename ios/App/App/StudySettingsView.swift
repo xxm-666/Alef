@@ -700,6 +700,7 @@ private struct StudyBackupView: View {
     @State private var undoConfirmation = false
     @State private var backup: StudyBackupDocument?
     @State private var preview: BackupPreview?
+    @State private var restoreMode: StudyProgress.BackupRestoreMode = .keepCurrent
     @State private var message: String?
     @State private var status: BackupStatus?
     @State private var showsBackupText = false
@@ -708,7 +709,7 @@ private struct StudyBackupView: View {
     private struct BackupPreview: Identifiable {
         let id = UUID()
         let entries: [String: Data]
-        let changes: [String]
+        let exportedAt: Date?
     }
 
     private enum BackupStatus {
@@ -760,10 +761,10 @@ private struct StudyBackupView: View {
                     .disabled(backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            if status == .unchanged { StudyNotice(title: "备份内容与当前数据相同", symbol: "info.circle") }
+            if status == .unchanged { StudyNotice(title: "备份没有可恢复的新内容", symbol: "info.circle") }
             if status == .restored { StudyNotice(title: "已恢复学习数据", symbol: "checkmark.circle") }
             if status == .undone { StudyNotice(title: "已撤销上次恢复", symbol: "arrow.uturn.backward") }
-            if progress.restorePoint != nil {
+            if progress.restorePoint?.applied != nil {
                 backupAction("撤销上次导入", note: "恢复到导入前的数据", symbol: "arrow.uturn.backward") {
                     undoConfirmation = true
                 }
@@ -785,8 +786,11 @@ private struct StudyBackupView: View {
         }
         .confirmationDialog("撤销上次导入？", isPresented: $undoConfirmation, titleVisibility: .visible) {
             Button("撤销导入", role: .destructive) {
-                progress.undoBackup()
-                status = .undone
+                if progress.undoBackup() {
+                    status = .undone
+                } else {
+                    message = "无法安全撤销。导入后的记录已变化，或该恢复来自旧版本。当前数据已保留。"
+                }
             }
         }
         .alert("Alef 备份", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
@@ -806,16 +810,33 @@ private struct StudyBackupView: View {
     }
 
     private func restorePreview(_ pending: BackupPreview) -> some View {
-        StudyPage {
-            StudySectionTitle("将更新 \(pending.changes.count) 项数据")
+        let changes = progress.backupChanges(pending.entries, mode: restoreMode)
+        let restored = progress.backupRestoreEntries(pending.entries, mode: restoreMode)
+        return StudyPage {
             StudyCard {
-                ForEach(pending.changes, id: \.self) { key in
-                    StudyRow(title: backupLabel(key), symbol: backupSymbol(key), value: backupCount(key, data: pending.entries[key]),
-                             chevron: false)
+                if let exportedAt = pending.exportedAt {
+                    Text("备份时间 · \(exportedAt.formatted(date: .abbreviated, time: .shortened))")
+                }
+                Picker("恢复方式", selection: $restoreMode) {
+                    Text("保留本机，只补缺失").tag(StudyProgress.BackupRestoreMode.keepCurrent)
+                    Text("恢复到备份时点").tag(StudyProgress.BackupRestoreMode.restoreSnapshot)
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
+            if restoreMode == .restoreSnapshot {
+                StudyNotice(title: "学习数据将回到备份时点", symbol: "exclamationmark.triangle",
+                            note: "备份较旧或字段缺失时，下方列出的记录可能回退或移除。")
+            }
+            StudySectionTitle(changes.isEmpty ? "当前方式没有可恢复的内容" : "将更新 \(changes.count) 项数据")
+            if !changes.isEmpty {
+                StudyCard {
+                    ForEach(changes, id: \.self) { key in
+                        StudyRow(title: backupLabel(key), symbol: backupSymbol(key),
+                                 value: backupChangeLabel(key, restored: restored[key]), chevron: false)
+                    }
                 }
             }
-            StudyNotice(title: "恢复后仍可撤销", symbol: "info.circle",
-                        note: "可在备份页撤销最近一次导入。")
         }
         .studyDetail("确认恢复内容")
         .toolbar {
@@ -827,15 +848,17 @@ private struct StudyBackupView: View {
             StudyActionBar {
                 VStack(spacing: 6) {
                     Button {
-                        progress.applyBackup(pending.entries)
+                        progress.applyBackup(pending.entries, mode: restoreMode)
                         preview = nil
                         backupText = ""
                         showsBackupText = false
                         status = .restored
                     } label: {
-                        Label("确认恢复", systemImage: "square.and.arrow.down").frame(maxWidth: .infinity)
+                        Label(restoreMode == .restoreSnapshot ? "确认恢复到备份时点" : "确认补充数据",
+                              systemImage: "square.and.arrow.down").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(StudyButtonStyle(prominent: true))
+                    .disabled(changes.isEmpty)
                     Button {
                         preview = nil
                     } label: {
@@ -845,6 +868,14 @@ private struct StudyBackupView: View {
                 }
             }
         }
+    }
+
+    private func backupChangeLabel(_ key: String, restored: Data?) -> String? {
+        if let change = progress.backupRecordChanges(key, restored: restored) {
+            return [(change.added, "新增"), (change.replaced, "覆盖"), (change.removed, "移除")]
+                .filter { $0.0 > 0 }.map { "\($0.1) \($0.0)" }.joined(separator: " · ")
+        }
+        return restored == nil ? "将移除" : backupCount(key, data: restored)
     }
 
     private func backupSymbol(_ key: String) -> String {
@@ -897,12 +928,13 @@ private struct StudyBackupView: View {
         status = nil
         do {
             let entries = try progress.previewBackup(data)
-            let changes = progress.backupChanges(entries)
-            guard !changes.isEmpty else {
+            guard !progress.backupChanges(entries).isEmpty
+                    || !progress.backupChanges(entries, mode: .restoreSnapshot).isEmpty else {
                 status = .unchanged
                 return
             }
-            preview = BackupPreview(entries: entries, changes: changes)
+            restoreMode = .keepCurrent
+            preview = BackupPreview(entries: entries, exportedAt: progress.backupExportDate(data))
         } catch {
             message = error.localizedDescription
         }

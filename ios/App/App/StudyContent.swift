@@ -126,6 +126,28 @@ struct StudyContent: Decodable {
         return Array(candidates.prefix(3))
     }
 
+    func dailyVocabularyOptions(for word: StudyWord, stage: DailyVocabularyChoiceStage, groupWordIDs: [String],
+                                selectedWordID: String? = nil) -> [StudyWord] {
+        let spellsWord = stage == .spokenWord
+        let groupIDs = Set(groupWordIDs)
+        let shuffled = words.shuffled()
+        let selected = words.first { $0.id == selectedWordID }
+        let candidates = [selected].compactMap { $0 }
+            + shuffled.filter { groupIDs.contains($0.id) } + shuffled.filter { !groupIDs.contains($0.id) }
+        var labels: Set<String> = [spellsWord ? word.hebrewUnpointed : word.meaningZh]
+        var options = [word]
+        for candidate in candidates {
+            guard candidate.hebrew != word.hebrew,
+                  stage == .writtenMeaning || candidate.ipa != word.ipa,
+                  !spellsWord || !word.acceptsSpelling(candidate.hebrewUnpointed) else { continue }
+            let label = spellsWord ? candidate.hebrewUnpointed : candidate.meaningZh
+            guard labels.insert(label).inserted else { continue }
+            options.append(candidate)
+            if options.count == 4 { break }
+        }
+        return options.shuffled()
+    }
+
     func words(withRoot root: String) -> [StudyWord] {
         guard let key = StudyRoot.key(for: root) else { return [] }
         return wordsByRoot[key] ?? []

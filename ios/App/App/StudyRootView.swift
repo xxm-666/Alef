@@ -1151,6 +1151,7 @@ struct StudyAnswerButton: View {
     let selected: Bool
     let correct: Bool
     var isHebrew = false
+    var cursive = false
     var optionLabel: String?
     var playing = false
     let action: () -> Void
@@ -1172,7 +1173,7 @@ struct StudyAnswerButton: View {
                         .background(progress.theme.insetSurface, in: Circle())
                         .accessibilityHidden(true)
                 }
-                if isHebrew { HebrewText(text: title, size: 28) }
+                if isHebrew { HebrewText(text: title, cursive: cursive, size: 28) }
                 else { Text(title).foregroundStyle(progress.theme.ink) }
                 Spacer()
                 if playing {

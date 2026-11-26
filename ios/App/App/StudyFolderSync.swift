@@ -222,7 +222,10 @@ enum StudySyncMerger {
     private static func dailyScore(_ plan: DailyVocabularyPlan) -> Int {
         let rounds = plan.groups.reduce(0) { $0 + $1.roundCount * 10_000 }
         let completed = plan.completedCount * 1_000
-        let steps = plan.groups.reduce(0) { $0 + $1.studied + $1.answers.count + ($1.isComplete ? 1 : 0) }
+        let steps = plan.groups.reduce(0) { total, group in
+            let choiceSteps = group.completedChoiceCount * 2 + (group.choices?.selectedWordID == nil ? 0 : 1)
+            return total + group.studied + choiceSteps + group.answers.count + (group.isComplete ? 1 : 0)
+        }
         return rounds + completed + steps
     }
 
