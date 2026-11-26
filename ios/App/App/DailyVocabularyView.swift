@@ -864,8 +864,8 @@ private struct DailyVocabularyPackPickerSheet: View {
             packRow(id: nil, title: "全部词库", subtitle: "从全部 \(content.words.count) 个单词按入门与高频顺序学习",
                     symbol: "books.vertical", total: content.words.count, remaining: unlearnedCount(for: nil),
                     selected: selected == nil)
-            ForEach(StudyWordPackGroup.allCases) { group in
-                let packs = content.allWordPacks.filter { $0.group == group }
+            ForEach(StudyWordPackGroup.allCases.filter { $0 != .content }) { group in
+                let packs = content.allWordPacks.filter { $0.group == group && $0.kind == .words }
                 StudySectionTitle(group.title)
                 StudyCard(padding: 10, spacing: 2) {
                     ForEach(packs) { pack in

@@ -70,32 +70,25 @@ struct WordsView: View {
     @State private var displayLimit = 60
 
     var body: some View {
+        let activePack = preferences.activePackId.flatMap { content.wordPack(id: $0) }
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize) {
-            StudyHeading(title: "词库", eyebrow: "VOCABULARY · \(content.words.count) 词")
-            StudySegments(title: "词库内容",
-                          options: [("browse", "单词"), ("packs", "单词包"), ("phrases", "情景短语"), ("reading", "阅读")],
-                          selection: Binding(get: { libraryMode }, set: {
-                var state = preferences
-                state.setMode($0)
-                progress.write(state, for: "alef.wordsState.v1")
-            }))
-            switch libraryMode {
-            case "packs":
-                topicPackLibrary
-            case "phrases":
+            StudyHeading(title: "内容库",
+                         eyebrow: "LIBRARY · \(content.words.count) 词 · \(content.phrases.count) 短语 · \(content.readings.count) 阅读")
+            frequencyTierBar
+            switch activePack?.kind {
+            case .phrases:
                 phraseLibrary
-            case "reading":
+            case .readings:
                 StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
             default:
                 searchControls
-                frequencyTierBar
                 quickTogglesBar
                 if hasFilters { activeFilters }
                 wordLibrary
             }
         }
         .studyHome()
-        .onChange(of: libraryMode) { _, _ in searchFocused = false }
+        .onChange(of: preferences.activePackId) { _, _ in searchFocused = false }
         .onChange(of: filterSignature) { _, _ in displayLimit = 60 }
         .onDisappear { searchFocused = false }
         .navigationDestination(item: $openedWordID) { id in
@@ -114,12 +107,6 @@ struct WordsView: View {
         }
     }
 
-    private var libraryMode: String {
-        switch preferences.mode {
-        case "packs", "phrases", "reading": preferences.mode
-        default: "browse"
-        }
-    }
     private var preferences: WordPreferences { progress.read("alef.wordsState.v1", default: WordPreferences()) }
 
     private func setting<Value>(_ path: WritableKeyPath<WordPreferences, Value>) -> Binding<Value> {
@@ -219,7 +206,7 @@ struct WordsView: View {
         let pinnedPacks = progress.pinnedWordPackIds.compactMap { content.wordPack(id: $0) }
         return ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                packBarPill("全部词库", symbol: nil, active: selected == nil) {
+                packBarPill("全部单词", symbol: nil, active: selected == nil) {
                     var state = preferences
                     state.selectedPackId = nil
                     state.frequencyTier = nil
@@ -233,12 +220,12 @@ struct WordsView: View {
                         progress.write(state, for: "alef.wordsState.v1")
                     }
                 }
-                Button {
-                    var state = preferences
-                    state.setMode("packs")
-                    progress.write(state, for: "alef.wordsState.v1")
+                NavigationLink {
+                    StudyPackManagerView(content: content,
+                                         showNiqqud: setting(\.showNiqqud),
+                                         showCursive: setting(\.showCursive))
                 } label: {
-                    Label("管理词包", systemImage: "pin")
+                    Label("包管理", systemImage: "square.grid.2x2")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(progress.theme.accent)
                         .padding(.horizontal, 11)
@@ -606,118 +593,6 @@ struct WordsView: View {
         }
     }
 
-    private var topicPackLibrary: some View {
-        let pinnedCount = progress.pinnedWordPackIds.count
-        let activeDailyPack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
-        return VStack(alignment: .leading, spacing: 14) {
-            StudyCard(padding: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "pin.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(progress.theme.accent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("已固定 \(pinnedCount) 个词包到单词页")
-                            .font(.subheadline.weight(.semibold))
-                        Text("今日记词：\(activeDailyPack?.title ?? "全部词库") · 点按图钉可固定或取消")
-                            .font(.caption)
-                            .foregroundStyle(progress.theme.mutedInk)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            ForEach(StudyWordPackGroup.allCases) { group in
-                let packs = content.allWordPacks.filter { $0.group == group }
-                StudySectionTitle(group.title)
-                topicPackGrid(packs, highlighted: group != .core)
-            }
-        }
-    }
-
-    private func topicPackGrid(_ packs: [StudyWordPack], highlighted: Bool) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 156), spacing: 8)], spacing: 8) {
-            ForEach(packs) { pack in
-                let packWords = content.words(inPack: pack.id)
-                let mastered = packWords.reduce(into: 0) { count, word in
-                    if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
-                }
-                let ratio = packWords.isEmpty ? 0.0 : Double(mastered) / Double(packWords.count)
-                let pinned = progress.isWordPackPinned(pack.id)
-                let isDailyTarget = progress.dailyVocabularyPackId == pack.id
-                StudyCard(highlighted: highlighted || isDailyTarget, padding: 12, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: pack.symbol)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(progress.theme.accent)
-                            .frame(width: 32, height: 32)
-                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        Spacer(minLength: 0)
-                        Button {
-                            progress.togglePinnedWordPack(pack.id)
-                        } label: {
-                            Image(systemName: pinned ? "pin.fill" : "pin")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(pinned ? Color.white : progress.theme.mutedInk)
-                                .frame(width: 30, height: 30)
-                                .background(pinned ? progress.theme.primaryButton : progress.theme.insetSurface, in: Circle())
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(pinned ? "取消固定\(pack.title)" : "固定\(pack.title)到单词页")
-                    }
-                    NavigationLink {
-                        TopicPackDetailView(pack: pack, content: content,
-                                            showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 4) {
-                                    Text(pack.title)
-                                        .font(.subheadline.weight(.bold))
-                                        .foregroundStyle(progress.theme.ink)
-                                        .lineLimit(1)
-                                    if isDailyTarget {
-                                        Text("今日")
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(progress.theme.accent)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 2)
-                                            .background(progress.theme.highlightedSurface, in: Capsule())
-                                    }
-                                }
-                                Text(pack.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(progress.theme.mutedInk)
-                                    .lineLimit(2)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        Capsule().fill(progress.theme.insetSurface)
-                                        Capsule()
-                                            .fill(progress.theme.accent)
-                                            .frame(width: max(0, geo.size.width * ratio))
-                                    }
-                                }
-                                .frame(height: 5)
-                                HStack {
-                                    Text("\(packWords.count) 词")
-                                    Spacer(minLength: 0)
-                                    Text("已掌握 \(mastered)")
-                                }
-                                .font(.caption2.weight(.medium))
-                                .monospacedDigit()
-                                .foregroundStyle(progress.theme.mutedInk)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
     private var phraseLibrary: some View {
         let categories = content.phraseCategories.keys.sorted()
         let favorites: [String] = progress.read("alef.native.phraseFavorites.v1", default: [])
@@ -833,7 +708,7 @@ private struct WordFilterSheet: View {
             }))
             StudySectionTitle("高频词表")
             StudySegments(title: "高频词表",
-                          options: [(nil, "全部词库"), ("pack_beginner", "基础入门"), ("pack_top1000", "Top 1000"), ("pack_top2000", "Top 2000")],
+                          options: [(nil, "全部单词"), ("pack_beginner", "基础入门"), ("pack_top1000", "核心 1000"), ("pack_top1001_2000", "进阶 2000")],
                           selection: Binding(get: { preferences.activePackId }, set: {
                 preferences.selectedPackId = $0
                 preferences.frequencyTier = nil
@@ -2037,5 +1912,320 @@ private struct TopicPackDetailView: View {
                 .accessibilityLabel(favorite ? "取消收藏\(word.meaningZh)" : "收藏\(word.meaningZh)")
             }
         }
+    }
+}
+
+private struct StudyPackManagerView: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let content: StudyContent
+    @Binding var showNiqqud: Bool
+    @Binding var showCursive: Bool
+
+    var body: some View {
+        let pinnedCount = progress.pinnedWordPackIds.count
+        let activeDailyPack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
+        StudyPage {
+            StudyCard(padding: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "pin.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(progress.theme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("已固定 \(pinnedCount) 个学习包到内容库顶部")
+                            .font(.subheadline.weight(.semibold))
+                        Text("今日记词：\(activeDailyPack?.title ?? "全部单词") · 点按图钉固定，点按卡片进入学习")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            ForEach(StudyWordPackGroup.allCases) { group in
+                let packs = content.allWordPacks.filter { $0.group == group }
+                StudySectionTitle(group.title)
+                packGrid(packs, highlighted: group == .content || group == .featured)
+            }
+        }
+        .studyDetail("包管理")
+    }
+
+    private func packGrid(_ packs: [StudyWordPack], highlighted: Bool) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 156), spacing: 8)], spacing: 8) {
+            ForEach(packs) { pack in
+                let pinned = progress.isWordPackPinned(pack.id)
+                let isDailyTarget = pack.kind == .words && progress.dailyVocabularyPackId == pack.id
+                StudyCard(highlighted: highlighted || isDailyTarget, padding: 12, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: pack.symbol)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                            .frame(width: 32, height: 32)
+                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Spacer(minLength: 0)
+                        Button {
+                            progress.togglePinnedWordPack(pack.id)
+                        } label: {
+                            Image(systemName: pinned ? "pin.fill" : "pin")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(pinned ? Color.white : progress.theme.mutedInk)
+                                .frame(width: 30, height: 30)
+                                .background(pinned ? progress.theme.primaryButton : progress.theme.insetSurface, in: Circle())
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(pinned ? "取消固定\(pack.title)" : "固定\(pack.title)到内容库")
+                    }
+                    NavigationLink {
+                        destinationView(for: pack)
+                    } label: {
+                        packCardContent(pack, isDailyTarget: isDailyTarget)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destinationView(for pack: StudyWordPack) -> some View {
+        switch pack.kind {
+        case .phrases:
+            PhrasePackDetailView(pack: pack, content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
+        case .readings:
+            ReadingPackDetailView(pack: pack, content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
+        case .words:
+            TopicPackDetailView(pack: pack, content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
+        }
+    }
+
+    @ViewBuilder
+    private func packCardContent(_ pack: StudyWordPack, isDailyTarget: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(pack.title)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(progress.theme.ink)
+                        .lineLimit(1)
+                    if isDailyTarget {
+                        Text("今日")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(progress.theme.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(progress.theme.highlightedSurface, in: Capsule())
+                    }
+                }
+                Text(pack.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .lineLimit(2)
+            }
+            switch pack.kind {
+            case .phrases:
+                let favorites: [String] = progress.read("alef.native.phraseFavorites.v1", default: [])
+                HStack {
+                    Text("\(content.phrases.count) 句")
+                    Spacer(minLength: 0)
+                    Text("收藏 \(favorites.count)")
+                }
+                .font(.caption2.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(progress.theme.mutedInk)
+            case .readings:
+                HStack {
+                    Text("\(content.readings.count) 篇短文")
+                    Spacer(minLength: 0)
+                    Text("含朗读与理解")
+                }
+                .font(.caption2.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(progress.theme.mutedInk)
+            case .words:
+                let packWords = content.words(inPack: pack.id)
+                let mastered = packWords.reduce(into: 0) { count, word in
+                    if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
+                }
+                let ratio = packWords.isEmpty ? 0.0 : Double(mastered) / Double(packWords.count)
+                VStack(alignment: .leading, spacing: 4) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(progress.theme.insetSurface)
+                            Capsule()
+                                .fill(progress.theme.accent)
+                                .frame(width: max(0, geo.size.width * ratio))
+                        }
+                    }
+                    .frame(height: 5)
+                    HStack {
+                        Text("\(packWords.count) 词")
+                        Spacer(minLength: 0)
+                        Text("已掌握 \(mastered)")
+                    }
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(progress.theme.mutedInk)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct PhrasePackDetailView: View {
+    @Environment(StudyProgress.self) private var progress
+    @EnvironmentObject private var audio: StudyAudio
+    let pack: StudyWordPack
+    let content: StudyContent
+    @Binding var showNiqqud: Bool
+    @Binding var showCursive: Bool
+    @State private var phraseCategory = "all"
+    @State private var hidePhraseTranslation = false
+    @State private var shadowingPhraseId: String?
+
+    var body: some View {
+        let categories = content.phraseCategories.keys.sorted()
+        let favorites: [String] = progress.read("alef.native.phraseFavorites.v1", default: [])
+        let pinned = progress.isWordPackPinned(pack.id)
+        StudyPage {
+            StudyCard(highlighted: true, padding: 12) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(pack.title).font(.headline)
+                        Text("\(content.phrases.count) 句情景表达 · \(pack.subtitle)")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        progress.togglePinnedWordPack(pack.id)
+                    } label: {
+                        Label(pinned ? "已固定" : "固定", systemImage: pinned ? "pin.fill" : "pin")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: pinned))
+                }
+            }
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    scopeButton("全部场景", key: "all")
+                    scopeButton("收藏", key: "favorites")
+                    ForEach(categories, id: \.self) { key in
+                        scopeButton(content.phraseCategories[key]?.label ?? key, key: key)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            Menu {
+                Toggle("隐藏中文，自测释义", isOn: $hidePhraseTranslation)
+                Toggle("显示元音点", isOn: $showNiqqud)
+                Toggle("手写体", isOn: $showCursive)
+            } label: {
+                Label("短语显示", systemImage: "textformat").frame(minHeight: 44)
+            }
+            .buttonStyle(StudyButtonStyle())
+            let phrases = content.phrases.filter { phrase in
+                phraseCategory == "all" || phrase.scenario == phraseCategory
+                    || (phraseCategory == "favorites" && favorites.contains(phrase.id))
+            }
+            if phrases.isEmpty {
+                ContentUnavailableView("还没有收藏短语", systemImage: "bookmark")
+            }
+            LazyVStack(spacing: 9) {
+                ForEach(phrases) { phrase in
+                    let saved = favorites.contains(phrase.id)
+                    let isShadowing = shadowingPhraseId == phrase.id
+                    StudyCard {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            HebrewText(text: showNiqqud ? phrase.hebrew : phrase.hebrewUnpointed,
+                                       cursive: showCursive, size: 34, style: .title)
+                            Text(phrase.transliteration).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                            if !hidePhraseTranslation {
+                                Text(phrase.meaningZh).font(.headline)
+                            }
+                        }
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        if !hidePhraseTranslation, let note = phrase.note {
+                            Text(note).font(.footnote).foregroundStyle(progress.theme.mutedInk)
+                        }
+                        HStack(spacing: 4) {
+                            PronunciationButton(hebrew: phrase.hebrew, iconOnly: true, title: "播放短语原音")
+                            Menu {
+                                Button("慢速播放（0.68×）", systemImage: "tortoise") {
+                                    audio.speak(phrase.hebrew, rate: 0.68)
+                                }
+                                Button(isShadowing ? "收起跟读" : "跟读", systemImage: "mic") {
+                                    shadowingPhraseId = isShadowing ? nil : phrase.id
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("短语播放与跟读选项")
+                            Spacer(minLength: 0)
+                            Button {
+                                let updated = saved ? favorites.filter { $0 != phrase.id } : favorites + [phrase.id]
+                                progress.write(updated, for: "alef.native.phraseFavorites.v1")
+                            } label: {
+                                Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(saved ? "取消收藏短语" : "收藏短语")
+                        }
+                        .foregroundStyle(progress.theme.accent)
+                        if isShadowing {
+                            ShadowingPracticeCard(hebrew: phrase.hebrew, title: "跟读短句")
+                        }
+                    }
+                }
+            }
+        }
+        .studyDetail(pack.title)
+    }
+
+    private func scopeButton(_ title: String, key: String) -> some View {
+        Button(title) { phraseCategory = key }
+            .buttonStyle(StudyButtonStyle(selected: phraseCategory == key))
+            .accessibilityAddTraits(phraseCategory == key ? .isSelected : [])
+    }
+}
+
+private struct ReadingPackDetailView: View {
+    @Environment(StudyProgress.self) private var progress
+    let pack: StudyWordPack
+    let content: StudyContent
+    @Binding var showNiqqud: Bool
+    @Binding var showCursive: Bool
+
+    var body: some View {
+        let pinned = progress.isWordPackPinned(pack.id)
+        StudyPage {
+            StudyCard(highlighted: true, padding: 12) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(pack.title).font(.headline)
+                        Text("\(content.readings.count) 篇短文 · \(pack.subtitle)")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        progress.togglePinnedWordPack(pack.id)
+                    } label: {
+                        Label(pinned ? "已固定" : "固定", systemImage: pinned ? "pin.fill" : "pin")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: pinned))
+                }
+            }
+            StudyReadingLibrary(content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
+        }
+        .studyDetail(pack.title)
     }
 }

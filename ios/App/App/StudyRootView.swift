@@ -34,7 +34,7 @@ struct StudyRootView: View {
                         }
                     }
             }
-            .tabItem { Label("词库", systemImage: "square.stack.3d.up") }
+            .tabItem { Label("内容", systemImage: "square.stack.3d.up") }
             .id(widgetTabIDs[.words]?.uuidString ?? "words")
             .tag("words")
             NavigationStack { PracticeCenterView(content: content) }

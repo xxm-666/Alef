@@ -128,10 +128,19 @@ struct StudyContent: Decodable {
             return words.filter { $0.difficulty == .beginner }
         case "pack_top1000":
             return words.filter { ($0.frequencyRank ?? Int.max) <= 1000 }
+        case "pack_top1001_2000":
+            return words.filter {
+                guard let rank = $0.frequencyRank else { return false }
+                return rank > 1000 && rank <= 2000
+            }
+        case "pack_top2001_plus":
+            return words.filter { ($0.frequencyRank ?? Int.max) > 2000 }
         case "pack_top2000":
             return words.filter { ($0.frequencyRank ?? Int.max) <= 2000 }
         case "pack_common":
             return words.filter { $0.frequency == .common }
+        case "pack_phrases", "pack_readings":
+            return []
         default:
             if id.hasPrefix("cat_") {
                 let category = String(id.dropFirst(4))
@@ -217,13 +226,18 @@ struct StudyCategory: Decodable {
     let label: String
 }
 
+enum StudyWordPackKind: String, Hashable {
+    case words, phrases, readings
+}
+
 enum StudyWordPackGroup: String, CaseIterable, Identifiable {
-    case frequency, featured, core
+    case content, frequency, featured, core
 
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .frequency: "基础与高频包"
+        case .content: "综合内容包"
+        case .frequency: "基础与高频词包"
         case .featured: "进阶专题包"
         case .core: "基础主题包"
         }
@@ -237,15 +251,19 @@ struct StudyWordPack: Identifiable, Hashable {
     let subtitle: String
     let symbol: String
     let group: StudyWordPackGroup
+    var kind: StudyWordPackKind = .words
 
-    static let defaultPinnedIDs = ["pack_top1000", "pack_top2000"]
+    static let defaultPinnedIDs = ["pack_top1000", "pack_top1001_2000", "pack_phrases", "pack_readings"]
 
     static let catalog: [StudyWordPack] = [
-        // 基础与高频包
-        StudyWordPack(id: "pack_beginner", title: "基础入门", shortTitle: "基础入门", subtitle: "短词与基础拼读，零基础首选", symbol: "sparkles", group: .frequency),
-        StudyWordPack(id: "pack_top1000", title: "核心 Top 1000", shortTitle: "Top 1000", subtitle: "he_50k 最高频核心词，覆盖日常高频表达", symbol: "flame", group: .frequency),
-        StudyWordPack(id: "pack_top2000", title: "常用 Top 2000", shortTitle: "Top 2000", subtitle: "he_50k 前 2000 常用词，稳步进阶", symbol: "chart.bar.fill", group: .frequency),
-        StudyWordPack(id: "pack_common", title: "高频常用词", shortTitle: "常用词", subtitle: "日常交流与阅读最高频核心词", symbol: "star.fill", group: .frequency),
+        // 综合内容包
+        StudyWordPack(id: "pack_phrases", title: "情景短语", shortTitle: "情景短语", subtitle: "日常交流、出行点餐与跟读练习", symbol: "text.bubble", group: .content, kind: .phrases),
+        StudyWordPack(id: "pack_readings", title: "分级阅读", shortTitle: "阅读", subtitle: "经典短文、过渡元音点与阅读理解", symbol: "text.book.closed", group: .content, kind: .readings),
+        // 基础与高频词包（词频段互斥）
+        StudyWordPack(id: "pack_beginner", title: "基础入门", shortTitle: "基础入门", subtitle: "拼读简单的短词，零基础首选", symbol: "sparkles", group: .frequency),
+        StudyWordPack(id: "pack_top1000", title: "核心词 1–1000", shortTitle: "核心 1000", subtitle: "he_50k 排名 #1–#1000 最高频词", symbol: "flame", group: .frequency),
+        StudyWordPack(id: "pack_top1001_2000", title: "进阶词 1001–2000", shortTitle: "进阶 2000", subtitle: "he_50k 排名 #1001–#2000（无重叠）", symbol: "chart.bar.fill", group: .frequency),
+        StudyWordPack(id: "pack_top2001_plus", title: "扩展词 2001+", shortTitle: "扩展 2001+", subtitle: "he_50k 2000 名以后的进阶扩展词", symbol: "star.fill", group: .frequency),
         // 进阶专题包
         StudyWordPack(id: "cat_news", title: "新闻与社会", shortTitle: "新闻社会", subtitle: "政治、媒体、法律与公共事务", symbol: "newspaper", group: .featured),
         StudyWordPack(id: "cat_tech", title: "科技与互联网", shortTitle: "科技网络", subtitle: "软件、网络、设备与现代办公", symbol: "cpu", group: .featured),
