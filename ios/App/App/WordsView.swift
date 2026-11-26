@@ -643,7 +643,7 @@ struct WordsView: View {
                 let ratio = packWords.isEmpty ? 0.0 : Double(mastered) / Double(packWords.count)
                 let pinned = progress.isWordPackPinned(pack.id)
                 let isDailyTarget = progress.dailyVocabularyPackId == pack.id
-                StudyCard(padding: 12, spacing: 8, highlighted: highlighted || isDailyTarget) {
+                StudyCard(highlighted: highlighted || isDailyTarget, padding: 12, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: pack.symbol)
                             .font(.subheadline.weight(.semibold))

@@ -924,7 +924,7 @@ private struct DailyVocabularyPackPickerSheet: View {
         if inCard {
             row
         } else {
-            StudyCard(padding: 12, highlighted: selected) { row }
+            StudyCard(highlighted: selected, padding: 12) { row }
         }
     }
 }
