@@ -7,6 +7,8 @@ import { WORD_BATCH_5 } from './words/batch5';
 import { WORD_BATCH_6 } from './words/batch6';
 import { WORD_BATCH_7 } from './words/batch7';
 import { WORD_BATCH_8 } from './words/batch8';
+import { WORD_BATCH_9 } from './words/batch9';
+import { WORD_BATCH_10 } from './words/batch10';
 import { classifyWord } from './words/classification';
 
 export const WORD_CATEGORY_META: Record<WordCategory, { label: string; badge: string }> = {
@@ -1808,6 +1810,8 @@ const ALL_RAW_WORDS: HebrewWord[] = [
   ...WORD_BATCH_6,
   ...WORD_BATCH_7,
   ...WORD_BATCH_8,
+  ...WORD_BATCH_9,
+  ...WORD_BATCH_10,
 ];
 
 const seenIds = new Set<string>();

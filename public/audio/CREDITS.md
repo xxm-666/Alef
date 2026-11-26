@@ -514,4 +514,4 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 ## Edge TTS (he-IL-HilaNeural) 补充音频
 
-第八批高频核心词汇中的 75 段补充发音由 Microsoft Edge TTS（`he-IL-HilaNeural`）合成现代希伯来语发音。
+第八批（Top 500）75 段及第九、十批（Top 1000 / Top 2000）159 段补充发音均由 Microsoft Edge TTS（`he-IL-HilaNeural`）合成现代希伯来语发音。

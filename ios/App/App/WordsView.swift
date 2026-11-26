@@ -15,9 +15,11 @@ struct WordPreferences: Codable {
     var topic: String?
     var cardLayout: Bool?
     var frequency: WordFrequency?
+    var frequencyTier: String?
     var difficulty: WordDifficulty?
 
     static let scopes = [("all", "全部"), ("favorites", "收藏"), ("needs_review", "需复习"), ("due_srs", "到期复习")]
+    static let frequencyTiers: [(String?, String)] = [(nil, "全部词库"), ("top1000", "Top 1000"), ("top2000", "Top 2000")]
 
     var scope: String { Self.scopes.contains { $0.0 == activeFilter } ? activeFilter : "all" }
     var selectedTopic: String? { topic ?? (scope == activeFilter ? nil : activeFilter) }
@@ -38,6 +40,7 @@ struct WordPreferences: Codable {
         topic = nil
         initialLetter = "all"
         frequency = nil
+        frequencyTier = nil
         difficulty = nil
     }
 }
@@ -53,6 +56,7 @@ struct WordsView: View {
     @State private var phraseCategory = "all"
     @State private var hidePhraseTranslation = false
     @State private var shadowingPhraseId: String?
+    @State private var displayLimit = 60
 
     var body: some View {
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize) {
@@ -71,6 +75,7 @@ struct WordsView: View {
                 StudyReadingLibrary(content: content, showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
             default:
                 searchControls
+                frequencyTierBar
                 quickTogglesBar
                 if hasFilters { activeFilters }
                 wordLibrary
@@ -78,6 +83,7 @@ struct WordsView: View {
         }
         .studyHome()
         .onChange(of: libraryMode) { _, _ in searchFocused = false }
+        .onChange(of: filterSignature) { _, _ in displayLimit = 60 }
         .onDisappear { searchFocused = false }
         .navigationDestination(item: $openedWordID) { id in
             if let word = content.words.first(where: { $0.id == id }) {
@@ -180,6 +186,45 @@ struct WordsView: View {
         }
     }
 
+    private var filterSignature: String {
+        let s = preferences
+        return [
+            s.searchQuery,
+            s.activeFilter,
+            s.selectedTopic ?? "",
+            s.initialLetter,
+            s.frequency?.rawValue ?? "",
+            s.frequencyTier ?? "",
+            s.difficulty?.rawValue ?? "",
+            s.sortOrder,
+            s.usesCards ? "cards" : "list",
+        ].joined(separator: "|")
+    }
+
+    private var frequencyTierBar: some View {
+        let selected = preferences.frequencyTier
+        return HStack(spacing: 6) {
+            ForEach(Array(WordPreferences.frequencyTiers.enumerated()), id: \.offset) { _, option in
+                let isActive = selected == option.0
+                Button {
+                    var state = preferences
+                    state.frequencyTier = option.0
+                    progress.write(state, for: "alef.wordsState.v1")
+                } label: {
+                    Text(option.1)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isActive ? Color.white : progress.theme.ink)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(isActive ? progress.theme.primaryButton : progress.theme.insetSurface,
+                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isActive ? .isSelected : [])
+            }
+        }
+    }
+
     private var quickTogglesBar: some View {
         let favoritesOnly = preferences.scope == "favorites"
         return ScrollView(.horizontal) {
@@ -255,6 +300,10 @@ struct WordsView: View {
     private var filterDescription: String {
         let settings = preferences
         var labels = [WordPreferences.scopes.first { $0.0 == settings.scope }?.1 ?? "全部"]
+        if let tier = settings.frequencyTier,
+           let tierTitle = WordPreferences.frequencyTiers.first(where: { $0.0 == tier })?.1 {
+            labels.append(tierTitle)
+        }
         if let topic = settings.selectedTopic { labels.append(content.wordCategories[topic]?.label ?? topic) }
         if let frequency = settings.frequency { labels.append(frequency.label) }
         if let difficulty = settings.difficulty { labels.append(difficulty.label) }
@@ -270,6 +319,11 @@ struct WordsView: View {
         let unpointedQuery = withoutHebrewMarks(query)
         let scope = settings.scope
         let topic = settings.selectedTopic
+        let tierLimit: Int? = switch settings.frequencyTier {
+        case "top1000": 1000
+        case "top2000": 2000
+        default: nil
+        }
         let words = content.words.filter { word in
             let include = switch scope {
             case "favorites": favorites.contains(word.id)
@@ -277,9 +331,10 @@ struct WordsView: View {
             case "due_srs": schedule[word.id]?.isDue == true
             default: true
             }
+            let inTier = tierLimit == nil || (word.frequencyRank ?? Int.max) <= (tierLimit ?? Int.max)
             let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
                 + (word.alternateSpellings ?? [])
-            return include && (topic == nil || word.category == topic)
+            return include && inTier && (topic == nil || word.category == topic)
                 && (settings.frequency == nil || word.frequency == settings.frequency)
                 && (settings.difficulty == nil || word.difficulty == settings.difficulty)
                 && (settings.initialLetter == "all" || word.hebrewUnpointed.hasPrefix(settings.initialLetter))
@@ -291,11 +346,18 @@ struct WordsView: View {
             return words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed }
         case "frequency":
             return words.sorted {
-                let lhs = ($0.frequency.rank, $0.frequencyRank ?? Int.max, $0.hebrewUnpointed)
-                let rhs = ($1.frequency.rank, $1.frequencyRank ?? Int.max, $1.hebrewUnpointed)
+                let lhs = ($0.frequencyRank ?? Int.max, $0.frequency.rank, $0.hebrewUnpointed)
+                let rhs = ($1.frequencyRank ?? Int.max, $1.frequency.rank, $1.hebrewUnpointed)
                 return lhs < rhs
             }
         default:
+            if tierLimit != nil {
+                return words.sorted {
+                    let lhs = ($0.frequencyRank ?? Int.max, $0.hebrewUnpointed)
+                    let rhs = ($1.frequencyRank ?? Int.max, $1.hebrewUnpointed)
+                    return lhs < rhs
+                }
+            }
             return words
         }
     }
@@ -304,9 +366,30 @@ struct WordsView: View {
         let prefs = preferences
         let words = filteredWords
         let favorites = Set(progress.favorites)
-        Text("\(words.count) 个单词")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(progress.theme.mutedInk)
+        let masteredCount = words.reduce(into: 0) { count, word in
+            if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
+        }
+        let showRank = prefs.frequencyTier != nil || prefs.sortOrder == "frequency"
+        let tierLabel = WordPreferences.frequencyTiers.first(where: { $0.0 == prefs.frequencyTier })?.1
+        let visibleWords = Array(words.prefix(displayLimit))
+        HStack(spacing: 8) {
+            if let tierLabel, prefs.frequencyTier != nil {
+                Text("\(tierLabel) · 共 \(words.count) 词")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(progress.theme.accent)
+            } else {
+                Text("共 \(words.count) 词")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            Spacer(minLength: 0)
+            if !words.isEmpty {
+                Text("已掌握 \(masteredCount)/\(words.count)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .monospacedDigit()
+            }
+        }
         if words.isEmpty {
             ContentUnavailableView {
                 Label("没有匹配的单词", systemImage: "magnifyingglass")
@@ -321,24 +404,47 @@ struct WordsView: View {
                 }
                 .buttonStyle(StudyButtonStyle())
             }
-        } else if prefs.usesCards {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 152), spacing: 8)], spacing: 8) {
-                ForEach(words) { word in
-                    wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
-                            stacked: true, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
+        } else {
+            if prefs.usesCards {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 152), spacing: 8)], spacing: 8) {
+                    ForEach(visibleWords) { word in
+                        wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
+                                stacked: true, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive, showRank: showRank)
+                    }
+                }
+            } else {
+                LazyVStack(spacing: 7) {
+                    ForEach(visibleWords) { word in
+                        wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
+                                stacked: typeSize.isAccessibilitySize, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive, showRank: showRank)
+                    }
                 }
             }
-        } else {
-            LazyVStack(spacing: 7) {
-                ForEach(words) { word in
-                    wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
-                            stacked: typeSize.isAccessibilitySize, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive)
+            if visibleWords.count < words.count {
+                Button {
+                    displayLimit = min(words.count, displayLimit + 60)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("已显示 \(visibleWords.count) / \(words.count) 词")
+                        Text("·")
+                        Text("继续加载")
+                            .foregroundStyle(progress.theme.accent)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .onAppear {
+                    displayLimit = min(words.count, displayLimit + 60)
                 }
             }
         }
     }
 
-    private func wordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery, stacked: Bool, showNiqqud: Bool, showCursive: Bool) -> some View {
+    private func wordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery, stacked: Bool, showNiqqud: Bool, showCursive: Bool, showRank: Bool) -> some View {
         let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 0))
         return StudyCard(padding: stacked ? 10 : 7) {
             layout {
@@ -352,10 +458,21 @@ struct WordsView: View {
                         .lineLimit(stacked ? nil : 2)
                         .minimumScaleFactor(0.75)
                     let details = VStack(alignment: .leading, spacing: 3) {
-                        Text(word.transliteration)
-                            .font(stacked ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-                            .foregroundStyle(stacked ? progress.theme.accent : progress.theme.ink)
-                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            if showRank, let rank = word.frequencyRank {
+                                Text("#\(rank)")
+                                    .font(.caption2.weight(.bold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(progress.theme.accent)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(progress.theme.highlightedSurface, in: Capsule())
+                            }
+                            Text(word.transliteration)
+                                .font(stacked ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                                .foregroundStyle(stacked ? progress.theme.accent : progress.theme.ink)
+                                .lineLimit(1)
+                        }
                         Text(word.meaningZh)
                             .font(stacked ? .subheadline.weight(.medium) : .caption)
                             .foregroundStyle(stacked ? progress.theme.ink : progress.theme.mutedInk)
@@ -559,6 +676,10 @@ private struct WordFilterSheet: View {
                 preferences.topic = preferences.selectedTopic
                 preferences.activeFilter = $0
             }))
+            StudySectionTitle("高频词表")
+            StudySegments(title: "高频词表",
+                          options: WordPreferences.frequencyTiers,
+                          selection: $preferences.frequencyTier)
             StudySectionTitle("常用程度")
             StudySegments(title: "常用程度",
                           options: [(nil, "不限")] + WordFrequency.allCases.map { (Optional($0), $0.label) },
