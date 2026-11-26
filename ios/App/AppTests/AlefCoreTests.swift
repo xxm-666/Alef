@@ -1789,7 +1789,8 @@ final class AlefCoreTests: XCTestCase {
     }
 
     private func makeWord(id: String, hebrew: String, unpointed: String,
-                          alternateSpellings: [String]? = nil) -> StudyWord {
+                          alternateSpellings: [String]? = nil,
+                          frequencyRank: Int? = nil) -> StudyWord {
         StudyWord(
             id: id,
             hebrew: hebrew,
@@ -1803,6 +1804,7 @@ final class AlefCoreTests: XCTestCase {
             category: "greetings",
             frequency: .common,
             difficulty: .beginner,
+            frequencyRank: frequencyRank,
             root: nil,
             note: "",
             sentence: nil

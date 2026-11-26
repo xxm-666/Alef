@@ -50,6 +50,7 @@ export type WordDifficulty = 'beginner' | 'intermediate' | 'advanced';
 export interface ClassifiedHebrewWord extends HebrewWord {
   frequency: WordFrequency;
   difficulty: WordDifficulty;
+  frequencyRank?: number;
 }
 
 export type ThemeMode = 'dark' | 'parchment' | 'rose' | 'violet';

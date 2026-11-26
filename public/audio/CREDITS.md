@@ -511,3 +511,7 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 第七批词汇中的 205 段补充发音由 [eSpeak NG 1.52](https://github.com/espeak-ng/espeak-ng) 的希伯来语语音生成。
 输入使用词条的现代希伯来语音素和重音，音频经静音裁剪后转为单声道 MP3，ID3 标签标注了合成来源。
+
+## Edge TTS (he-IL-HilaNeural) 补充音频
+
+第八批高频核心词汇中的 75 段补充发音由 Microsoft Edge TTS（`he-IL-HilaNeural`）合成现代希伯来语发音。

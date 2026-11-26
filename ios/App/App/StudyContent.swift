@@ -102,7 +102,8 @@ struct StudyContent: Decodable {
         let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
         let ranked = words.map { word in
             let priority = (word.difficulty == .beginner ? 0 : 1, word.frequency.rank,
-                            word.difficulty.rank, stageIDs.contains(word.id) ? 0 : 1)
+                            word.frequencyRank ?? Int.max, word.difficulty.rank,
+                            stageIDs.contains(word.id) ? 0 : 1)
             return (word, priority)
         }
         return ranked.sorted { $0.1 < $1.1 }.map { $0.0 }
@@ -332,6 +333,7 @@ struct StudyWord: Decodable, Identifiable {
     let category: String
     let frequency: WordFrequency
     let difficulty: WordDifficulty
+    let frequencyRank: Int?
     let root: String?
     let note: String
     let sentence: Sentence?

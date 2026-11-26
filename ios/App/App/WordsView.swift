@@ -286,7 +286,18 @@ struct WordsView: View {
                 && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) }
                     || (!unpointedQuery.isEmpty && word.hebrewUnpointed.localizedStandardContains(unpointedQuery)))
         }
-        return settings.sortOrder == "alpha" ? words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed } : words
+        switch settings.sortOrder {
+        case "alpha":
+            return words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed }
+        case "frequency":
+            return words.sorted {
+                let lhs = ($0.frequency.rank, $0.frequencyRank ?? Int.max, $0.hebrewUnpointed)
+                let rhs = ($1.frequency.rank, $1.frequencyRank ?? Int.max, $1.hebrewUnpointed)
+                return lhs < rhs
+            }
+        default:
+            return words
+        }
     }
 
     @ViewBuilder private var wordLibrary: some View {
@@ -572,7 +583,9 @@ private struct WordFilterSheet: View {
             }
             .scrollIndicators(.hidden)
             StudySectionTitle("排序与显示")
-            StudySegments(title: "排序", options: [("default", "默认顺序"), ("alpha", "字母顺序")], selection: $preferences.sortOrder)
+            StudySegments(title: "排序",
+                          options: [("default", "默认"), ("frequency", "高频优先"), ("alpha", "字母")],
+                          selection: $preferences.sortOrder)
             Toggle("元音点（Niqqud）", isOn: $preferences.showNiqqud).frame(minHeight: 44)
             StudySegments(title: "字形", options: [(false, "印刷体"), (true, "手写体")], selection: $preferences.showCursive)
             Toggle("卡片布局", isOn: Binding(get: { preferences.usesCards }, set: {
@@ -691,7 +704,8 @@ struct WordDetailView: View {
                                 .padding(.vertical, 4)
                                 .background(progress.theme.highlightedSurface, in: Capsule())
                         }
-                        Text("\(word.frequency.label) · \(word.difficulty.label)")
+                        let freqText = word.frequencyRank.map { "\(word.frequency.label) #\($0)" } ?? word.frequency.label
+                        Text("\(freqText) · \(word.difficulty.label)")
                             .font(.caption)
                             .foregroundStyle(progress.theme.mutedInk)
                         HebrewText(text: displayedWord, cursive: showCursive,
