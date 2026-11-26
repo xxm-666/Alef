@@ -452,11 +452,19 @@ struct WordsView: View {
                 .buttonStyle(StudyButtonStyle())
             }
         } else {
+            let lastVisibleId = visibleWords.last?.id
             if prefs.usesCards {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 152), spacing: 8)], spacing: 8) {
                     ForEach(visibleWords) { word in
                         wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
                                 stacked: true, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive, showRank: showRank)
+                            .onAppear {
+                                if word.id == lastVisibleId, displayLimit < words.count {
+                                    DispatchQueue.main.async {
+                                        displayLimit = min(words.count, displayLimit + 40)
+                                    }
+                                }
+                            }
                     }
                 }
             } else {
@@ -464,6 +472,13 @@ struct WordsView: View {
                     ForEach(visibleWords) { word in
                         wordRow(word, favorite: favorites.contains(word.id), mastery: progress.effectiveWordMastery(word.id),
                                 stacked: typeSize.isAccessibilitySize, showNiqqud: prefs.showNiqqud, showCursive: prefs.showCursive, showRank: showRank)
+                            .onAppear {
+                                if word.id == lastVisibleId, displayLimit < words.count {
+                                    DispatchQueue.main.async {
+                                        displayLimit = min(words.count, displayLimit + 40)
+                                    }
+                                }
+                            }
                     }
                 }
             }
@@ -477,10 +492,6 @@ struct WordsView: View {
                         .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, minHeight: 40)
-                .id("words-loader-\(visibleWords.count)")
-                .onAppear {
-                    displayLimit = min(words.count, displayLimit + 40)
-                }
             }
         }
     }
@@ -1826,10 +1837,18 @@ private struct TopicPackDetailView: View {
             if words.isEmpty {
                 ContentUnavailableView("没有匹配的单词", systemImage: "magnifyingglass")
             } else {
+                let lastVisibleId = visibleWords.last?.id
                 LazyVStack(spacing: 7) {
                     ForEach(visibleWords) { word in
                         packWordRow(word, favorite: favorites.contains(word.id),
                                     mastery: progress.effectiveWordMastery(word.id))
+                            .onAppear {
+                                if word.id == lastVisibleId, displayLimit < words.count {
+                                    DispatchQueue.main.async {
+                                        displayLimit = min(words.count, displayLimit + 40)
+                                    }
+                                }
+                            }
                     }
                 }
                 if visibleWords.count < words.count {
@@ -1842,10 +1861,6 @@ private struct TopicPackDetailView: View {
                             .monospacedDigit()
                     }
                     .frame(maxWidth: .infinity, minHeight: 40)
-                    .id("pack-loader-\(visibleWords.count)")
-                    .onAppear {
-                        displayLimit = min(words.count, displayLimit + 40)
-                    }
                 }
             }
         }
