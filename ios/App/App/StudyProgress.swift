@@ -925,6 +925,14 @@ struct StudyReviewBatch: Codable, Hashable {
             if group.studied == group.wordIds.count && group.choices == nil && group.answers.isEmpty {
                 plan.groups[index].choices = DailyVocabularyChoices(wordCount: group.wordIds.count)
             }
+            // Older saves can be waiting for confirmation after an already scored answer.
+            if let selected = group.choices?.selectedWordID, selected == group.choiceWordID {
+                plan.groups[index].choices?.selectedWordID = nil
+                plan.groups[index].choices?.answered += 1
+            }
+            if group.feedbackPending && group.answers.last?.correct == true {
+                plan.groups[index].feedbackPending = false
+            }
         }
         if current != plan { write(plan, for: DailyVocabularyPlan.storageKey) }
     }
@@ -1005,11 +1013,12 @@ struct StudyReviewBatch: Codable, Hashable {
         guard plan.day == day, let wordID = expected.choiceWordID, expected.choices?.selectedWordID == nil,
               !selectedWordID.isEmpty,
               let index = plan.groups.firstIndex(of: expected) else { return false }
-        plan.groups[index].choices?.selectedWordID = selectedWordID
         if selectedWordID == wordID {
+            plan.groups[index].choices?.answered += 1
             savePractice(wordID, masteryKey: "alef.wordMastery.v1", scheduleKey: "alef.wordSrs.v1",
                          correct: true, date: date, dailyPlan: plan)
         } else {
+            plan.groups[index].choices?.selectedWordID = selectedWordID
             saveDailyPractice(plan, on: date)
         }
         return true
@@ -1046,7 +1055,7 @@ struct StudyReviewBatch: Codable, Hashable {
         let attempt = DailySpellingAnswer(input: answer, correct: word.acceptsSpelling(answer), peeked: usedHint ? true : nil)
         plan.spellingCombo = attempt.correct && !usedHint ? min(plan.answerCombo, Int.max - 1) + 1 : 0
         plan.groups[index].answers.append(attempt)
-        plan.groups[index].feedbackPending = true
+        plan.groups[index].feedbackPending = !attempt.correct
         plan.groups[index].spellingPeeked = nil
         if usedHint && attempt.correct {
             saveDailyPractice(plan, on: date)

@@ -58,6 +58,13 @@ private struct DailyVocabularyView: View {
         case question, feedback
     }
 
+    private struct ChoiceQuestion: Equatable {
+        let groupWordIDs: [String]
+        let round: Int
+        let position: Int
+        let wordID: String
+    }
+
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.scenePhase) private var scenePhase
@@ -65,7 +72,7 @@ private struct DailyVocabularyView: View {
     let content: StudyContent
     @State private var activeId: String?
     @State private var browsingIndex: Int?
-    @State private var choiceOptions: [StudyWord] = []
+    @State private var choiceOptions: (question: ChoiceQuestion, words: [StudyWord])?
     @State private var spelling = ""
     @State private var retryingMistake = false
     @State private var retryMatched = false
@@ -113,8 +120,8 @@ private struct DailyVocabularyView: View {
                 }
                 .accessibilityHidden(true)
             }
-            .onChange(of: group, initial: true) { previous, current in
-                updateChoiceOptions(previous: previous, current: current)
+            .onChange(of: group, initial: true) { _, current in
+                updateChoiceOptions(for: current)
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
@@ -139,6 +146,11 @@ private struct DailyVocabularyView: View {
                 .onChange(of: group?.choices?.selectedWordID) { _, selection in
                     if selection != nil {
                         scroll.scrollTo(ScrollTarget.feedback, anchor: .bottom)
+                    }
+                }
+                .onChange(of: group?.answers.count) { _, _ in
+                    if group?.feedbackPending == false {
+                        scroll.scrollTo(ScrollTarget.question, anchor: .top)
                     }
                 }
                 .onChange(of: group?.feedbackPending) { _, pending in
@@ -180,7 +192,8 @@ private struct DailyVocabularyView: View {
     }
 
     @ViewBuilder private func actionBar(group: DailyVocabularyGroup?, day: String) -> some View {
-        if let group, !group.isComplete, let word = currentWord(group) {
+        if let group, !group.isComplete, let word = currentWord(group),
+           group.choiceStage == nil || group.choices?.selectedWordID != nil {
             let layout = typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: 8))
                 : AnyLayout(HStackLayout(spacing: 8))
@@ -199,13 +212,10 @@ private struct DailyVocabularyView: View {
 
                         groupAction(group, word: word, day: day)
                     }
-                } else if let stage = group.choiceStage {
-                    let nextStage = DailyVocabularyChoiceStage(rawValue: stage.rawValue + 1)?.title ?? "拼写"
-                    let title = group.choiceOffset + 1 == group.wordIds.count ? "开始\(nextStage)" : "下一题"
-                    primaryButton(title, symbol: "arrow.right") {
+                } else if group.choiceStage != nil {
+                    primaryButton("下一题", symbol: "arrow.right") {
                         advance(group, day: day)
                     }
-                    .disabled(group.choices?.selectedWordID == nil)
                 } else if group.feedbackPending {
                     let answer = group.answers.last
                     if let answer, !answer.correct, !retryingMistake {
@@ -412,19 +422,25 @@ private struct DailyVocabularyView: View {
         }
     }
 
-    private func updateChoiceOptions(previous: DailyVocabularyGroup?, current: DailyVocabularyGroup?) {
-        guard let current, let stage = current.choiceStage, let word = currentWord(current) else {
-            choiceOptions = []
+    private func choiceQuestion(for group: DailyVocabularyGroup) -> ChoiceQuestion? {
+        guard let position = group.choices?.answered, let wordID = group.choiceWordID else { return nil }
+        return ChoiceQuestion(groupWordIDs: group.wordIds, round: group.roundCount, position: position, wordID: wordID)
+    }
+
+    private func updateChoiceOptions(for group: DailyVocabularyGroup?) {
+        guard let group, let question = choiceQuestion(for: group),
+              let stage = group.choiceStage, let word = word(question.wordID) else {
+            choiceOptions = nil
             return
         }
-        let selected = current.choices?.selectedWordID
-        if previous?.wordIds == current.wordIds, previous?.roundCount == current.roundCount,
-           previous?.choices?.answered == current.choices?.answered, previous?.choiceWordID == word.id,
-           !choiceOptions.isEmpty, selected == nil || choiceOptions.contains(where: { $0.id == selected }) {
+        let selected = group.choices?.selectedWordID
+        if let choiceOptions, choiceOptions.question == question,
+           selected == nil || choiceOptions.words.contains(where: { $0.id == selected }) {
             return
         }
-        choiceOptions = content.dailyVocabularyOptions(for: word, stage: stage, groupWordIDs: current.wordIds,
-                                                       selectedWordID: selected)
+        let options = content.dailyVocabularyOptions(for: word, stage: stage, groupWordIDs: group.wordIds,
+                                                     selectedWordID: selected)
+        choiceOptions = (question, options)
     }
 
     private func choiceContent(_ group: DailyVocabularyGroup, stage: DailyVocabularyChoiceStage, word: StudyWord,
@@ -432,9 +448,9 @@ private struct DailyVocabularyView: View {
         let total = group.wordIds.count
         let showsHebrew = stage == .spokenWord
         let selected = group.choices?.selectedWordID
+        let options = choiceOptions?.question == choiceQuestion(for: group) ? choiceOptions?.words ?? [] : []
         return VStack(alignment: .leading, spacing: 12) {
-            meter("\(stage.title) · 第 \(group.choiceOffset + 1) / \(total) 题",
-                  value: group.choiceOffset + (selected == nil ? 0 : 1), total: total, label: "\(stage.title)进度")
+            quizMeter(group, title: "\(stage.title) · 第 \(group.choiceOffset + 1) / \(total) 题")
             StudyCard(highlighted: stage != .writtenMeaning) {
                 switch stage {
                 case .writtenMeaning:
@@ -446,7 +462,7 @@ private struct DailyVocabularyView: View {
                     PronunciationButton(hebrew: word.hebrew, title: "播放题目", prominent: true)
                 }
             }
-            ForEach(Array(choiceOptions.enumerated()), id: \.element.id) { index, option in
+            ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                 StudyAnswerButton(title: showsHebrew ? choiceSpelling(option) : option.meaningZh,
                                   submitted: selected != nil, selected: selected == option.id, correct: option.id == word.id,
                                   isHebrew: showsHebrew, cursive: progress.showCursive, optionLabel: studyOptionLabel(index)) {
@@ -457,8 +473,8 @@ private struct DailyVocabularyView: View {
                     audio.playFeedback(option.id == word.id ? .correct : .wrong)
                 }
             }
-            if let selected {
-                StudyQuizFeedback(correct: selected == word.id, solution: "\(choiceSpelling(word)) · \(word.meaningZh)")
+            if let selected, selected != word.id {
+                StudyQuizFeedback(correct: false, solution: "\(choiceSpelling(word)) · \(word.meaningZh)")
                     .id(ScrollTarget.feedback)
             }
         }
@@ -476,7 +492,7 @@ private struct DailyVocabularyView: View {
         let isRetrying = retryingMistake && answer?.correct == false
         let input = Binding<String>(get: { isRetrying ? spelling : (answer?.input ?? spelling) }, set: { spelling = $0 })
 
-        meter(title, value: group.answers.count, total: total, label: "拼写进度")
+        quizMeter(group, title: title)
         StudyCard {
             StudySectionTitle(isRetrying ? "订正拼写「\(word.meaningZh)」" : "写出「\(word.meaningZh)」")
             Text("提示 · \(word.transliteration)").font(.subheadline).foregroundStyle(progress.theme.mutedInk)
@@ -629,7 +645,7 @@ private struct DailyVocabularyView: View {
         let total = group.wordIds.count
         if group.studied < total {
             let displayedIndex = studyWordIndex(for: group)
-            primaryButton(displayedIndex + 1 == total ? "开始看词选义" : "下一词", symbol: "arrow.right") {
+            primaryButton(displayedIndex + 1 == total ? "开始答题" : "下一词", symbol: "arrow.right") {
                 stepNext(group, day: day)
             }
         } else if group.feedbackPending {
@@ -651,6 +667,13 @@ private struct DailyVocabularyView: View {
                     .accessibilityLabel(label)
             }
         }
+    }
+
+    private func quizMeter(_ group: DailyVocabularyGroup, title: String) -> some View {
+        let choiceQuestions = group.choices == nil ? 0 : group.wordIds.count * DailyVocabularyChoiceStage.allCases.count
+        let choiceAnswers = (group.choices?.answered ?? 0) + (group.choices?.selectedWordID == nil ? 0 : 1)
+        return meter(title, value: choiceAnswers + group.answers.count,
+                     total: choiceQuestions + group.wordIds.count, label: "本组答题进度")
     }
 
     private func primaryButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -742,6 +765,7 @@ private struct DailyVocabularyView: View {
         let now = Date.now
         guard let answer = progress.answerDailyVocabulary(group, day: actionDay(day, on: now), word: word,
                                                           input: spelling, date: now) else { return }
+        spelling = ""
         retryingMistake = false
         retryMatched = false
         retryComparison = nil

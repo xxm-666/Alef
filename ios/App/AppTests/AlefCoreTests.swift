@@ -305,7 +305,7 @@ final class AlefCoreTests: XCTestCase {
         }
         finishDailyVocabularyChoices(on: day1)
 
-        // Answer first word correctly and advance feedback
+        // A correct spelling advances immediately.
         let answer = progress.answerDailyVocabulary(
             progress.dailyVocabulary.nextGroup!,
             day: dayKey1,
@@ -314,7 +314,8 @@ final class AlefCoreTests: XCTestCase {
             date: day1
         )
         XCTAssertEqual(answer?.correct, true)
-        XCTAssertEqual(progress.dailyVocabulary.nextGroup?.feedbackPending, true)
+        XCTAssertEqual(progress.dailyVocabulary.nextGroup?.feedbackPending, false)
+        XCTAssertEqual(progress.dailyVocabulary.nextGroup?.answers.count, 1)
         XCTAssertEqual(progress.schedule[words[0].id]?.intervalDays, 3)
 
         // Cross into next day: started incomplete group 0 is preserved
@@ -376,9 +377,10 @@ final class AlefCoreTests: XCTestCase {
                 XCTAssertEqual(reopened.statistics.totalReviews, stage.rawValue * words.count + offset + 1)
                 XCTAssertEqual(reopened.statistics.activeStreakDays(on: today), 1)
                 let pending = try XCTUnwrap(reopened.dailyVocabulary.nextGroup)
-                XCTAssertEqual(pending.choices?.selectedWordID, word.id)
-                XCTAssertEqual(pending.choiceOffset, offset)
-                XCTAssertFalse(progress.answerDailyVocabularyChoice(pending, day: day, selectedWordID: promptedID, date: today))
+                let wasCorrect = promptedID == word.id
+                let questionIndex = stage.rawValue * words.count + offset
+                XCTAssertEqual(pending.choices?.answered, questionIndex + (wasCorrect ? 1 : 0))
+                XCTAssertEqual(pending.choices?.selectedWordID, wasCorrect ? nil : word.id)
                 if stage == .writtenMeaning && offset == 0 {
                     let merged = StudySyncMerger.merge(
                         local: [DailyVocabularyPlan.storageKey: try JSONEncoder().encode(reopened.dailyVocabulary)],
@@ -388,7 +390,8 @@ final class AlefCoreTests: XCTestCase {
                     let saved = try XCTUnwrap(merged[DailyVocabularyPlan.storageKey])
                     XCTAssertEqual(try JSONDecoder().decode(DailyVocabularyPlan.self, from: saved), reopened.dailyVocabulary)
                 }
-                if promptedID == word.id {
+                if wasCorrect {
+                    XCTAssertFalse(progress.advanceDailyVocabulary(pending, day: day))
                     XCTAssertEqual(reopened.wordProficiency(word.id, at: today), (stage.rawValue + 1) * 4)
                     XCTAssertEqual(reopened.schedule[word.id]?.repetitions, 0)
                     XCTAssertEqual(reopened.schedule[word.id]?.intervalDays, 1)
@@ -400,13 +403,14 @@ final class AlefCoreTests: XCTestCase {
                         XCTAssertEqual(incorrect.proficiency(at: today), 4)
                     }
                 } else {
+                    XCTAssertFalse(progress.answerDailyVocabularyChoice(pending, day: day, selectedWordID: promptedID, date: today))
                     XCTAssertEqual(reopened.wordProficiency(promptedID, at: today), 0)
                     XCTAssertNil(reopened.schedule[promptedID])
+                    XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: day))
+                    XCTAssertEqual(progress.dailyVocabulary.nextGroup?.choices?.answered, questionIndex + 1)
+                    XCTAssertEqual(progress.wordProficiency(promptedID, at: today), 0)
                 }
-                let proficiency = reopened.wordProficiency(promptedID, at: today)
-                XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: day))
                 XCTAssertNil(progress.dailyVocabulary.nextGroup?.choices?.selectedWordID)
-                XCTAssertEqual(progress.wordProficiency(promptedID, at: today), proficiency)
             }
             XCTAssertEqual(promptedIDs, Set(words.map(\.id)))
         }
@@ -424,19 +428,30 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.wordProficiency(word.id, at: today), 30)
         XCTAssertEqual(progress.schedule[word.id]?.intervalDays, 3)
         XCTAssertEqual(progress.schedule[word.id]?.repetitions, 1)
+        let last = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertEqual(progress.answerDailyVocabulary(last, day: day, word: words[1], input: "א", date: today)?.correct, false)
+        let pending = try XCTUnwrap(StudyProgress(defaults: defaults).dailyVocabulary.nextGroup)
+        XCTAssertTrue(pending.feedbackPending)
+        XCTAssertFalse(pending.isComplete)
+        XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: day))
+        XCTAssertNil(progress.dailyVocabulary.nextGroup)
     }
 
-    func testDailyVocabularyUpgradesLegacyGroupsWithoutSpellingAnswers() {
+    func testDailyVocabularyUpgradesLegacyGroupsAndContinuesFromCorrectAnswers() {
         let words = [
             makeWord(id: "shalom", hebrew: "שָׁלוֹם", unpointed: "שלום"),
             makeWord(id: "todah", hebrew: "תּוֹדָה", unpointed: "תודה"),
+            makeWord(id: "bayit", hebrew: "בַּיִת", unpointed: "בית"),
         ]
         let today = makeDate(year: 2026, month: 11, day: 1)
         let day = DailyVocabularyPlan.dayKey(for: today)
         let pending = DailyVocabularyGroup(wordIds: ["shalom"], studied: 1)
         let activeSpelling = DailyVocabularyGroup(wordIds: ["todah"], studied: 1,
                                                   answers: [.init(input: "תודה", correct: true)], feedbackPending: true)
-        let oldPlan = DailyVocabularyPlan(day: day, groups: [pending, activeSpelling])
+        var choices = DailyVocabularyChoices(wordCount: 1)
+        choices.selectedWordID = "bayit"
+        let activeChoice = DailyVocabularyGroup(wordIds: ["bayit"], studied: 1, choices: choices)
+        let oldPlan = DailyVocabularyPlan(day: day, groups: [pending, activeSpelling, activeChoice])
         progress.write(oldPlan, for: DailyVocabularyPlan.storageKey)
 
         progress.prepareDailyVocabulary(words: words, date: today)
@@ -444,7 +459,11 @@ final class AlefCoreTests: XCTestCase {
         let upgraded = progress.dailyVocabulary
         XCTAssertEqual(upgraded.groups[0].choiceStage, .writtenMeaning)
         XCTAssertEqual(upgraded.groups[0].choiceWordID, "shalom")
-        XCTAssertEqual(upgraded.groups[1], activeSpelling)
+        XCTAssertEqual(upgraded.groups[1].answers, activeSpelling.answers)
+        XCTAssertTrue(upgraded.groups[1].isComplete)
+        XCTAssertEqual(upgraded.groups[2].choiceStage, .spokenWord)
+        XCTAssertNil(upgraded.groups[2].choices?.selectedWordID)
+        XCTAssertEqual(progress.statistics.totalReviews, 0)
         XCTAssertTrue(upgraded.isValid)
         progress.prepareDailyVocabulary(words: words, date: today)
         XCTAssertEqual(progress.dailyVocabulary, upgraded)
@@ -552,9 +571,10 @@ final class AlefCoreTests: XCTestCase {
             XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: word, input: input,
                                                           date: today)?.correct, correct)
             XCTAssertNil(progress.answerDailyVocabulary(group, day: day, word: word, input: input, date: today))
-            let pending = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
-            XCTAssertEqual(pending.answerCombo, [1, 2, 3, 0, 1][index])
-            XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: day))
+            let updated = progress.dailyVocabulary.groups[0]
+            XCTAssertEqual(updated.answerCombo, [1, 2, 3, 0, 1][index])
+            XCTAssertEqual(updated.feedbackPending, !correct)
+            XCTAssertEqual(progress.advanceDailyVocabulary(updated, day: day), !correct)
         }
 
         let reopened = StudyProgress(defaults: defaults)
@@ -571,10 +591,9 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         finishDailyVocabularyChoices(on: today)
         let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertFalse(progress.earnedAchievements.contains(.firstVocabularyGroup))
         XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: word, input: "שלום",
                                                       date: today)?.correct, true)
-        XCTAssertFalse(progress.earnedAchievements.contains(.firstVocabularyGroup))
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         XCTAssertTrue(progress.earnedAchievements.contains(.firstVocabularyGroup))
 
         let tomorrow = try XCTUnwrap(gregorianUtc.date(byAdding: .day, value: 1, to: today))
@@ -691,7 +710,8 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.dailyVocabulary, currentPlan)
         XCTAssertEqual(progress.schedule[word.id], currentSchedule)
         XCTAssertEqual(progress.schedule["todah"], older)
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
+        let following = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
+        XCTAssertTrue(progress.answerDailyVocabularyChoice(following, day: day, selectedWordID: "todah", date: today))
         XCTAssertFalse(progress.undoBackup())
         XCTAssertEqual(progress.schedule["todah"], older)
         let laterPlan = progress.dailyVocabulary
@@ -1412,7 +1432,6 @@ final class AlefCoreTests: XCTestCase {
             XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: words[i], input: "שלום", date: today)?.correct, true)
             XCTAssertEqual(progress.wordMastery[words[i].id], .learning)
             XCTAssertEqual(progress.wordProficiency(words[i].id, at: today), 18)
-            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         }
 
         // Start group 1 and answer word 5 correctly -> cross-group combo reaches 6
@@ -1487,7 +1506,6 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(progress.answerDailyVocabulary(g0, day: day, word: words[0], input: "שלום", date: today)?.correct, true)
         XCTAssertEqual(progress.wordProficiency(words[0].id, at: today), 18)
         XCTAssertEqual(progress.dailyVocabulary.answerCombo, 1)
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
 
         // Second word answered after peeking -> group advances, but proficiency stays 0 and combo resets
         let g1 = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
@@ -1499,7 +1517,8 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(peekedAns?.wasPeeked, true)
         XCTAssertEqual(reopened.wordProficiency(words[1].id, at: today), 0)
         XCTAssertEqual(reopened.dailyVocabulary.answerCombo, 0)
-        XCTAssertNil(reopened.dailyVocabulary.nextGroup?.spellingPeeked)
+        XCTAssertNil(reopened.dailyVocabulary.groups[0].spellingPeeked)
+        XCTAssertTrue(reopened.dailyVocabulary.groups[0].isComplete)
     }
 
     func testDailyVocabularyComboFollowsSubmissionOrderAndMidnightCarriesUnfinishedGroup() throws {
@@ -1520,11 +1539,8 @@ final class AlefCoreTests: XCTestCase {
         progress.prepareDailyVocabulary(words: words, date: tomorrow)
         XCTAssertEqual(progress.dailyVocabulary.nextGroup, pending)
         XCTAssertEqual(progress.dailyVocabulary.answerCombo, 0)
-        XCTAssertFalse(progress.advanceDailyVocabulary(pending, day: day))
-        XCTAssertTrue(progress.advanceDailyVocabulary(pending, day: tomorrowKey))
-        let last = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
-        XCTAssertEqual(progress.answerDailyVocabulary(last, day: tomorrowKey, word: words[1], input: "שלום", date: tomorrow)?.correct, true)
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: tomorrowKey))
+        XCTAssertNil(progress.answerDailyVocabulary(pending, day: day, word: words[1], input: "שלום", date: tomorrow))
+        XCTAssertEqual(progress.answerDailyVocabulary(pending, day: tomorrowKey, word: words[1], input: "שלום", date: tomorrow)?.correct, true)
         XCTAssertEqual(progress.dailyVocabulary.completedCount, 1)
     }
 
@@ -1539,11 +1555,9 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(progress.answerDailyVocabularyChoice(choice, day: day, selectedWordID: word.id, date: today))
         progress.recordWordPractice(word.id, correct: false, date: today)
         XCTAssertEqual(progress.wordProficiency(word.id, at: today), 4)
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         finishDailyVocabularyChoices(on: today)
         let spelling = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
         XCTAssertEqual(progress.answerDailyVocabulary(spelling, day: day, word: word, input: "שלום", date: today)?.correct, true)
-        XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         let scheduled = try XCTUnwrap(progress.schedule[word.id])
         XCTAssertEqual(scheduled.strength, 22)
         XCTAssertEqual(scheduled.intervalDays, 3)
@@ -1586,7 +1600,6 @@ final class AlefCoreTests: XCTestCase {
         for i in 0..<5 {
             let group = try XCTUnwrap(progress.dailyVocabulary.nextGroup)
             XCTAssertEqual(progress.answerDailyVocabulary(group, day: day, word: words[i], input: "שלום", date: today)?.correct, true)
-            XCTAssertTrue(progress.advanceDailyVocabulary(try XCTUnwrap(progress.dailyVocabulary.nextGroup), day: day))
         }
         let completedGroup = progress.dailyVocabulary.groups[0]
         XCTAssertTrue(completedGroup.isComplete)
