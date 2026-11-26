@@ -9,11 +9,13 @@ struct DailyVocabularyEntry: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             let plan = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress, at: timeline.date), date: timeline.date)
+            let activePack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
             let status = plan.groups.isEmpty ? "暂无待学新词" : "已完成 \(plan.completedCount) / \(plan.groups.count) 组"
             NavigationLink {
                 DailyVocabularyView(content: content)
             } label: {
-                let summary = plan.nextGroup.map { "\(status) · \($0.status)" } ?? status
+                let packPrefix = activePack.map { "\($0.shortTitle) · " } ?? ""
+                let summary = packPrefix + (plan.nextGroup.map { "\(status) · \($0.status)" } ?? status)
                 if emphasized {
                     StudyHeroCard(colors: progress.theme.warmGradient, padding: 14, spacing: 10) {
                         HStack {
@@ -79,6 +81,7 @@ private struct DailyVocabularyView: View {
     @State private var retryComparison: SpellingComparison?
     @State private var celebration: StudyAnswerCelebration?
     @State private var reviewingGroup: DailyVocabularyGroup?
+    @State private var showsPackPicker = false
 
     private var plan: DailyVocabularyPlan { progress.dailyVocabulary }
     var body: some View {
@@ -111,6 +114,15 @@ private struct DailyVocabularyView: View {
             }
             .sheet(item: $reviewingGroup, onDismiss: { audio.stop() }) { group in
                 groupWordReview(group)
+            }
+            .sheet(isPresented: $showsPackPicker) {
+                NavigationStack {
+                    DailyVocabularyPackPickerSheet(content: content) { selectedPackId in
+                        let newWords = content.dailyVocabularyWords(in: progress, packId: selectedPackId)
+                        progress.setDailyVocabularyPack(selectedPackId, words: newWords)
+                    }
+                }
+                .presentationDragIndicator(.visible)
             }
             .background {
                 TimelineView(.periodic(from: .now, by: 30)) { timeline in
@@ -255,14 +267,45 @@ private struct DailyVocabularyView: View {
     }
 
     private func planContent(_ today: DailyVocabularyPlan) -> some View {
-        let canAddGroup = today.groups.count < DailyVocabularyPlan.maxGroupsPerDay
-            && !today.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
-                                          mastery: progress.wordMastery,
-                                          schedule: progress.schedule).isEmpty
+        let activePack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
+        let remaining = today.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
+                                                  mastery: progress.wordMastery,
+                                                  schedule: progress.schedule)
+        let canAddGroup = today.groups.count < DailyVocabularyPlan.maxGroupsPerDay && !remaining.isEmpty
         return VStack(alignment: .leading, spacing: 16) {
+            StudyCard(padding: 12) {
+                Button {
+                    showsPackPicker = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: activePack?.symbol ?? "books.vertical")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                            .frame(width: 36, height: 36)
+                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("学习词包 · \(activePack?.title ?? "全部词库")")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(progress.theme.ink)
+                            Text("剩余 \(remaining.count) 个未学新词 · 点按切换词包")
+                                .font(.caption)
+                                .foregroundStyle(progress.theme.mutedInk)
+                                .monospacedDigit()
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
             StudyCard {
                 StudySectionTitle("今日计划")
-                Text("每组最多 \(DailyVocabularyPlan.groupSize) 词。先学入门词，其余词按常用、较常用、扩展的顺序选取。")
+                Text(activePack == nil
+                     ? "每组最多 \(DailyVocabularyPlan.groupSize) 词。先学入门词，其余词按常用、较常用、扩展的顺序选取。"
+                     : "当前从「\(activePack?.title ?? "")」优先选取未学高频词，每组最多 \(DailyVocabularyPlan.groupSize) 词。")
                     .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                 meter("已完成 \(today.completedCount) / \(today.groups.count) 组",
                       value: today.completedCount, total: today.groups.count, label: "今日分组进度")
@@ -791,6 +834,97 @@ private struct DailyVocabularyView: View {
         } else {
             retryComparison = word.spellingComparison(for: trimmed)
             audio.playFeedback(.wrong)
+        }
+    }
+}
+
+private struct DailyVocabularyPackPickerSheet: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dismiss) private var dismiss
+    let content: StudyContent
+    let onSelect: (String?) -> Void
+
+    private func unlearnedCount(for packId: String?) -> Int {
+        let words = packId.map { content.words(inPack: $0) } ?? content.words
+        return words.reduce(into: 0) { count, word in
+            if progress.wordMastery[word.id] != .mastered && progress.schedule[word.id] == nil {
+                count += 1
+            }
+        }
+    }
+
+    var body: some View {
+        let selected = progress.dailyVocabularyPackId
+        StudyPage {
+            StudyCard(padding: 12) {
+                Text("切换词包后，今日尚未开始的分组会立即改为从所选词包抽词；已开始或已完成的分组会保留。")
+                    .font(.caption)
+                    .foregroundStyle(progress.theme.mutedInk)
+            }
+            packRow(id: nil, title: "全部词库", subtitle: "从全部 \(content.words.count) 个单词按入门与高频顺序学习",
+                    symbol: "books.vertical", total: content.words.count, remaining: unlearnedCount(for: nil),
+                    selected: selected == nil)
+            ForEach(StudyWordPackGroup.allCases) { group in
+                let packs = content.allWordPacks.filter { $0.group == group }
+                StudySectionTitle(group.title)
+                StudyCard(padding: 10, spacing: 2) {
+                    ForEach(packs) { pack in
+                        if pack.id != packs.first?.id { Divider() }
+                        let total = content.words(inPack: pack.id).count
+                        packRow(id: pack.id, title: pack.title, subtitle: pack.subtitle, symbol: pack.symbol,
+                                total: total, remaining: unlearnedCount(for: pack.id), selected: selected == pack.id,
+                                inCard: true)
+                    }
+                }
+            }
+        }
+        .studyDetail("选择今日学习词包")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("关闭") { dismiss() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func packRow(id: String?, title: String, subtitle: String, symbol: String,
+                         total: Int, remaining: Int, selected: Bool, inCard: Bool = false) -> some View {
+        let row = Button {
+            onSelect(id)
+            dismiss()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(selected ? Color.white : progress.theme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(selected ? progress.theme.primaryButton : progress.theme.highlightedSurface,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(progress.theme.ink)
+                    Text("\(subtitle) · 待学 \(remaining)/\(total)")
+                        .font(.caption)
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .lineLimit(2)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(progress.theme.accent)
+                }
+            }
+            .padding(.vertical, inCard ? 6 : 0)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        if inCard {
+            row
+        } else {
+            StudyCard(padding: 12, highlighted: selected) { row }
         }
     }
 }

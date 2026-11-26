@@ -98,15 +98,47 @@ struct StudyContent: Decodable {
         }
     }
 
-    func dailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
+    func dailyVocabularyWords(in progress: StudyProgress, packId: String?, at date: Date = .now) -> [StudyWord] {
         let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
-        let ranked = words.map { word in
+        let pool = packId.map { words(inPack: $0) } ?? words
+        let ranked = pool.map { word in
             let priority = (word.difficulty == .beginner ? 0 : 1, word.frequency.rank,
                             word.frequencyRank ?? Int.max, word.difficulty.rank,
                             stageIDs.contains(word.id) ? 0 : 1)
             return (word, priority)
         }
         return ranked.sorted { $0.1 < $1.1 }.map { $0.0 }
+    }
+
+    func dailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
+        dailyVocabularyWords(in: progress, packId: progress.dailyVocabularyPackId, at: date)
+    }
+
+    var allWordPacks: [StudyWordPack] {
+        StudyWordPack.catalog
+    }
+
+    func wordPack(id: String) -> StudyWordPack? {
+        StudyWordPack.catalog.first { $0.id == id }
+    }
+
+    func words(inPack id: String) -> [StudyWord] {
+        switch id {
+        case "pack_beginner":
+            return words.filter { $0.difficulty == .beginner }
+        case "pack_top1000":
+            return words.filter { ($0.frequencyRank ?? Int.max) <= 1000 }
+        case "pack_top2000":
+            return words.filter { ($0.frequencyRank ?? Int.max) <= 2000 }
+        case "pack_common":
+            return words.filter { $0.frequency == .common }
+        default:
+            if id.hasPrefix("cat_") {
+                let category = String(id.dropFirst(4))
+                return words.filter { $0.category == category }
+            }
+            return words.filter { $0.category == id }
+        }
     }
 
     func reminderReviews(in progress: StudyProgress) -> StudyReminderReviews {
@@ -183,6 +215,56 @@ struct StudyDisplayPreset: Decodable, Identifiable {
 
 struct StudyCategory: Decodable {
     let label: String
+}
+
+enum StudyWordPackGroup: String, CaseIterable, Identifiable {
+    case frequency, featured, core
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .frequency: "基础与高频包"
+        case .featured: "进阶专题包"
+        case .core: "基础主题包"
+        }
+    }
+}
+
+struct StudyWordPack: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let shortTitle: String
+    let subtitle: String
+    let symbol: String
+    let group: StudyWordPackGroup
+
+    static let defaultPinnedIDs = ["pack_top1000", "pack_top2000"]
+
+    static let catalog: [StudyWordPack] = [
+        // 基础与高频包
+        StudyWordPack(id: "pack_beginner", title: "基础入门", shortTitle: "基础入门", subtitle: "短词与基础拼读，零基础首选", symbol: "sparkles", group: .frequency),
+        StudyWordPack(id: "pack_top1000", title: "核心 Top 1000", shortTitle: "Top 1000", subtitle: "he_50k 最高频核心词，覆盖日常高频表达", symbol: "flame", group: .frequency),
+        StudyWordPack(id: "pack_top2000", title: "常用 Top 2000", shortTitle: "Top 2000", subtitle: "he_50k 前 2000 常用词，稳步进阶", symbol: "chart.bar.fill", group: .frequency),
+        StudyWordPack(id: "pack_common", title: "高频常用词", shortTitle: "常用词", subtitle: "日常交流与阅读最高频核心词", symbol: "star.fill", group: .frequency),
+        // 进阶专题包
+        StudyWordPack(id: "cat_news", title: "新闻与社会", shortTitle: "新闻社会", subtitle: "政治、媒体、法律与公共事务", symbol: "newspaper", group: .featured),
+        StudyWordPack(id: "cat_tech", title: "科技与互联网", shortTitle: "科技网络", subtitle: "软件、网络、设备与现代办公", symbol: "cpu", group: .featured),
+        StudyWordPack(id: "cat_colloquial", title: "影视与地道口语", shortTitle: "地道口语", subtitle: "高频口语副词、感叹词与情感表达", symbol: "bubble.left.and.text.bubble.right", group: .featured),
+        StudyWordPack(id: "cat_health", title: "医疗与健康", shortTitle: "医疗健康", subtitle: "症状、就医、心理与身心健康", symbol: "heart.text.square", group: .featured),
+        StudyWordPack(id: "cat_business", title: "商业与金融", shortTitle: "商业金融", subtitle: "经济、交易、职场沟通与理财", symbol: "briefcase", group: .featured),
+        // 基础主题包
+        StudyWordPack(id: "cat_greetings", title: "日常问候", shortTitle: "问候", subtitle: "寒暄、礼貌与高频表达", symbol: "hand.wave", group: .core),
+        StudyWordPack(id: "cat_daily", title: "生活饮食", shortTitle: "生活", subtitle: "居家、餐饮与日常物品", symbol: "fork.knife", group: .core),
+        StudyWordPack(id: "cat_verbs", title: "核心动词", shortTitle: "动词", subtitle: "日常高频动作与变化", symbol: "bolt", group: .core),
+        StudyWordPack(id: "cat_adjectives", title: "形容与颜色", shortTitle: "形容", subtitle: "状态、性质与色彩描绘", symbol: "paintpalette", group: .core),
+        StudyWordPack(id: "cat_work", title: "工作学习", shortTitle: "职场", subtitle: "校园、办公与专业表达", symbol: "laptopcomputer", group: .core),
+        StudyWordPack(id: "cat_city", title: "城市出行", shortTitle: "城市", subtitle: "交通、建筑与城市生活", symbol: "building.2", group: .core),
+        StudyWordPack(id: "cat_time", title: "时间数字", shortTitle: "时间", subtitle: "日期、时刻与基础计数", symbol: "clock", group: .core),
+        StudyWordPack(id: "cat_nature", title: "自然世界", shortTitle: "自然", subtitle: "天气、动植物与地理", symbol: "leaf", group: .core),
+        StudyWordPack(id: "cat_family", title: "人物家庭", shortTitle: "家庭", subtitle: "亲属称谓与人际关系", symbol: "person.2", group: .core),
+        StudyWordPack(id: "cat_body", title: "身体情绪", shortTitle: "身心", subtitle: "身体部位与心理感受", symbol: "figure.walk", group: .core),
+        StudyWordPack(id: "cat_biblical", title: "圣经文化", shortTitle: "圣经", subtitle: "经典文化与历史词源", symbol: "book.closed", group: .core),
+    ]
 }
 
 struct StudyLetter: Decodable, Identifiable {

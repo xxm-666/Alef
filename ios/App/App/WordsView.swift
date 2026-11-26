@@ -16,10 +16,20 @@ struct WordPreferences: Codable {
     var cardLayout: Bool?
     var frequency: WordFrequency?
     var frequencyTier: String?
+    var selectedPackId: String?
     var difficulty: WordDifficulty?
 
     static let scopes = [("all", "全部"), ("favorites", "收藏"), ("needs_review", "需复习"), ("due_srs", "到期复习")]
     static let frequencyTiers: [(String?, String)] = [(nil, "全部词库"), ("top1000", "Top 1000"), ("top2000", "Top 2000")]
+
+    var activePackId: String? {
+        if let selectedPackId { return selectedPackId }
+        switch frequencyTier {
+        case "top1000": return "pack_top1000"
+        case "top2000": return "pack_top2000"
+        default: return nil
+        }
+    }
 
     var scope: String { Self.scopes.contains { $0.0 == activeFilter } ? activeFilter : "all" }
     var selectedTopic: String? { topic ?? (scope == activeFilter ? nil : activeFilter) }
@@ -41,6 +51,7 @@ struct WordPreferences: Codable {
         initialLetter = "all"
         frequency = nil
         frequencyTier = nil
+        selectedPackId = nil
         difficulty = nil
     }
 }
@@ -62,13 +73,15 @@ struct WordsView: View {
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize) {
             StudyHeading(title: "词库", eyebrow: "VOCABULARY · \(content.words.count) 词")
             StudySegments(title: "词库内容",
-                          options: [("browse", "单词"), ("phrases", "情景短语"), ("reading", "阅读")],
+                          options: [("browse", "单词"), ("packs", "单词包"), ("phrases", "情景短语"), ("reading", "阅读")],
                           selection: Binding(get: { libraryMode }, set: {
                 var state = preferences
                 state.setMode($0)
                 progress.write(state, for: "alef.wordsState.v1")
             }))
             switch libraryMode {
+            case "packs":
+                topicPackLibrary
             case "phrases":
                 phraseLibrary
             case "reading":
@@ -103,7 +116,7 @@ struct WordsView: View {
 
     private var libraryMode: String {
         switch preferences.mode {
-        case "phrases", "reading": preferences.mode
+        case "packs", "phrases", "reading": preferences.mode
         default: "browse"
         }
     }
@@ -194,7 +207,7 @@ struct WordsView: View {
             s.selectedTopic ?? "",
             s.initialLetter,
             s.frequency?.rawValue ?? "",
-            s.frequencyTier ?? "",
+            s.activePackId ?? "",
             s.difficulty?.rawValue ?? "",
             s.sortOrder,
             s.usesCards ? "cards" : "list",
@@ -202,27 +215,62 @@ struct WordsView: View {
     }
 
     private var frequencyTierBar: some View {
-        let selected = preferences.frequencyTier
-        return HStack(spacing: 6) {
-            ForEach(Array(WordPreferences.frequencyTiers.enumerated()), id: \.offset) { _, option in
-                let isActive = selected == option.0
+        let selected = preferences.activePackId
+        let pinnedPacks = progress.pinnedWordPackIds.compactMap { content.wordPack(id: $0) }
+        return ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                packBarPill("全部词库", symbol: nil, active: selected == nil) {
+                    var state = preferences
+                    state.selectedPackId = nil
+                    state.frequencyTier = nil
+                    progress.write(state, for: "alef.wordsState.v1")
+                }
+                ForEach(pinnedPacks) { pack in
+                    packBarPill(pack.shortTitle, symbol: pack.symbol, active: selected == pack.id) {
+                        var state = preferences
+                        state.selectedPackId = pack.id
+                        state.frequencyTier = nil
+                        progress.write(state, for: "alef.wordsState.v1")
+                    }
+                }
                 Button {
                     var state = preferences
-                    state.frequencyTier = option.0
+                    state.setMode("packs")
                     progress.write(state, for: "alef.wordsState.v1")
                 } label: {
-                    Text(option.1)
+                    Label("管理词包", systemImage: "pin")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(isActive ? Color.white : progress.theme.ink)
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(isActive ? progress.theme.primaryButton : progress.theme.insetSurface,
-                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .foregroundStyle(progress.theme.accent)
+                        .padding(.horizontal, 11)
+                        .frame(minHeight: 36)
+                        .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(isActive ? .isSelected : [])
             }
         }
+        .scrollIndicators(.hidden)
+    }
+
+    private func packBarPill(_ title: String, symbol: String?, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if let symbol {
+                    Label(title, systemImage: symbol)
+                } else {
+                    Text(title)
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(active ? Color.white : progress.theme.ink)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .background(active ? progress.theme.primaryButton : progress.theme.insetSurface,
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private var quickTogglesBar: some View {
@@ -300,9 +348,8 @@ struct WordsView: View {
     private var filterDescription: String {
         let settings = preferences
         var labels = [WordPreferences.scopes.first { $0.0 == settings.scope }?.1 ?? "全部"]
-        if let tier = settings.frequencyTier,
-           let tierTitle = WordPreferences.frequencyTiers.first(where: { $0.0 == tier })?.1 {
-            labels.append(tierTitle)
+        if let packId = settings.activePackId, let pack = content.wordPack(id: packId) {
+            labels.append(pack.title)
         }
         if let topic = settings.selectedTopic { labels.append(content.wordCategories[topic]?.label ?? topic) }
         if let frequency = settings.frequency { labels.append(frequency.label) }
@@ -319,22 +366,18 @@ struct WordsView: View {
         let unpointedQuery = withoutHebrewMarks(query)
         let scope = settings.scope
         let topic = settings.selectedTopic
-        let tierLimit: Int? = switch settings.frequencyTier {
-        case "top1000": 1000
-        case "top2000": 2000
-        default: nil
-        }
-        let words = content.words.filter { word in
+        let activePackId = settings.activePackId
+        let sourceWords = activePackId.map { content.words(inPack: $0) } ?? content.words
+        let words = sourceWords.filter { word in
             let include = switch scope {
             case "favorites": favorites.contains(word.id)
             case "needs_review": progress.effectiveWordMastery(word.id) != .mastered
             case "due_srs": schedule[word.id]?.isDue == true
             default: true
             }
-            let inTier = tierLimit == nil || (word.frequencyRank ?? Int.max) <= (tierLimit ?? Int.max)
             let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
                 + (word.alternateSpellings ?? [])
-            return include && inTier && (topic == nil || word.category == topic)
+            return include && (topic == nil || word.category == topic)
                 && (settings.frequency == nil || word.frequency == settings.frequency)
                 && (settings.difficulty == nil || word.difficulty == settings.difficulty)
                 && (settings.initialLetter == "all" || word.hebrewUnpointed.hasPrefix(settings.initialLetter))
@@ -351,10 +394,10 @@ struct WordsView: View {
                 return lhs < rhs
             }
         default:
-            if tierLimit != nil {
+            if activePackId != nil {
                 return words.sorted {
-                    let lhs = ($0.frequencyRank ?? Int.max, $0.hebrewUnpointed)
-                    let rhs = ($1.frequencyRank ?? Int.max, $1.hebrewUnpointed)
+                    let lhs = ($0.frequencyRank ?? Int.max, $0.frequency.rank, $0.hebrewUnpointed)
+                    let rhs = ($1.frequencyRank ?? Int.max, $1.frequency.rank, $1.hebrewUnpointed)
                     return lhs < rhs
                 }
             }
@@ -369,12 +412,12 @@ struct WordsView: View {
         let masteredCount = words.reduce(into: 0) { count, word in
             if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
         }
-        let showRank = prefs.frequencyTier != nil || prefs.sortOrder == "frequency"
-        let tierLabel = WordPreferences.frequencyTiers.first(where: { $0.0 == prefs.frequencyTier })?.1
+        let activePack = prefs.activePackId.flatMap { content.wordPack(id: $0) }
+        let showRank = activePack != nil || prefs.sortOrder == "frequency"
         let visibleWords = Array(words.prefix(displayLimit))
         HStack(spacing: 8) {
-            if let tierLabel, prefs.frequencyTier != nil {
-                Text("\(tierLabel) · 共 \(words.count) 词")
+            if let activePack {
+                Text("\(activePack.title) · 共 \(words.count) 词")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(progress.theme.accent)
             } else {
@@ -563,6 +606,118 @@ struct WordsView: View {
         }
     }
 
+    private var topicPackLibrary: some View {
+        let pinnedCount = progress.pinnedWordPackIds.count
+        let activeDailyPack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
+        return VStack(alignment: .leading, spacing: 14) {
+            StudyCard(padding: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "pin.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(progress.theme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("已固定 \(pinnedCount) 个词包到单词页")
+                            .font(.subheadline.weight(.semibold))
+                        Text("今日记词：\(activeDailyPack?.title ?? "全部词库") · 点按图钉可固定或取消")
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            ForEach(StudyWordPackGroup.allCases) { group in
+                let packs = content.allWordPacks.filter { $0.group == group }
+                StudySectionTitle(group.title)
+                topicPackGrid(packs, highlighted: group != .core)
+            }
+        }
+    }
+
+    private func topicPackGrid(_ packs: [StudyWordPack], highlighted: Bool) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 156), spacing: 8)], spacing: 8) {
+            ForEach(packs) { pack in
+                let packWords = content.words(inPack: pack.id)
+                let mastered = packWords.reduce(into: 0) { count, word in
+                    if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
+                }
+                let ratio = packWords.isEmpty ? 0.0 : Double(mastered) / Double(packWords.count)
+                let pinned = progress.isWordPackPinned(pack.id)
+                let isDailyTarget = progress.dailyVocabularyPackId == pack.id
+                StudyCard(padding: 12, spacing: 8, highlighted: highlighted || isDailyTarget) {
+                    HStack(spacing: 6) {
+                        Image(systemName: pack.symbol)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                            .frame(width: 32, height: 32)
+                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Spacer(minLength: 0)
+                        Button {
+                            progress.togglePinnedWordPack(pack.id)
+                        } label: {
+                            Image(systemName: pinned ? "pin.fill" : "pin")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(pinned ? Color.white : progress.theme.mutedInk)
+                                .frame(width: 30, height: 30)
+                                .background(pinned ? progress.theme.primaryButton : progress.theme.insetSurface, in: Circle())
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(pinned ? "取消固定\(pack.title)" : "固定\(pack.title)到单词页")
+                    }
+                    NavigationLink {
+                        TopicPackDetailView(pack: pack, content: content,
+                                            showNiqqud: setting(\.showNiqqud), showCursive: setting(\.showCursive))
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 4) {
+                                    Text(pack.title)
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(progress.theme.ink)
+                                        .lineLimit(1)
+                                    if isDailyTarget {
+                                        Text("今日")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(progress.theme.accent)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 2)
+                                            .background(progress.theme.highlightedSurface, in: Capsule())
+                                    }
+                                }
+                                Text(pack.subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(progress.theme.mutedInk)
+                                    .lineLimit(2)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule().fill(progress.theme.insetSurface)
+                                        Capsule()
+                                            .fill(progress.theme.accent)
+                                            .frame(width: max(0, geo.size.width * ratio))
+                                    }
+                                }
+                                .frame(height: 5)
+                                HStack {
+                                    Text("\(packWords.count) 词")
+                                    Spacer(minLength: 0)
+                                    Text("已掌握 \(mastered)")
+                                }
+                                .font(.caption2.weight(.medium))
+                                .monospacedDigit()
+                                .foregroundStyle(progress.theme.mutedInk)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     private var phraseLibrary: some View {
         let categories = content.phraseCategories.keys.sorted()
         let favorites: [String] = progress.read("alef.native.phraseFavorites.v1", default: [])
@@ -678,8 +833,11 @@ private struct WordFilterSheet: View {
             }))
             StudySectionTitle("高频词表")
             StudySegments(title: "高频词表",
-                          options: WordPreferences.frequencyTiers,
-                          selection: $preferences.frequencyTier)
+                          options: [(nil, "全部词库"), ("pack_beginner", "基础入门"), ("pack_top1000", "Top 1000"), ("pack_top2000", "Top 2000")],
+                          selection: Binding(get: { preferences.activePackId }, set: {
+                preferences.selectedPackId = $0
+                preferences.frequencyTier = nil
+            }))
             StudySectionTitle("常用程度")
             StudySegments(title: "常用程度",
                           options: [(nil, "不限")] + WordFrequency.allCases.map { (Optional($0), $0.label) },
@@ -1575,6 +1733,309 @@ struct WordSpellingInput: View {
         }
         .onChange(of: submitted) { _, done in
             inputFocused = !done
+        }
+    }
+}
+
+private struct TopicPackDetailView: View {
+    @Environment(StudyProgress.self) private var progress
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let pack: StudyWordPack
+    let content: StudyContent
+    @Binding var showNiqqud: Bool
+    @Binding var showCursive: Bool
+
+    @State private var searchQuery = ""
+    @State private var sortByFrequency = true
+    @State private var unmasteredOnly = false
+    @State private var displayLimit = 60
+
+    private var packWords: [StudyWord] {
+        content.words(inPack: pack.id)
+    }
+
+    private var filteredWords: [StudyWord] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unpointedQuery = withoutHebrewMarks(query)
+        let base = packWords.filter { word in
+            let matchesMastery = !unmasteredOnly || progress.effectiveWordMastery(word.id) != .mastered
+            let searchable = [word.hebrew, word.hebrewUnpointed, word.transliteration, word.meaningZh, word.root ?? "", word.ipa]
+                + (word.alternateSpellings ?? [])
+            let matchesQuery = query.isEmpty
+                || searchable.contains { $0.localizedStandardContains(query) }
+                || (!unpointedQuery.isEmpty && word.hebrewUnpointed.localizedStandardContains(unpointedQuery))
+            return matchesMastery && matchesQuery
+        }
+        if sortByFrequency {
+            return base.sorted {
+                let lhs = ($0.frequencyRank ?? Int.max, $0.frequency.rank, $0.hebrewUnpointed)
+                let rhs = ($1.frequencyRank ?? Int.max, $1.frequency.rank, $1.hebrewUnpointed)
+                return lhs < rhs
+            }
+        }
+        return base
+    }
+
+    var body: some View {
+        let allWords = packWords
+        let words = filteredWords
+        let masteredCount = allWords.reduce(into: 0) { count, word in
+            if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
+        }
+        let ratio = allWords.isEmpty ? 0.0 : Double(masteredCount) / Double(allWords.count)
+        let favorites = Set(progress.favorites)
+        let visibleWords = Array(words.prefix(displayLimit))
+        let pinned = progress.isWordPackPinned(pack.id)
+        let isDailyTarget = progress.dailyVocabularyPackId == pack.id
+
+        StudyPage(keyboardDismissMode: .immediately) {
+            StudyCard(highlighted: true) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: pack.symbol)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(progress.theme.accent)
+                        .frame(width: 42, height: 42)
+                        .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(pack.title)
+                            .font(.headline)
+                            .foregroundStyle(progress.theme.ink)
+                        Text(pack.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    Spacer(minLength: 0)
+                    Text("\(masteredCount)/\(allWords.count)")
+                        .font(.subheadline.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(progress.theme.accent)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(progress.theme.insetSurface)
+                        Capsule()
+                            .fill(progress.theme.accent)
+                            .frame(width: max(0, geo.size.width * ratio))
+                    }
+                }
+                .frame(height: 6)
+                HStack(spacing: 8) {
+                    Button {
+                        progress.togglePinnedWordPack(pack.id)
+                    } label: {
+                        Label(pinned ? "已固定到单词页" : "固定到单词页", systemImage: pinned ? "pin.fill" : "pin")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: pinned))
+                    Button {
+                        let nextPackId: String? = isDailyTarget ? nil : pack.id
+                        let nextWords = content.dailyVocabularyWords(in: progress, packId: nextPackId)
+                        progress.setDailyVocabularyPack(nextPackId, words: nextWords)
+                    } label: {
+                        Label(isDailyTarget ? "今日记词学习中" : "设为今日记词",
+                              systemImage: isDailyTarget ? "calendar.badge.checkmark" : "calendar.badge.plus")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                    }
+                    .buttonStyle(StudyButtonStyle(selected: isDailyTarget))
+                }
+                if !allWords.isEmpty {
+                    HStack(spacing: 8) {
+                        NavigationLink {
+                            WordQuizView(content: content, words: allWords, kind: .meaning)
+                        } label: {
+                            Label("释义测验", systemImage: "text.book.closed")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                        }
+                        .buttonStyle(StudyButtonStyle(prominent: true))
+                        NavigationLink {
+                            WordQuizView(content: content, words: allWords, kind: .listening)
+                        } label: {
+                            Label("听力", systemImage: "ear")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                        }
+                        .buttonStyle(StudyButtonStyle())
+                        NavigationLink {
+                            WordQuizView(content: content, words: allWords, kind: .spelling)
+                        } label: {
+                            Label("拼写", systemImage: "pencil")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                        }
+                        .buttonStyle(StudyButtonStyle())
+                    }
+                }
+            }
+
+            HStack(spacing: 9) {
+                Image(systemName: "magnifyingglass").foregroundStyle(progress.theme.mutedInk).accessibilityHidden(true)
+                TextField("在「\(pack.title)」中搜索", text: $searchQuery)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.search)
+                if !searchQuery.isEmpty {
+                    Button { searchQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(progress.theme.mutedInk)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("清除搜索")
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(progress.theme.cardSurface, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(progress.theme.outline.opacity(0.8), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    togglePill(sortByFrequency ? "高频优先" : "默认顺序", symbol: "arrow.up.arrow.down", active: sortByFrequency) {
+                        sortByFrequency.toggle()
+                    }
+                    togglePill("仅看未掌握", symbol: "circle.dashed", active: unmasteredOnly) {
+                        unmasteredOnly.toggle()
+                    }
+                    togglePill(showNiqqud ? "● 元音点" : "○ 元音点", active: showNiqqud) {
+                        showNiqqud.toggle()
+                    }
+                    togglePill("手写体", symbol: "pencil.tip", active: showCursive) {
+                        showCursive.toggle()
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+
+            Text("共 \(words.count) 词")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(progress.theme.mutedInk)
+
+            if words.isEmpty {
+                ContentUnavailableView("没有匹配的单词", systemImage: "magnifyingglass")
+            } else {
+                LazyVStack(spacing: 7) {
+                    ForEach(visibleWords) { word in
+                        packWordRow(word, favorite: favorites.contains(word.id),
+                                    mastery: progress.effectiveWordMastery(word.id))
+                    }
+                }
+                if visibleWords.count < words.count {
+                    Button {
+                        displayLimit = min(words.count, displayLimit + 60)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("已显示 \(visibleWords.count) / \(words.count) 词")
+                            Text("·")
+                            Text("继续加载").foregroundStyle(progress.theme.accent)
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(progress.theme.mutedInk)
+                        .monospacedDigit()
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(progress.theme.insetSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .onAppear {
+                        displayLimit = min(words.count, displayLimit + 60)
+                    }
+                }
+            }
+        }
+        .studyDetail(pack.title)
+        .onChange(of: searchQuery) { _, _ in displayLimit = 60 }
+        .onChange(of: unmasteredOnly) { _, _ in displayLimit = 60 }
+    }
+
+    private func togglePill(_ label: String, symbol: String? = nil, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if let symbol {
+                    Label(label, systemImage: symbol)
+                } else {
+                    Text(label)
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(active ? Color.white : progress.theme.ink)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .background(active ? progress.theme.primaryButton : progress.theme.insetSurface, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    private func packWordRow(_ word: StudyWord, favorite: Bool, mastery: Mastery) -> some View {
+        let proficiency = progress.wordProficiency(word.id)
+        let tint = proficiency > 0 ? StudyProficiencyStyle.color(for: proficiency) : progress.theme.mutedInk
+        let surface = proficiency > 0 ? tint.opacity(0.14) : progress.theme.insetSurface
+        return StudyCard(padding: 7) {
+            HStack(spacing: 0) {
+                VStack(spacing: 3) {
+                    Image(systemName: mastery.symbol).font(.subheadline)
+                    Text(mastery.title).font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(tint)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 46, minHeight: 46)
+                .background(surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                NavigationLink {
+                    WordDetailView(word: word, content: content, showNiqqud: showNiqqud, showCursive: showCursive)
+                } label: {
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 5) {
+                                if sortByFrequency, let rank = word.frequencyRank {
+                                    Text("#\(rank)")
+                                        .font(.caption2.weight(.bold))
+                                        .monospacedDigit()
+                                        .foregroundStyle(progress.theme.accent)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(progress.theme.highlightedSurface, in: Capsule())
+                                }
+                                Text(word.transliteration)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(progress.theme.ink)
+                                    .lineLimit(1)
+                            }
+                            Text(word.meaningZh)
+                                .font(.caption)
+                                .foregroundStyle(progress.theme.mutedInk)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        HebrewText(text: showNiqqud ? word.hebrew : word.hebrewUnpointed,
+                                   cursive: showCursive, size: 28)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .padding(.leading, 8)
+                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                PronunciationButton(hebrew: word.hebrew, iconOnly: true, title: "播放\(word.meaningZh)的发音")
+                Button { progress.toggleFavorite(word.id) } label: {
+                    Image(systemName: favorite ? "bookmark.fill" : "bookmark")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(progress.theme.accent)
+                .accessibilityLabel(favorite ? "取消收藏\(word.meaningZh)" : "收藏\(word.meaningZh)")
+            }
         }
     }
 }

@@ -20,7 +20,12 @@ export type WordCategory =
   | 'city'
   | 'body'
   | 'work'
-  | 'biblical';
+  | 'biblical'
+  | 'news'
+  | 'tech'
+  | 'colloquial'
+  | 'health'
+  | 'business';
 
 export interface WordSentenceExample {
   hebrew: string;

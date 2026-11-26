@@ -489,7 +489,7 @@ struct DailyVocabularyPlan: Codable, Equatable {
         // Rebuild older plans once so their unopened groups use the new priority.
         let shouldReselect = isToday && usesBeginnerFirstSelection != true
         let available = Set(words.map(\.id))
-        let valid = groups.filter { $0.wordIds.allSatisfy(available.contains) }
+        let valid = groups.filter { $0.hasStarted || $0.wordIds.allSatisfy(available.contains) }
         let isEligibleUnstarted: (DailyVocabularyGroup) -> Bool = { group in
             group.wordIds.allSatisfy { mastery[$0] != .mastered && schedule[$0] == nil }
         }
@@ -920,6 +920,54 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func dailyVocabularyPlan(words: [StudyWord], date: Date = .now) -> DailyVocabularyPlan {
         dailyVocabulary.plan(for: date, words: words, mastery: wordMastery, schedule: schedule)
+    }
+
+    static let pinnedWordPacksKey = "alef.pinnedWordPacks.v1"
+    static let dailyVocabularyPackKey = "alef.dailyVocabPack.v1"
+
+    var pinnedWordPackIds: [String] {
+        read(Self.pinnedWordPacksKey, default: StudyWordPack.defaultPinnedIDs)
+    }
+
+    func isWordPackPinned(_ id: String) -> Bool {
+        pinnedWordPackIds.contains(id)
+    }
+
+    func togglePinnedWordPack(_ id: String) {
+        var current = pinnedWordPackIds
+        if let idx = current.firstIndex(of: id) {
+            current.remove(at: idx)
+        } else {
+            current.append(id)
+        }
+        write(current, for: Self.pinnedWordPacksKey)
+    }
+
+    var dailyVocabularyPackId: String? {
+        let raw: String = read(Self.dailyVocabularyPackKey, default: "")
+        return raw.isEmpty ? nil : raw
+    }
+
+    func setDailyVocabularyPack(_ packId: String?, words: [StudyWord], date: Date = .now) {
+        let normalized = packId ?? ""
+        write(normalized, for: Self.dailyVocabularyPackKey)
+
+        let today = DailyVocabularyPlan.dayKey(for: date)
+        var plan = dailyVocabulary
+        let isToday = plan.day == today
+        var kept = isToday
+            ? plan.groups.filter { $0.hasStarted }
+            : plan.groups.filter { $0.hasStarted && !$0.isComplete }
+        let assigned = Set(kept.flatMap(\.wordIds))
+        let newIds = words.filter { !assigned.contains($0.id) && wordMastery[$0.id] != .mastered && schedule[$0.id] == nil }.map(\.id)
+        let targetCount = max(kept.count, plan.groupsPerDay)
+        for offset in stride(from: 0, to: newIds.count, by: DailyVocabularyPlan.groupSize) {
+            guard kept.count < targetCount else { break }
+            kept.append(DailyVocabularyGroup(wordIds: Array(newIds.dropFirst(offset).prefix(DailyVocabularyPlan.groupSize))))
+        }
+        plan = DailyVocabularyPlan(day: today, groupsPerDay: plan.groupsPerDay, groups: kept,
+                                   spellingCombo: isToday ? plan.spellingCombo : 0, usesBeginnerFirstSelection: true)
+        write(plan, for: DailyVocabularyPlan.storageKey)
     }
 
     func prepareDailyVocabulary(words: [StudyWord], date: Date = .now) {

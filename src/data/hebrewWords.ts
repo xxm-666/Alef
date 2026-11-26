@@ -9,6 +9,11 @@ import { WORD_BATCH_7 } from './words/batch7';
 import { WORD_BATCH_8 } from './words/batch8';
 import { WORD_BATCH_9 } from './words/batch9';
 import { WORD_BATCH_10 } from './words/batch10';
+import { WORD_PACK_NEWS } from './words/packNews';
+import { WORD_PACK_TECH } from './words/packTech';
+import { WORD_PACK_COLLOQUIAL } from './words/packColloquial';
+import { WORD_PACK_HEALTH } from './words/packHealth';
+import { WORD_PACK_BUSINESS } from './words/packBusiness';
 import { classifyWord } from './words/classification';
 
 export const WORD_CATEGORY_META: Record<WordCategory, { label: string; badge: string }> = {
@@ -23,6 +28,11 @@ export const WORD_CATEGORY_META: Record<WordCategory, { label: string; badge: st
   body: { label: '身体情绪', badge: '身心' },
   work: { label: '工作学习', badge: '职场' },
   biblical: { label: '圣经文化', badge: '圣经' },
+  news: { label: '新闻与社会', badge: '新闻' },
+  tech: { label: '科技与互联网', badge: '科技' },
+  colloquial: { label: '影视与地道口语', badge: '口语' },
+  health: { label: '医疗与健康', badge: '医疗' },
+  business: { label: '商业与金融', badge: '商业' },
 };
 
 const CORE_HEBREW_WORDS: HebrewWord[] = [
@@ -1812,6 +1822,11 @@ const ALL_RAW_WORDS: HebrewWord[] = [
   ...WORD_BATCH_8,
   ...WORD_BATCH_9,
   ...WORD_BATCH_10,
+  ...WORD_PACK_NEWS,
+  ...WORD_PACK_TECH,
+  ...WORD_PACK_COLLOQUIAL,
+  ...WORD_PACK_HEALTH,
+  ...WORD_PACK_BUSINESS,
 ];
 
 const seenIds = new Set<string>();
