@@ -515,3 +515,11 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 ## Edge TTS (he-IL-HilaNeural) 补充音频
 
 第八批（Top 500）75 段、第九/十批（Top 1000 / Top 2000）159 段以及五个高频主题包（新闻与社会、科技与互联网、影视与地道口语、医疗与健康、商业与金融）182 段补充发音均由 Microsoft Edge TTS（`he-IL-HilaNeural`）合成现代希伯来语发音。
+
+## 情景短句和阅读扩充
+
+新增的 168 段 MP3 使用 Windows 的 Microsoft Asaf（he-IL）合成，经首尾静音裁剪和音量调整。短句和阅读中相同的句子共用一份录音。新增经典选段在应用内标为“现代合成发音”，其中四字神名按 Adonai 朗读。
+
+新增的十篇《希伯来圣经》选读取自 Dovi 与希伯来语维基文库贡献者编订的《Miqra according to the Masorah》，经 Sefaria 获取。学习版保留元音点，去除吟诵符号和版式标记，按语意分段。改编的希伯来语文本沿用 CC BY-SA 许可。[底本与编者说明](https://en.wikisource.org/wiki/User:Dovi/Miqra_according_to_the_Masorah/Introduction/Abstract) · [Sefaria 版本说明](https://www.sefaria.org/Genesis.1.4?with=About) · [署名－相同方式共享](https://creativecommons.org/licenses/by-sa/4.0/)
+
+两篇《先贤篇》节选来自 Sefaria 收录的公版 Torat Emet 357，分句及标点依练习调整。各篇的章节号列在阅读页题下。[《先贤篇》版本信息](https://www.sefaria.org/Pirkei_Avot?tab=versions)

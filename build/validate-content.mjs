@@ -187,6 +187,9 @@ export async function validateStudyContent(
       errors.push(`Duplicate phrase id: ${phrase.id}`);
     }
     phraseIds.add(phrase.id);
+    for (const field of ['hebrewUnpointed', 'transliteration', 'meaningZh']) {
+      if (!isNonEmptyString(phrase[field])) errors.push(`Phrase "${phrase.id}" is missing ${field}`);
+    }
     if (!Object.prototype.hasOwnProperty.call(phraseCategories, phrase.scenario)) {
       errors.push(`Phrase "${phrase.id}" has unknown scenario "${phrase.scenario}"`);
     }
@@ -219,6 +222,11 @@ export async function validateStudyContent(
     }
     for (const [idx, sentence] of sentences.entries()) {
       totalSentences += 1;
+      for (const field of ['unpointed', 'transliteration', 'chinese']) {
+        if (!isNonEmptyString(sentence?.[field])) {
+          errors.push(`Reading "${reading.id}" sentence #${idx + 1} is missing ${field}`);
+        }
+      }
       if (!isNonEmptyString(sentence?.hebrew) || !audioNfc.has(sentence.hebrew.normalize('NFC'))) {
         errors.push(`Reading "${reading.id}" sentence #${idx + 1} is missing an entry in audioManifest`);
       }
@@ -228,6 +236,10 @@ export async function validateStudyContent(
     }
     const q = reading.question;
     const choicesLen = Array.isArray(q?.choices) ? q.choices.length : 0;
+    if (!isNonEmptyString(q?.prompt) || choicesLen !== 3 || !q.choices.every(isNonEmptyString)
+        || new Set(q.choices.map((choice) => choice.trim())).size !== 3) {
+      errors.push(`Reading "${reading.id}" requires a prompt and three distinct nonempty choices`);
+    }
     if (!q || !Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex >= choicesLen) {
       errors.push(`Reading "${reading.id}" has invalid question.correctIndex (${q?.correctIndex}) for ${choicesLen} choices`);
     }

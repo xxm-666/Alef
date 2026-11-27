@@ -1144,7 +1144,9 @@ final class AlefCoreTests: XCTestCase {
 
     func testP1ContentDecodingAndRootFamilies() throws {
         let content = try StudyContent.load()
-        XCTAssertEqual(content.readings.count, 12)
+        XCTAssertGreaterThanOrEqual(content.phrases.count, 120)
+        XCTAssertGreaterThanOrEqual(content.readings.filter { $0.category == "modern" }.count, 24)
+        XCTAssertGreaterThanOrEqual(content.readings.filter { $0.category == "classic" }.count, 14)
         XCTAssertEqual(content.grammarAffixes.count, 10)
         XCTAssertEqual(content.grammarBinyanim.count, 6)
         XCTAssertEqual(content.minimalPairs.count, 26)

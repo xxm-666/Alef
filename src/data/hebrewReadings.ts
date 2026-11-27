@@ -1,4 +1,6 @@
 import { CLASSIC_READING_RECORDINGS, type ReadingAudio } from './audioManifest';
+import { MODERN_READINGS } from './readings/modern';
+import { CLASSIC_READINGS } from './readings/classic';
 
 interface ReadingSentence {
   hebrew: string;
@@ -169,13 +171,13 @@ const readings: HebrewReading[] = [
     sentences: [
       {
         hebrew: 'בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם וְאֵת הָאָרֶץ.',
-        unpointed: 'בראשית ברא אלוהים את השמיים ואת הארץ.',
+        unpointed: 'בראשית ברא אלהים את השמים ואת הארץ.',
         transliteration: 'Bereshit bara Elohim et ha-shamayim ve-et ha-aretz.',
         chinese: '起初，上帝创造了天地。',
       },
       {
         hebrew: 'וַיֹּאמֶר אֱלֹהִים יְהִי אוֹר, וַיְהִי אוֹר.',
-        unpointed: 'ויאמר אלוהים יהי אור, ויהי אור.',
+        unpointed: 'ויאמר אלהים יהי אור, ויהי אור.',
         transliteration: 'Vayomer Elohim, yehi or, vayehi or.',
         chinese: '上帝说：“要有光。”就有了光。',
       },
@@ -183,7 +185,7 @@ const readings: HebrewReading[] = [
     glosses: {
       בראשית: '起初，最初。',
       ברא: '创造了。',
-      יהי: '要有。这里表示命令，属于经典希伯来语的用法。',
+      יהי: '“要有、让……出现”。这是动词 היה（是、存在）的第三人称祈愿式。',
       אור: '光。',
     },
     question: { prompt: '第一节说，上帝创造了什么？', choices: ['青草和树木', '天地', '海洋和鱼群'], correctIndex: 1 },
@@ -196,7 +198,7 @@ const readings: HebrewReading[] = [
     sentences: [
       {
         hebrew: 'בִּנְאוֹת דֶּשֶׁא יַרְבִּיצֵנִי, עַל־מֵי מְנֻחוֹת יְנַהֲלֵנִי.',
-        unpointed: 'בנאות דשא ירביצני, על־מי מנוחות ינהלני.',
+        unpointed: 'בנאות דשא ירביצני, על־מי מנחות ינהלני.',
         transliteration: "Bin'ot deshe yarbitzeni, al mei menukhot yenahaleni.",
         chinese: '他让我躺在青草地上，领我到安静的水边。',
       },
@@ -210,7 +212,7 @@ const readings: HebrewReading[] = [
     glosses: {
       דשא: '草，青草。',
       ינהלני: '他领我。词尾 ־נִי 表示“我”。',
-      מנוחות: '安歇。מֵי מְנֻחוֹת 指可以在旁安歇的水域。',
+      מנחות: '安歇。מֵי מְנֻחוֹת 指可以在旁安歇的水域。',
       נפשי: '我的心灵。词尾 ־ִי 表示“我的”。',
       צדק: '正直，公义。',
     },
@@ -248,8 +250,10 @@ const readings: HebrewReading[] = [
     ],
     glosses: {
       שלומך: '你的平安/近况（对女性读作 shlomekh）。',
+      הכל: '全部，一切（含定冠词 הַ־）。',
       הכול: '全部，一切（含定冠词 הַ־）。',
       בסדר: '没问题，很好（来自 בְּ + סֵדֶר）。',
+      קראים: '叫作；קֹרְאִים לִי 意为“人们叫我……”。',
       קוראים: '叫作；קֹרְאִים לִי 意为“人们叫我……”。',
       להכיר: '认识，结识（动词不定式）。',
     },
@@ -292,7 +296,7 @@ const readings: HebrewReading[] = [
       קרים: '冷的、凉的（修饰复数名词 מַיִם 水）。',
       טעים: '美味的，好吃的。',
     },
-    question: { prompt: '客人想确认餐厅里有没有什么？', choices: ['素食菜品', '热茶', '甜点'], correctIndex: 0 },
+    question: { prompt: '客人询问的是哪类菜品？', choices: ['素食菜品', '海鲜菜品', '无糖甜点'], correctIndex: 0 },
   },
   {
     id: 'asking-way',
@@ -320,7 +324,7 @@ const readings: HebrewReading[] = [
     ],
     glosses: {
       תחנת: '……的车站（תַּחֲנָה 的构造态）。',
-      הרכבת: '火车（定冠词 הָ־ 加在 ר 前不变加强点）。',
+      הרכבת: '火车。定冠词在 ר 前读 הָ，ר 不加表示辅音加倍的点。',
       ישר: '笔直地，直走。',
       ימינה: '向右（方向副词后缀 ־ָה）。',
       ברגל: '步行，走路（前缀 בְּ + רֶגֶל 脚）。',
@@ -368,7 +372,7 @@ const readings: HebrewReading[] = [
   },
   {
     id: 'hotel-airport',
-    title: '酒店与机场',
+    title: '在酒店办理入住',
     category: 'modern',
     sentences: [
       {
@@ -386,7 +390,7 @@ const readings: HebrewReading[] = [
       {
         hebrew: 'מָה הַסִּיסְמָה שֶׁל הַוַּויְיפַאי?',
         unpointed: 'מה הסיסמה של הווייפאי?',
-        transliteration: 'Ma ha-sismah shel ha-wifi?',
+        transliteration: 'Ma ha-sismah shel ha-waifai?',
         chinese: 'Wi-Fi 密码是多少？',
       },
       {
@@ -401,6 +405,7 @@ const readings: HebrewReading[] = [
       הדרכון: '护照（前缀 הַ־ + דַּרְכּוֹן）。',
       שלי: '我的（独立所有格 שֶׁלִּי）。',
       הסיסמה: '密码。',
+      מגשת: '被供应、端上（Huf\'al 被动分词，来自词根 נ-ג-ש）。',
       מוגשת: '被供应、端上（Huf\'al 被动分词，来自词根 נ-ג-ש）。',
     },
     question: { prompt: '客人询问了哪两件事？', choices: ['退房时间与行李', 'Wi-Fi 密码与早餐时间', '登机口与出租车'], correctIndex: 1 },
@@ -440,10 +445,13 @@ const readings: HebrewReading[] = [
       הבנתי: '我明白了（Hif\'il 第一人称过去时）。',
       אומרים: '人们说（用来表达“……怎么说？”）。',
       בעברית: '用希伯来语（前缀 בְּ + עִבְרִית）。',
+      מצינת: '极好的，出色的（修饰阴性名词 הָעִבְרִית）。',
       מצוינת: '极好的，出色的（修饰阴性名词 הָעִבְרִית）。',
     },
     question: { prompt: '想请对方再重复一遍时怎么说？', choices: ['אֶפְשָׁר שׁוּב?', 'מָה זֹאת אוֹמֶרֶת?', 'כַּמָּה זֶה עוֹלֶה?'], correctIndex: 0 },
   },
+  ...MODERN_READINGS,
+  ...CLASSIC_READINGS,
 ];
 
 export const HEBREW_READINGS: HebrewReading[] = readings.map((reading) => {

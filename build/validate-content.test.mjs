@@ -17,8 +17,9 @@ test('repository study content passes validation and matches DailyLetter.swift',
   const summary = await validateStudyContent(baseContent, { rootUrl });
   assert.equal(summary.letters, 22);
   assert.ok(summary.words > 1000);
-  assert.ok(summary.phrases > 0);
-  assert.equal(summary.readings, 12);
+  assert.ok(summary.phrases >= 120);
+  assert.ok(baseContent.readings.filter(({ category }) => category === 'modern').length >= 24);
+  assert.ok(baseContent.readings.filter(({ category }) => category === 'classic').length >= 14);
   assert.ok(summary.recordings > 0);
 });
 
@@ -64,6 +65,29 @@ test('rejects invalid reading question.correctIndex', async () => {
     validateStudyContent(broken, { rootUrl }),
     /invalid question\.correctIndex/,
   );
+});
+
+test('each reading gloss can be opened with and without niqqud', () => {
+  for (const reading of baseContent.readings) {
+    for (const field of ['hebrew', 'unpointed']) {
+      const visibleDefinitions = new Set();
+      for (const sentence of reading.sentences) {
+        const tokens = sentence[field].replace(/\p{M}/gu, '').match(/[א-ת]+/gu) ?? [];
+        for (const token of tokens) {
+          if (reading.glosses[token]) visibleDefinitions.add(reading.glosses[token]);
+        }
+      }
+      assert.deepEqual(visibleDefinitions, new Set(Object.values(reading.glosses)), `${reading.id}: ${field}`);
+    }
+  }
+});
+
+test('unpointed classic readings retain the consonants of the cited text', () => {
+  for (const reading of baseContent.readings.filter(({ category }) => category === 'classic')) {
+    for (const sentence of reading.sentences) {
+      assert.equal(sentence.unpointed, sentence.hebrew.replace(/\p{M}/gu, ''), reading.id);
+    }
+  }
 });
 
 test('labels the classic reading recordings by their actual playback style', async () => {
