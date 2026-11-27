@@ -39,6 +39,7 @@
 		A1EF20000000000000000025 /* StudyComicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000026 /* StudyComicView.swift */; };
 		A1EF20000000000000000027 /* StudyReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF20000000000000000028 /* StudyReviewView.swift */; };
 		A1EF20000000000000000029 /* StudyAchievementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000002A /* StudyAchievementsView.swift */; };
+		A1EF2000000000000000002B /* StudyRainyTransferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EF2000000000000000002C /* StudyRainyTransferView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +109,7 @@
 		A1EF20000000000000000026 /* StudyComicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyComicView.swift; sourceTree = "<group>"; };
 		A1EF20000000000000000028 /* StudyReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyReviewView.swift; sourceTree = "<group>"; };
 		A1EF2000000000000000002A /* StudyAchievementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyAchievementsView.swift; sourceTree = "<group>"; };
+		A1EF2000000000000000002C /* StudyRainyTransferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyRainyTransferView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +173,7 @@
 				A1EF20000000000000000009 /* StudyFlashcardsView.swift */,
 				A1EF20000000000000000024 /* StudyGamesView.swift */,
 				A1EF20000000000000000026 /* StudyComicView.swift */,
+				A1EF2000000000000000002C /* StudyRainyTransferView.swift */,
 				A1EF20000000000000000028 /* StudyReviewView.swift */,
 				A1EF20000000000000000007 /* StudyContent.swift */,
 				A1EF20000000000000000005 /* StudyAudio.swift */,
@@ -337,6 +340,7 @@
 				A1EF2000000000000000000A /* StudyFlashcardsView.swift in Sources */,
 				A1EF20000000000000000023 /* StudyGamesView.swift in Sources */,
 				A1EF20000000000000000025 /* StudyComicView.swift in Sources */,
+				A1EF2000000000000000002B /* StudyRainyTransferView.swift in Sources */,
 				A1EF20000000000000000027 /* StudyReviewView.swift in Sources */,
 				A1EF20000000000000000008 /* StudyContent.swift in Sources */,
 				A1EF20000000000000000006 /* StudyAudio.swift in Sources */,

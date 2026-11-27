@@ -28,6 +28,54 @@ final class AlefCoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testRainyTransferKeepsTheCurrentQuestionAfterMistakesAndCompletesInOrder() {
+        var session = RainyTransferSession()
+        session.goToStop()
+        XCTAssertEqual(session.phase, .askDriver)
+        XCTAssertTrue(session.chooseLine("p-dir-1").isEmpty)
+        XCTAssertNotNil(session.hint)
+        XCTAssertEqual(session.phase, .askDriver)
+        XCTAssertTrue(session.transcript.isEmpty)
+
+        XCTAssertEqual(session.chooseLine("p-dir-9"), ["p-dir-9", "p-dir-10"])
+        XCTAssertNil(session.hint)
+        session.askWhereToTransfer()
+        XCTAssertEqual(session.chooseLine("p-dir-11"), ["p-dir-11", "p-dir-12"])
+        XCTAssertFalse(session.chooseStop(.library))
+        session.goToStop()
+        XCTAssertEqual(session.phase, .chooseStop)
+        XCTAssertTrue(session.chooseStop(.market))
+        session.goToStop()
+        XCTAssertEqual(session.phase, .listen)
+
+        XCTAssertFalse(session.chooseWait(10))
+        session.reviewAnnouncement()
+        session.reviewAnnouncement()
+        XCTAssertFalse(session.chooseWait(15))
+        XCTAssertEqual(session.phase, .listen)
+        XCTAssertTrue(session.chooseWait(10))
+        XCTAssertEqual(session.phase, .waitHere)
+        session.finish()
+        session.finish()
+        XCTAssertEqual(session.phase, .summary)
+        XCTAssertEqual(session.transcript, ["p-dir-9", "p-dir-10", "p-dir-11", "p-dir-12", "p-dir-13", "p-dir-14"])
+    }
+
+    func testRainyTransferTheaterEntryAndDialogueRecordings() throws {
+        XCTAssertTrue(StudyComicScenario.allCases.contains(.rainyTransfer))
+        XCTAssertEqual(StudyComicScenario.rainyTransfer.actCountBadge, "3 幕 · 公交出行")
+        XCTAssertEqual(StudyComicScenario.telAvivCafe.actCountBadge, "5 幕 · 餐饮点单")
+        XCTAssertEqual(StudyComicScenario.oldCityDayTrip.actCountBadge, "4 幕 · 旅行探索")
+
+        let content = try StudyContent.load()
+        let ids = Set(RainyTransferSession.lineChoices.flatMap { $0.map(\.id) })
+            .union(["p-dir-10", "p-dir-12", RainyTransferSession.announcementID, RainyTransferSession.closingLineID])
+        for id in ids {
+            let line = try XCTUnwrap(content.phrases.first { $0.id == id })
+            XCTAssertNotNil(content.audio[line.hebrew], id)
+        }
+    }
+
     func testReviewScheduleSm2ProgressionAndCaps() {
         let baseDate = makeDate(year: 2026, month: 11, day: 1)
 

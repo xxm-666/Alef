@@ -3,6 +3,7 @@ import SwiftUI
 enum StudyComicScenario: String, CaseIterable, Identifiable {
     case telAvivCafe
     case oldCityDayTrip
+    case rainyTransfer
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         switch self {
         case .telAvivCafe: "特拉维夫咖啡馆"
         case .oldCityDayTrip: "旧城一日游"
+        case .rainyTransfer: "雨天换乘"
         }
     }
 
@@ -17,6 +19,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         switch self {
         case .telAvivCafe: "咖啡馆点单"
         case .oldCityDayTrip: "旧城一日游"
+        case .rainyTransfer: "雨天换乘"
         }
     }
 
@@ -24,6 +27,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         switch self {
         case .telAvivCafe: "入座要菜单、点奶咖、要冰水、夸好喝到买单"
         case .oldCityDayTrip: "集市买石榴、老城问路、庭院畅聊与日落告别"
+        case .rainyTransfer: "问线路、找站点、听到站时间"
         }
     }
 
@@ -31,6 +35,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         switch self {
         case .telAvivCafe: "餐饮点单"
         case .oldCityDayTrip: "旅行探索"
+        case .rainyTransfer: "公交出行"
         }
     }
 
@@ -38,11 +43,29 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         switch self {
         case .telAvivCafe: "CafeMenuOrder"
         case .oldCityDayTrip: "OldCityMarket"
+        case .rainyTransfer: RainyTransferSession.Phase.askDriver.imageName
         }
     }
 
     var actCountBadge: String {
-        "\(acts.count) 幕 · \(categoryTag)"
+        let count = switch self {
+        case .telAvivCafe: ScenarioAct.cafeActs.count
+        case .oldCityDayTrip: ScenarioAct.oldCityActs.count
+        case .rainyTransfer: RainyTransferSession.actTitles.count
+        }
+        return "\(count) 幕 · \(categoryTag)"
+    }
+}
+
+private enum StudyDialogueScenario {
+    case telAvivCafe
+    case oldCityDayTrip
+
+    var navTitle: String {
+        switch self {
+        case .telAvivCafe: StudyComicScenario.telAvivCafe.navTitle
+        case .oldCityDayTrip: StudyComicScenario.oldCityDayTrip.navTitle
+        }
     }
 
     var partnerRole: String {
@@ -86,7 +109,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
         }
     }
 
-    var acts: [ScenarioAct] {
+    fileprivate var acts: [ScenarioAct] {
         switch self {
         case .telAvivCafe: ScenarioAct.cafeActs
         case .oldCityDayTrip: ScenarioAct.oldCityActs
@@ -889,11 +912,24 @@ struct StudyScenarioTheaterHubView: View {
 }
 
 struct StudyScenarioComicView: View {
+    let content: StudyContent
+    let scenario: StudyComicScenario
+
+    var body: some View {
+        switch scenario {
+        case .telAvivCafe: StudyDialogueComicView(content: content, scenario: .telAvivCafe)
+        case .oldCityDayTrip: StudyDialogueComicView(content: content, scenario: .oldCityDayTrip)
+        case .rainyTransfer: StudyRainyTransferView(content: content)
+        }
+    }
+}
+
+private struct StudyDialogueComicView: View {
     @Environment(StudyProgress.self) private var progress
     @EnvironmentObject private var audio: StudyAudio
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let content: StudyContent
-    let scenario: StudyComicScenario
+    let scenario: StudyDialogueScenario
 
     @State private var actIndex = 0
     @State private var phase: ScenarioDialoguePhase = .prompt
