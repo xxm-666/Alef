@@ -2670,8 +2670,12 @@
   // 8B. REDESIGNED INTERACTIVE CAFE DIALOGUE (5 ACTS + MULTI-INTERACTION STAGE)
   // =========================================================================
   const CAFE_IMG_BASE = '../ios/App/App/Assets.xcassets/';
-  const CAFE_WEBP_SETS = new Set(['CafeCoffeeApproach', 'CafeBillHappy']);
-  const cafeImg = (name) => `${CAFE_IMG_BASE}${name}.imageset/panel.${CAFE_WEBP_SETS.has(name) ? 'webp' : 'jpg'}`;
+  const cafeImg = (name) => `${CAFE_IMG_BASE}${name}.imageset/panel.jpg`;
+  const CAFE_PRELOADED_IMAGES = ['CafeMenuOrder', 'CafeCoffeeApproach', 'CafeWaterHappy', 'CafeTastingHappy', 'CafeBillHappy'].map(n => {
+    const img = new Image();
+    img.src = cafeImg(n);
+    return img;
+  });
   const CAFE_AUDIO_BASE = '../public/audio/';
   let cafeAudioPlayer = null;
 

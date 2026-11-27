@@ -1212,24 +1212,33 @@ private struct CafeCinemaStage: View {
     @State private var shakeOffset: CGFloat = 0
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Image(imageName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .scaleEffect(!reduceMotion && phase != .animating && breathing ? 1.04 : 1.0)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 5.5).repeatForever(autoreverses: true), value: breathing)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: imageName)
-                    .clipped()
-                    .accessibilityLabel(act.title)
+        Color.clear
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay {
+                GeometryReader { geo in
+                    ZStack {
+                        ZStack {
+                            Image(imageName)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .id(imageName)
+                                .transition(reduceMotion ? .identity : .opacity)
+                        }
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: imageName)
+                        .scaleEffect(!reduceMotion && phase != .animating && breathing ? 1.035 : 1.0)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 5.5).repeatForever(autoreverses: true), value: breathing)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .accessibilityLabel(act.title)
 
-                LinearGradient(
-                    colors: [Color.black.opacity(0.32), Color.clear, Color.black.opacity(0.45)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.32), Color.clear, Color.black.opacity(0.45)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .allowsHitTesting(false)
 
                 // Top Bar: Act badge + accumulated table props + replay
                 VStack {
@@ -1371,7 +1380,7 @@ private struct CafeCinemaStage: View {
                 }
             }
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
+        }
         .offset(x: shakeOffset)
         .onAppear {
             if !reduceMotion {
