@@ -1124,7 +1124,7 @@ struct StudyReadingView: View {
                             symbol: correct ? "checkmark.circle" : "info.circle")
             }
         }
-        .studyDetail(reading.title)
+        .studyDetail(reading.title, showsTabBar: answer == reading.question.correctIndex)
         .studyAnswerCelebration(celebration)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1380,7 +1380,10 @@ struct WordQuizView: View {
                 if value != nil { scroll.scrollTo("word-result", anchor: .bottom) }
             }
         }
-        .studyDetail(reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : (untilMastered ? "本阶单词测验" : "\(kind.title)练习")))
+        .studyDetail(
+            reviewing ? "到期复习" : (mistakePractice ? "\(kind.title)错题练习" : (untilMastered ? "本阶单词测验" : "\(kind.title)练习")),
+            showsTabBar: showsSummary || (started && target == nil)
+        )
         .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if !reviewing && answered > 0 && !showsSummary {
@@ -1484,8 +1487,7 @@ struct WordQuizView: View {
             }
             if let schedule = progress.schedule[target.id] {
                 if reviewing && isRetryAnswer {
-                    StudyNotice(title: "已记录本轮补练", symbol: "calendar.badge.checkmark",
-                                note: "下次复习 · \(schedule.displayDate)")
+                    StudyNotice(title: "已记录本轮补练", symbol: "calendar.badge.checkmark")
                 } else {
                     StudyProficiencyCard(
                         proficiency: progress.wordProficiency(target.id),
@@ -1523,12 +1525,9 @@ struct WordQuizView: View {
     }
 
     private var summary: some View {
-        let nextReview = queue.compactMap { progress.schedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
         let allMastered = untilMastered && remainingMasteryWords.isEmpty
         let title = reviewing ? "完成到期复习" : (mistakePractice ? "完成错题练习" : (allMastered ? "本阶单词已全部记住" : "完成练习"))
-        let message: String? = if reviewing {
-            nextReview.map { "下次复习 · \($0.displayDate)" }
-        } else if allMastered {
+        let message: String? = if allMastered {
             "本阶 \(words.count) 个高频词均已牢记。"
         } else if untilMastered {
             "已牢记 \(max(0, words.count - remainingMasteryWords.count)) / \(words.count) 词，可随时继续巩固。"
@@ -1871,7 +1870,7 @@ private struct TopicPackDetailView: View {
                 }
             }
         }
-        .studyDetail(pack.title)
+        .studyDetail(pack.title, showsTabBar: true)
         .onChange(of: searchQuery) { _, _ in displayLimit = 40 }
         .onChange(of: unmasteredOnly) { _, _ in displayLimit = 40 }
     }
@@ -2284,6 +2283,6 @@ private struct ReadingPackDetailView: View {
             }
             StudyReadingLibrary(content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
         }
-        .studyDetail(pack.title)
+        .studyDetail(pack.title, showsTabBar: true)
     }
 }

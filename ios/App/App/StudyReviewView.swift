@@ -137,10 +137,6 @@ struct StudyTodayReviewView: View {
                     StudySectionTitle(overview.summary)
                     Text("到期单词 \(overview.words.count) · 到期字母 \(overview.letters.count)")
                         .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                    if let nextReview = overview.nextReview {
-                        Text("下一批 · \(nextReview.formatted(.dateTime.month().day().hour().minute()))")
-                            .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
-                    }
                     if let batch = overview.availableBatch {
                         Button(action: startReview) {
                             Label(overview.savedBatch == nil ? "开始一组" : "继续这一组",
@@ -190,7 +186,7 @@ struct StudyTodayReviewView: View {
                 }
             }
         }
-        .studyDetail("今日复习")
+        .studyDetail("今日复习", showsTabBar: true)
     }
 }
 
@@ -251,7 +247,7 @@ private struct StudyMistakeBookView: View {
                 }
             }
         }
-        .studyDetail("错题本")
+        .studyDetail("错题本", showsTabBar: true)
         .onAppear {
             if mistakes.isEmpty && progress.wordMistakes.contains(where: { $0.kind != kind && wordsByID[$0.wordID] != nil }) {
                 kind = kind == .meaning ? .spelling : .meaning

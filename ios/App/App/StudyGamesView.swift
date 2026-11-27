@@ -244,7 +244,7 @@ struct StudyGameView: View {
             }
             .onChange(of: round?.index) { _, _ in scroll.scrollTo("game-top", anchor: .top) }
         }
-        .studyDetail(game.title)
+        .studyDetail(game.title, showsTabBar: round.map { $0.current == nil } ?? false)
         .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if round?.answer != nil {
@@ -653,7 +653,7 @@ struct StudyMatchingGameView: View {
                 .buttonStyle(StudyButtonStyle(learningAction: round.complete))
             }
         }
-        .studyDetail(StudyGame.matching.title)
+        .studyDetail(StudyGame.matching.title, showsTabBar: started && (round.complete || round.cards.isEmpty))
         .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if round.hasMismatch {

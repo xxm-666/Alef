@@ -905,7 +905,7 @@ struct StudyScenarioTheaterHubView: View {
                 .buttonStyle(.plain)
             }
         }
-        .studyDetail("情景剧场")
+        .studyDetail("情景剧场", showsTabBar: true)
     }
 }
 
@@ -1000,7 +1000,7 @@ private struct StudyDialogueComicView: View {
                 }
             }
         }
-        .studyDetail(scenario.navTitle)
+        .studyDetail(scenario.navTitle, showsTabBar: phase == .summary)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if phase != .summary {

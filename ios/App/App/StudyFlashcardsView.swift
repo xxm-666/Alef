@@ -127,7 +127,7 @@ struct PracticeCenterView: View {
                 }
             }
         }
-        .studyDetail("字母练习")
+        .studyDetail("字母练习", showsTabBar: true)
     }
 
     private var wordExercises: some View {
@@ -144,7 +144,7 @@ struct PracticeCenterView: View {
                 }
             }
         }
-        .studyDetail("单词练习")
+        .studyDetail("单词练习", showsTabBar: true)
     }
 
     private var games: some View {
@@ -165,7 +165,7 @@ struct PracticeCenterView: View {
                 }
             }
         }
-        .studyDetail("学习小游戏")
+        .studyDetail("学习小游戏", showsTabBar: true)
     }
 }
 
@@ -225,7 +225,7 @@ struct StudyFlashcardsView: View {
                 }
             }
         }
-        .studyDetail("字母闪卡")
+        .studyDetail("字母闪卡", showsTabBar: cards.isEmpty)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("闪卡选项", systemImage: "slider.horizontal.3") { showsOptions = true }
@@ -327,35 +327,24 @@ struct StudyFlashcardsView: View {
     }
 
     private func masteryControls(for current: StudyLetter) -> some View {
-        let existing = progress.letterSchedule[current.id]
         let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: typeSize.isAccessibilitySize ? 2 : 4)
         return VStack(alignment: .leading, spacing: 6) {
-            if let existing {
-                Text("下次复习 · \(existing.displayDate)（间隔 \(existing.intervalDays) 天）")
-                    .font(.caption)
-                    .foregroundStyle(progress.theme.mutedInk)
-            }
             LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(ReviewGrade.allCases) { grade in
-                    let preview = ReviewSchedule.next(from: existing, grade: grade, on: .now)
                     Button {
                         rate(grade, for: current)
                     } label: {
                         VStack(spacing: 2) {
                             Image(systemName: grade.symbol)
-                                .font(.caption.weight(.semibold))
                             Text(grade.title)
-                                .font(.caption.weight(.semibold))
-                            Text("\(preview.intervalDays)天")
-                                .font(.caption2)
-                                .foregroundStyle(progress.theme.mutedInk)
                         }
+                        .font(.caption.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(StudyButtonStyle(selected: grade == .good))
                 }
             }
-            Text("选择自评会记录一次复习、安排下次时间，并进入下一张。")
+            Text("选择自评会记录一次复习，并进入下一张。")
                 .font(.caption).foregroundStyle(progress.theme.mutedInk)
         }
     }
@@ -578,7 +567,7 @@ private struct FlashQuizView: View {
                 scroll.scrollTo(value == nil ? "flash-question" : "flash-result", anchor: value == nil ? .top : .bottom)
             }
         }
-        .studyDetail(reviewing ? "到期字母复习" : kind.title)
+        .studyDetail(reviewing ? "到期字母复习" : kind.title, showsTabBar: showsSummary || (started && question == nil))
         .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if !reviewing && total > 0 && !showsSummary {
@@ -648,9 +637,8 @@ private struct FlashQuizView: View {
             if reviewing && !success && requeuedThisTurn {
                 StudyNotice(title: "已加入本轮末尾再练一次", symbol: "arrow.counterclockwise", reminder: true)
             }
-            if reviewing, let schedule = progress.letterSchedule[question.letter.id] {
-                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "已记录本次复习", symbol: "calendar.badge.checkmark",
-                            note: "下次复习 · \(schedule.displayDate)")
+            if reviewing, progress.letterSchedule[question.letter.id] != nil {
+                StudyNotice(title: isRetryAnswer ? "已记录本轮补练" : "已记录本次复习", symbol: "calendar.badge.checkmark")
                 if success && !isRetryAnswer {
                     reviewGradeBar(for: question.letter)
                 }
@@ -667,17 +655,14 @@ private struct FlashQuizView: View {
     private func reviewGradeBar(for letter: StudyLetter) -> some View {
         HStack(spacing: 6) {
             ForEach([ReviewGrade.hard, .good, .easy]) { grade in
-                let preview = ReviewSchedule.next(from: preAnswerSchedule, grade: grade, on: answeredDate)
                 Button {
                     selectedGrade = grade
                     audio.playSelectionHaptic()
                     progress.adjustLetterReview(letter.id, base: preAnswerSchedule, grade: grade, date: answeredDate)
                 } label: {
-                    VStack(spacing: 2) {
-                        Text(grade.title).font(.caption.weight(.semibold))
-                        Text("\(preview.intervalDays)天").font(.caption2).foregroundStyle(progress.theme.mutedInk)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 40)
+                    Text(grade.title)
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 40)
                 }
                 .buttonStyle(StudyButtonStyle(selected: selectedGrade == grade))
             }
@@ -685,9 +670,7 @@ private struct FlashQuizView: View {
     }
 
     private var summary: some View {
-        let nextReview = queue.compactMap { progress.letterSchedule[$0.id] }.min { $0.nextReviewAt < $1.nextReviewAt }
-        return StudyQuizSummary(title: reviewing ? "完成字母复习" : "完成字母练习", correct: correct, answered: total,
-                                message: reviewing ? nextReview.map { "下次复习 · \($0.displayDate)" } : nil)
+        StudyQuizSummary(title: reviewing ? "完成字母复习" : "完成字母练习", correct: correct, answered: total)
     }
 
     @ViewBuilder private var bottomBar: some View {
@@ -900,7 +883,7 @@ private struct MinimalPairQuizView: View {
                 scroll.scrollTo(value == nil ? "mp-question" : "mp-result", anchor: value == nil ? .top : .bottom)
             }
         }
-        .studyDetail("易混音辨析")
+        .studyDetail("易混音辨析", showsTabBar: showsSummary || content.minimalPairs.isEmpty)
         .studyAnswerCelebration(answerRun.celebration)
         .toolbar {
             if total > 0 && !showsSummary {

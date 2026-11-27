@@ -761,7 +761,7 @@ struct LetterStudyView: View {
             }
         }
         .id(letter.id)
-        .studyDetail("\(displayGlyph) · \(letter.studyName)")
+        .studyDetail("\(displayGlyph) · \(letter.studyName)", showsTabBar: true)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {

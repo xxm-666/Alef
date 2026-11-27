@@ -203,7 +203,7 @@ struct StudyRainyTransferView: View {
                 supportCard
             }
         }
-        .studyDetail(StudyComicScenario.rainyTransfer.navTitle)
+        .studyDetail(StudyComicScenario.rainyTransfer.navTitle, showsTabBar: session.phase == .summary)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if session.phase != .summary {

@@ -543,7 +543,7 @@ private struct StudySyllablesView: View {
                 }
             }
         }
-        .studyDetail("拼读实验室")
+        .studyDetail("拼读实验室", showsTabBar: !quizzing)
         .studyAnswerCelebration(answerRun.celebration)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if quizzing, let question {

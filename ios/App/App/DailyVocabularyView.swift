@@ -108,7 +108,7 @@ private struct DailyVocabularyView: View {
         let group = index.map { current.groups[$0] }
 
         scrollingPage(group: group, index: index, day: current.day)
-            .studyDetail("今日记词")
+            .studyDetail("今日记词", showsTabBar: group == nil || group?.isComplete == true)
             .studyAnswerCelebration(celebration)
             .toolbar {
                 if group != nil {

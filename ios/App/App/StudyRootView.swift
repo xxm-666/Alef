@@ -703,11 +703,8 @@ struct StudyProficiencyCard: View {
     }
 
     private var subtitle: String {
-        if let schedule {
-            if schedule.isDecayed(mastery: mastery) {
-                return "久未复习记忆有所回落 · 下次复习 \(schedule.displayDate)"
-            }
-            return "下次复习 · \(schedule.displayDate)（间隔 \(schedule.intervalLabel)）"
+        if schedule?.isDecayed(mastery: mastery) == true {
+            return "久未复习记忆有所回落"
         }
         return proficiency == 0 ? "正常拼读或复习会自动累积熟练度" : "继续练习颜色会逐步过渡到绿色"
     }
@@ -753,7 +750,7 @@ struct StudyProficiencyCard: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(remembered ? "已记住，点按恢复常规练习" : "标记为已记住，30 天后再抽查")
+                    .accessibilityLabel(remembered ? "已记住，点按恢复常规练习" : "标记为已记住")
                 }
             }
         }
@@ -1003,11 +1000,11 @@ extension View {
         modifier(StudyHomeBars())
     }
 
-    func studyDetail(_ title: String) -> some View {
+    func studyDetail(_ title: String, showsTabBar: Bool = false) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
-            .toolbar(.hidden, for: .tabBar)
+            .toolbar(showsTabBar ? .visible : .hidden, for: .tabBar)
     }
 
     func studyGlassSurface(cornerRadius: CGFloat = 22, interactive: Bool = false) -> some View {

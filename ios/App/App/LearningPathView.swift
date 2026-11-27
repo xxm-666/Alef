@@ -215,7 +215,7 @@ private struct LearningStageDetailView: View {
                 .buttonStyle(.plain)
             }
         }
-        .studyDetail("第 \(stage.stage) 关")
+        .studyDetail("第 \(stage.stage) 关", showsTabBar: true)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !stageWords.isEmpty {
                 let remaining = stageWords.filter { progress.effectiveWordMastery($0.id) != .mastered }.count
