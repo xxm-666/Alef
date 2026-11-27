@@ -1520,6 +1520,55 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(refreshed.isValid)
     }
 
+    func testIntroductoryDailyVocabularyOpensFirstGroupAndPersistsPack() throws {
+        let content = try StudyContent.load()
+        let date = makeDate(year: 2026, month: 11, day: 1)
+        let words = content.introductoryDailyVocabularyWords(in: progress, at: date)
+        XCTAssertFalse(words.isEmpty)
+        XCTAssertTrue(words.allSatisfy { $0.difficulty == .beginner })
+        XCTAssertFalse(progress.hasDailyVocabularyPackPreference)
+        XCTAssertTrue(progress.dailyVocabulary.groups.isEmpty)
+
+        let group = try XCTUnwrap(content.startIntroductoryDailyVocabulary(in: progress, at: date))
+        XCTAssertEqual(group.wordIds, words.prefix(DailyVocabularyPlan.groupSize).map(\.id))
+        XCTAssertEqual(progress.dailyVocabulary.nextGroup?.id, group.id)
+
+        let reopened = StudyProgress(defaults: defaults)
+        XCTAssertEqual(reopened.dailyVocabularyPackId, StudyWordPack.beginnerID)
+        XCTAssertEqual(reopened.dailyVocabulary.nextGroup?.wordIds, group.wordIds)
+        XCTAssertNil(content.startIntroductoryDailyVocabulary(in: reopened, at: date))
+        XCTAssertEqual(reopened.dailyVocabulary.nextGroup?.id, group.id)
+    }
+
+    func testIntroductoryDailyVocabularyRespectsCustomPackAndExplicitClear() throws {
+        let content = try StudyContent.load()
+        let date = makeDate(year: 2026, month: 11, day: 1)
+        let words = content.dailyVocabularyWords(in: progress, packId: "cat_greetings", at: date)
+        progress.setDailyVocabularyPack("cat_greetings", words: words, date: date)
+        let selectedPlan = progress.dailyVocabulary
+        XCTAssertNil(content.startIntroductoryDailyVocabulary(in: progress, at: date))
+        XCTAssertEqual(progress.dailyVocabularyPackId, "cat_greetings")
+        XCTAssertEqual(progress.dailyVocabulary, selectedPlan)
+
+        progress.setDailyVocabularyPack(nil, words: [], date: date)
+        let reopened = StudyProgress(defaults: defaults)
+        XCTAssertTrue(reopened.hasDailyVocabularyPackPreference)
+        XCTAssertNil(reopened.dailyVocabularyPackId)
+        XCTAssertNil(content.startIntroductoryDailyVocabulary(in: reopened, at: date))
+    }
+
+    func testIntroductoryDailyVocabularySkipsAnExhaustedPack() throws {
+        let content = try StudyContent.load()
+        let date = makeDate(year: 2026, month: 11, day: 1)
+        let beginnerWords = content.introductoryDailyVocabularyWords(in: progress, at: date)
+        progress.write(Dictionary(uniqueKeysWithValues: beginnerWords.map { ($0.id, Mastery.mastered) }),
+                       for: "alef.wordMastery.v1")
+
+        XCTAssertNil(content.startIntroductoryDailyVocabulary(in: progress, at: date))
+        XCTAssertFalse(progress.hasDailyVocabularyPackPreference)
+        XCTAssertTrue(progress.dailyVocabulary.groups.isEmpty)
+    }
+
     func testDailyVocabularyUsesBeginnerFirstThenFrequencyWithinSelectedPack() throws {
         let content = try StudyContent.load()
         let date = makeDate(year: 2026, month: 11, day: 1)
@@ -1535,10 +1584,11 @@ final class AlefCoreTests: XCTestCase {
 
         let scheduled = ReviewSchedule(nextReviewAt: 0, intervalDays: 1, strength: 0)
         var schedule: [String: ReviewSchedule] = [:]
-        for tier in tiers {
+        for (index, tier) in tiers.enumerated() {
             let plan = progress.dailyVocabularyPlan(words: words, date: date)
             let firstGroup = try XCTUnwrap(plan.nextGroup)
-            XCTAssertEqual(firstGroup.wordIds, Array(tier.prefix(DailyVocabularyPlan.groupSize)).map(\.id))
+            let remainingWords = tiers.dropFirst(index).flatMap { $0 }
+            XCTAssertEqual(firstGroup.wordIds, remainingWords.prefix(DailyVocabularyPlan.groupSize).map(\.id))
             for word in tier { schedule[word.id] = scheduled }
             progress.write(schedule, for: "alef.wordSrs.v1")
         }

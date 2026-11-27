@@ -115,6 +115,18 @@ struct StudyContent: Decodable {
         dailyVocabularyWords(in: progress, packId: progress.dailyVocabularyPackId, at: date)
     }
 
+    func introductoryDailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
+        guard !progress.hasDailyVocabularyPackPreference else { return [] }
+        return dailyVocabularyWords(in: progress, packId: StudyWordPack.beginnerID, at: date)
+    }
+
+    func startIntroductoryDailyVocabulary(in progress: StudyProgress, at date: Date = .now) -> DailyVocabularyGroup? {
+        let words = introductoryDailyVocabularyWords(in: progress, at: date)
+        guard !words.isEmpty, progress.dailyVocabularyPlan(words: words, date: date).nextGroup != nil else { return nil }
+        progress.setDailyVocabularyPack(StudyWordPack.beginnerID, words: words, date: date)
+        return progress.dailyVocabulary.nextGroup
+    }
+
     func wordPacks(in progress: StudyProgress) -> [StudyWordPack] {
         let savedIDs = Set(progress.pinnedWordPackIds + [progress.dailyVocabularyPackId].compactMap { $0 })
         return StudyWordPack.catalog + StudyWordPack.legacyCatalog.filter { savedIDs.contains($0.id) }
@@ -126,7 +138,7 @@ struct StudyContent: Decodable {
 
     func words(inPack id: String) -> [StudyWord] {
         switch id {
-        case "pack_beginner":
+        case StudyWordPack.beginnerID:
             return words.filter { $0.difficulty == .beginner }
         case "pack_top1000":
             return words.filter { ($0.frequencyRank ?? Int.max) <= 1000 }
@@ -247,6 +259,8 @@ enum StudyWordPackGroup: String, CaseIterable, Identifiable {
 }
 
 struct StudyWordPack: Identifiable, Hashable {
+    static let beginnerID = "pack_beginner"
+
     let id: String
     let title: String
     let shortTitle: String
@@ -267,7 +281,7 @@ struct StudyWordPack: Identifiable, Hashable {
         StudyWordPack(id: "pack_phrases", title: "情景短语", shortTitle: "情景短语", subtitle: "日常交流、出行点餐与跟读练习", symbol: "text.bubble", group: .content, kind: .phrases),
         StudyWordPack(id: "pack_readings", title: "分级阅读", shortTitle: "阅读", subtitle: "经典短文、过渡元音点与阅读理解", symbol: "text.book.closed", group: .content, kind: .readings),
         // 基础与高频词包（词频段互斥）
-        StudyWordPack(id: "pack_beginner", title: "基础入门", shortTitle: "基础入门", subtitle: "拼读简单的短词，零基础首选", symbol: "sparkles", group: .frequency),
+        StudyWordPack(id: beginnerID, title: "基础入门", shortTitle: "基础入门", subtitle: "拼读简单的短词，零基础首选", symbol: "sparkles", group: .frequency),
         StudyWordPack(id: "pack_top1000", title: "核心词 1–1000", shortTitle: "核心 1000", subtitle: "he_50k 排名 #1–#1000 最高频词", symbol: "flame", group: .frequency),
         StudyWordPack(id: "pack_top1001_2000", title: "进阶词 1001–2000", shortTitle: "进阶 2000", subtitle: "he_50k 排名 #1001–#2000（无重叠）", symbol: "chart.bar.fill", group: .frequency),
         StudyWordPack(id: "pack_top2001_plus", title: "扩展词 2001+", shortTitle: "扩展 2001+", subtitle: "he_50k 2000 名以后的进阶扩展词", symbol: "star.fill", group: .frequency),

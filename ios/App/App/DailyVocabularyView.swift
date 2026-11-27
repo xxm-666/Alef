@@ -5,17 +5,25 @@ struct DailyVocabularyEntry: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
     var emphasized = true
+    @State private var showsDailyVocabulary = false
+    @State private var initialGroupID: String?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
-            let plan = progress.dailyVocabularyPlan(words: content.dailyVocabularyWords(in: progress, at: timeline.date), date: timeline.date)
+            let starterWords = content.introductoryDailyVocabularyWords(in: progress, at: timeline.date)
+            let words = starterWords.isEmpty ? content.dailyVocabularyWords(in: progress, at: timeline.date) : starterWords
+            let plan = progress.dailyVocabularyPlan(words: words, date: timeline.date)
+            let starterGroup = starterWords.isEmpty ? nil : plan.nextGroup
             let activePack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
             let status = activePack == nil ? "请先选取学习词包" : (plan.groups.isEmpty ? "暂无待学新词" : "已完成 \(plan.completedCount) / \(plan.groups.count) 组")
-            NavigationLink {
-                DailyVocabularyView(content: content)
+            Button {
+                guard !showsDailyVocabulary else { return }
+                initialGroupID = content.startIntroductoryDailyVocabulary(in: progress)?.id
+                showsDailyVocabulary = true
             } label: {
                 let packPrefix = activePack.map { "\($0.shortTitle) · " } ?? ""
-                let summary = activePack == nil ? status : packPrefix + (plan.nextGroup.map { "\(status) · \($0.status)" } ?? status)
+                let summary = starterGroup.map { "基础入门 · 开始一组 \($0.wordIds.count) 词" }
+                    ?? (activePack == nil ? status : packPrefix + (plan.nextGroup.map { "\(status) · \($0.status)" } ?? status))
                 if emphasized {
                     StudyHeroCard(colors: progress.theme.warmGradient, padding: 14, spacing: 10) {
                         HStack {
@@ -31,7 +39,7 @@ struct DailyVocabularyEntry: View {
                                 .font(.title2)
                                 .accessibilityHidden(true)
                         }
-                        if !plan.groups.isEmpty {
+                        if starterGroup == nil, !plan.groups.isEmpty {
                             HStack(spacing: 5) {
                                 ForEach(Array(plan.groups.enumerated()), id: \.element.id) { _, group in
                                     Capsule()
@@ -50,7 +58,10 @@ struct DailyVocabularyEntry: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityHint(plan.nextGroup?.hasStarted == true ? "继续记词" : "查看今日计划")
+            .accessibilityHint(starterGroup == nil ? "查看今日计划" : "直接进入记词练习")
+        }
+        .navigationDestination(isPresented: $showsDailyVocabulary) {
+            DailyVocabularyView(content: content, initialGroupID: initialGroupID)
         }
     }
 }
@@ -72,6 +83,7 @@ private struct DailyVocabularyView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
+    let initialGroupID: String?
     @State private var activeId: String?
     @State private var browsingIndex: Int?
     @State private var choiceOptions: (question: ChoiceQuestion, words: [StudyWord])?
@@ -82,6 +94,12 @@ private struct DailyVocabularyView: View {
     @State private var celebration: StudyAnswerCelebration?
     @State private var reviewingGroup: DailyVocabularyGroup?
     @State private var showsPackPicker = false
+
+    init(content: StudyContent, initialGroupID: String?) {
+        self.content = content
+        self.initialGroupID = initialGroupID
+        _activeId = State(initialValue: initialGroupID)
+    }
 
     private var plan: DailyVocabularyPlan { progress.dailyVocabulary }
     var body: some View {
@@ -435,6 +453,10 @@ private struct DailyVocabularyView: View {
             }
             if let next {
                 primaryButton("开始下一组", symbol: "arrow.right") { openGroup(next.id) }
+            }
+            if group.id == initialGroupID {
+                Button("切换学习词包") { showsPackPicker = true }
+                    .buttonStyle(StudyButtonStyle())
             }
         } else if let word = currentWord(group) {
             let total = group.wordIds.count

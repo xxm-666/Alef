@@ -952,6 +952,11 @@ struct StudyReviewBatch: Codable, Hashable {
         return raw.isEmpty ? nil : raw
     }
 
+    var hasDailyVocabularyPackPreference: Bool {
+        let saved: String? = read(Self.dailyVocabularyPackKey, default: nil)
+        return saved != nil
+    }
+
     func setDailyVocabularyPack(_ packId: String?, words: [StudyWord], date: Date = .now) {
         let normalized = packId ?? ""
 
