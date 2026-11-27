@@ -208,19 +208,26 @@ final class AlefCoreTests: XCTestCase {
         let yesterday = makeDate(year: 2026, month: 11, day: 23)
         progress.setWord("shalom", mastery: .learning, date: yesterday.addingTimeInterval(-60))
         progress.setWord("todah", mastery: .learning, date: yesterday)
+        XCTAssertNil(StudyReviewOverview.startBatch(content: content, progress: progress, at: yesterday))
+        XCTAssertNil(progress.reviewBatch)
         let overview = StudyReviewOverview(content: content, progress: progress, at: now, calendar: gregorianUtc)
-        let batch = try XCTUnwrap(overview.nextBatch)
+        let batch = try XCTUnwrap(StudyReviewOverview.startBatch(content: content, progress: progress, at: now))
         XCTAssertEqual(batch.itemIDs, ["shalom", "todah"])
+        XCTAssertEqual(progress.reviewBatch, batch)
         XCTAssertEqual(overview.completed, 0)
-        progress.beginReviewBatch(batch)
         progress.completeReview("shalom", correct: false, date: now)
 
         let reopened = StudyProgress(defaults: defaults)
+        reopened.setLetter("alef", mastery: .learning, date: yesterday.addingTimeInterval(-120))
         let resumed = StudyReviewOverview(content: content, progress: reopened, at: now, calendar: gregorianUtc)
+        XCTAssertEqual(resumed.nextBatch?.kind, .letters)
         XCTAssertEqual(resumed.savedBatch?.itemIDs, ["todah"])
         XCTAssertEqual(resumed.completed, 1)
         XCTAssertEqual(resumed.words.map(\.id), ["todah"])
         XCTAssertNotNil(resumed.nextReview)
+        let resumedBatch = StudyReviewOverview.startBatch(content: content, progress: reopened, at: now)
+        XCTAssertEqual(resumedBatch?.itemIDs, ["todah"])
+        XCTAssertEqual(reopened.reviewBatch, resumedBatch)
     }
 
     func testMistakeBookSavesTypesAndOnlyClearsMatchingFormalReview() throws {
@@ -1112,7 +1119,7 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(trigger?.dateComponents.day, 24)
         XCTAssertEqual(trigger?.dateComponents.hour, 20)
         XCTAssertEqual(request?.content.title, "Alef · 有 1 项复习已到期")
-        XCTAssertEqual(request?.content.userInfo["targetTab"] as? String, "flashcards")
+        XCTAssertEqual(request?.identifier, StudyReminderManager.dailyReminderIdentifier)
 
         let late = StudyReminderReviews(wordDates: [tomorrow.addingTimeInterval(60)], letterDates: [])
         XCTAssertEqual(StudyReminderManager.nextFireDate(preferences: dueOnly, reviews: late, now: now, calendar: gregorianUtc), dayAfter)
@@ -1125,7 +1132,7 @@ final class AlefCoreTests: XCTestCase {
         let daily = ReminderPreferences(enabled: true, hour: 8, minute: 30, onlyWhenDue: false)
         let dailyRequest = StudyReminderManager.makeRequest(preferences: daily, reviews: noReviews, now: now, calendar: gregorianUtc)
         let dailyTrigger = dailyRequest?.trigger as? UNCalendarNotificationTrigger
-        XCTAssertEqual(dailyRequest?.content.userInfo["targetTab"] as? String, "flashcards")
+        XCTAssertEqual(dailyRequest?.identifier, StudyReminderManager.dailyReminderIdentifier)
         XCTAssertEqual(dailyTrigger?.repeats, true)
         XCTAssertEqual(dailyTrigger?.dateComponents.hour, 8)
         XCTAssertEqual(dailyTrigger?.dateComponents.minute, 30)

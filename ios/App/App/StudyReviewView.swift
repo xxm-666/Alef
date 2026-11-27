@@ -1,54 +1,64 @@
 import SwiftUI
 
+enum StudyPracticeRoute: Hashable {
+    case reviewOverview
+    case reviewBatch(StudyReviewBatch)
+}
+
 struct StudyTodayReviewEntry: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
+    let startReview: () -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { timeline in
             let overview = StudyReviewOverview(content: content, progress: progress, at: timeline.date)
-            NavigationLink {
-                StudyTodayReviewView(content: content)
-            } label: {
-                if overview.hasDueItems {
-                    StudyHeroCard {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("SM-2 智能队列")
-                                    .font(.caption2.weight(.bold))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color.white.opacity(0.20), in: Capsule())
-                                Text(overview.savedBatch == nil ? "今日复习" : "继续复习")
-                                    .font(.title3.weight(.bold))
-                                Text(overview.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.white.opacity(0.88))
+            if let batch = overview.availableBatch {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(action: startReview) {
+                        StudyHeroCard {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(overview.savedBatch == nil ? "今日复习" : "继续复习")
+                                        .font(.title3.weight(.bold))
+                                    Text("\(batch.kind.title) · \(batch.itemIDs.count) 题")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.white.opacity(0.88))
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "bolt.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(Color.white.opacity(0.92))
+                                    .accessibilityHidden(true)
                             }
-                            Spacer(minLength: 8)
-                            Image(systemName: "bolt.circle.fill")
-                                .font(.title)
-                                .foregroundStyle(Color.white.opacity(0.92))
-                                .accessibilityHidden(true)
+                            HStack(spacing: 6) {
+                                Image(systemName: "play.fill")
+                                    .font(.caption.weight(.bold))
+                                Text(overview.savedBatch == nil ? "开始本组复习" : "继续本组复习")
+                                    .font(.subheadline.weight(.bold))
+                            }
+                            .foregroundStyle(progress.theme.primaryButton)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(Color.white, in: Capsule())
                         }
-                        HStack(spacing: 6) {
-                            Image(systemName: "play.fill")
-                                .font(.caption.weight(.bold))
-                            Text(overview.savedBatch == nil ? "立即开始本组复习" : "继续本组复习")
-                                .font(.subheadline.weight(.bold))
-                        }
-                        .foregroundStyle(progress.theme.primaryButton)
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                        .background(Color.white, in: Capsule())
                     }
-                } else {
+                    .buttonStyle(.plain)
+
+                    NavigationLink(value: StudyPracticeRoute.reviewOverview) {
+                        Label("查看复习明细", systemImage: "list.bullet")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
+                    }
+                }
+            } else {
+                NavigationLink(value: StudyPracticeRoute.reviewOverview) {
                     StudyCard(padding: 12) {
                         StudyRow(title: "今日复习", symbol: "calendar.badge.checkmark", subtitle: overview.summary,
                                  badgeColors: [progress.theme.success, progress.theme.accent])
                     }
                 }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 }
@@ -103,12 +113,21 @@ struct StudyReviewOverview {
 
     var hasDueItems: Bool { !words.isEmpty || !letters.isEmpty }
     var summary: String { "剩余 \(words.count + letters.count) 项 · 今日已复习 \(completed) 项" }
+    var availableBatch: StudyReviewBatch? { savedBatch ?? nextBatch }
+
+    static func startBatch(content: StudyContent, progress: StudyProgress, at date: Date = .now) -> StudyReviewBatch? {
+        // Recheck due items when the learner opens a review, using the same path for every entry point.
+        let current = StudyReviewOverview(content: content, progress: progress, at: date)
+        guard let batch = current.availableBatch else { return nil }
+        progress.beginReviewBatch(batch)
+        return batch
+    }
 }
 
-private struct StudyTodayReviewView: View {
+struct StudyTodayReviewView: View {
     @Environment(StudyProgress.self) private var progress
     let content: StudyContent
-    @State private var openedBatch: StudyReviewBatch?
+    let startReview: () -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { timeline in
@@ -122,14 +141,8 @@ private struct StudyTodayReviewView: View {
                         Text("下一批 · \(nextReview.formatted(.dateTime.month().day().hour().minute()))")
                             .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
                     }
-                    if let batch = overview.savedBatch ?? overview.nextBatch {
-                        Button {
-                            // Recheck due items at tap time before taking the batch snapshot.
-                            let current = StudyReviewOverview(content: content, progress: progress, at: .now)
-                            guard let next = current.savedBatch ?? current.nextBatch else { return }
-                            progress.beginReviewBatch(next)
-                            openedBatch = next
-                        } label: {
+                    if let batch = overview.availableBatch {
+                        Button(action: startReview) {
                             Label(overview.savedBatch == nil ? "开始一组" : "继续这一组",
                                   systemImage: "play.fill")
                                 .frame(maxWidth: .infinity)
@@ -178,14 +191,20 @@ private struct StudyTodayReviewView: View {
             }
         }
         .studyDetail("今日复习")
-        .navigationDestination(item: $openedBatch) { batch in
-            if batch.kind == .letters {
-                let letters = batch.itemIDs.compactMap { id in content.letters.first { $0.id == id } }
-                LetterReviewView(letters: letters, allLetters: content.letters)
-            } else {
-                let words = batch.itemIDs.compactMap { id in content.words.first { $0.id == id } }
-                WordReviewView(content: content, words: words, kind: batch.kind == .spelling ? .spelling : .meaning)
-            }
+    }
+}
+
+struct StudyReviewBatchView: View {
+    let content: StudyContent
+    let batch: StudyReviewBatch
+
+    var body: some View {
+        if batch.kind == .letters {
+            let letters = batch.itemIDs.compactMap { id in content.letters.first { $0.id == id } }
+            LetterReviewView(letters: letters, allLetters: content.letters)
+        } else {
+            let words = batch.itemIDs.compactMap { id in content.words.first { $0.id == id } }
+            WordReviewView(content: content, words: words, kind: batch.kind == .spelling ? .spelling : .meaning)
         }
     }
 }

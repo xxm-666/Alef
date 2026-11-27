@@ -75,8 +75,28 @@ struct SystemStudyNotificationCenter: StudyNotificationCenter {
 @Observable
 final class StudyReminderManager {
     static let dailyReminderIdentifier = "alef.daily-study-reminder"
-    static let openTabNotification = Notification.Name("alef.reminder.openTab")
-    static var pendingTargetTab: String?
+    static let openReminderNotification = Notification.Name("alef.reminder.open")
+    private static var hasPendingOpen = false
+    private static var lastOpenedReminderDate: Date?
+
+    nonisolated static func requestOpen(for response: UNNotificationResponse) {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else { return }
+        let identifier = response.notification.request.identifier
+        let deliveryDate = response.notification.date
+        Task { @MainActor in
+            // A tap that launches the app can reach both the scene and notification delegates.
+            guard identifier == dailyReminderIdentifier, lastOpenedReminderDate != deliveryDate else { return }
+            lastOpenedReminderDate = deliveryDate
+            hasPendingOpen = true
+            NotificationCenter.default.post(name: openReminderNotification, object: nil)
+        }
+    }
+
+    static func takePendingOpen() -> Bool {
+        guard hasPendingOpen else { return false }
+        hasPendingOpen = false
+        return true
+    }
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     private(set) var lastError: String?
@@ -185,8 +205,6 @@ final class StudyReminderManager {
             content.title = "Alef · 每日希伯来语时间"
             content.body = "可以复习到期内容，或继续学习新词。"
         }
-        content.userInfo = ["targetTab": "flashcards"]
-
         let trigger: UNCalendarNotificationTrigger
         if preferences.onlyWhenDue {
             var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)

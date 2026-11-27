@@ -11,6 +11,7 @@ struct StudyRootView: View {
     let content: StudyContent
     @State private var letterPath = NavigationPath()
     @State private var wordPath = NavigationPath()
+    @State private var practicePath: [StudyPracticeRoute] = []
     @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
 
     var body: some View {
@@ -37,10 +38,20 @@ struct StudyRootView: View {
             .tabItem { Label("内容", systemImage: "square.stack.3d.up") }
             .id(widgetTabIDs[.words]?.uuidString ?? "words")
             .tag("words")
-            NavigationStack { PracticeCenterView(content: content) }
-                .tabItem { Label("练习", systemImage: "pencil") }
-                .id(widgetTabIDs[.practice]?.uuidString ?? "flashcards")
-                .tag("flashcards")
+            NavigationStack(path: $practicePath) {
+                PracticeCenterView(content: content, startReview: startReview)
+                    .navigationDestination(for: StudyPracticeRoute.self) { route in
+                        switch route {
+                        case .reviewOverview:
+                            StudyTodayReviewView(content: content, startReview: startReview)
+                        case .reviewBatch(let batch):
+                            StudyReviewBatchView(content: content, batch: batch)
+                        }
+                    }
+            }
+            .tabItem { Label("练习", systemImage: "pencil") }
+            .id(widgetTabIDs[.practice]?.uuidString ?? "flashcards")
+            .tag("flashcards")
             NavigationStack { StudyRulesView(content: content) }
                 .tabItem { Label("规则", systemImage: "list.bullet.rectangle") }
                 .id(widgetTabIDs[.rules]?.uuidString ?? "rules")
@@ -62,9 +73,9 @@ struct StudyRootView: View {
             progress.widgetRequest = nil
             openWidgetRoute(route)
         }
-        .onAppear { handlePendingReminderTab() }
-        .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openTabNotification)) { _ in
-            handlePendingReminderTab()
+        .onAppear { handlePendingReminder() }
+        .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openReminderNotification)) { _ in
+            handlePendingReminder()
         }
         .background {
             StudyReminderSyncBridge(content: content)
@@ -106,7 +117,8 @@ struct StudyRootView: View {
             switch tab {
             case .alphabet: letterPath = NavigationPath()
             case .words: wordPath = NavigationPath()
-            case .practice, .rules: break
+            case .practice: practicePath = []
+            case .rules: break
             }
             // Recreate the stack so a shortcut also dismisses view-based navigation destinations.
             widgetTabIDs[tab] = UUID()
@@ -114,11 +126,24 @@ struct StudyRootView: View {
         }
     }
 
-    private func handlePendingReminderTab() {
-        guard let tab = StudyReminderManager.pendingTargetTab else { return }
-        StudyReminderManager.pendingTargetTab = nil
-        if ["grid", "words", "flashcards", "rules", "settings"].contains(tab) {
-            progress.write(tab, for: "alef.activeView.v1")
+    private func startReview() {
+        if case .reviewBatch? = practicePath.last { return }
+        if let batch = StudyReviewOverview.startBatch(content: content, progress: progress) {
+            practicePath.append(.reviewBatch(batch))
+        } else if practicePath.isEmpty {
+            practicePath.append(.reviewOverview)
+        }
+    }
+
+    private func handlePendingReminder() {
+        guard StudyReminderManager.takePendingOpen() else { return }
+        progress.write(StudyWidgetRoute.Tab.practice.rawValue, for: "alef.activeView.v1")
+        if case .reviewBatch? = practicePath.last { return }
+
+        if let batch = StudyReviewOverview.startBatch(content: content, progress: progress) {
+            practicePath = [.reviewBatch(batch)]
+        } else {
+            openWidgetRoute(.tab(.practice))
         }
     }
 

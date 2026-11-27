@@ -4,6 +4,7 @@ struct PracticeCenterView: View {
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
+    let startReview: () -> Void
 
     var body: some View {
         let words = content.dueWords(in: progress)
@@ -12,7 +13,7 @@ struct PracticeCenterView: View {
                                 count: typeSize.isAccessibilitySize ? 1 : 2)
         StudyPage {
             StudyHeading(title: "今日练习", eyebrow: "PRACTICE · 今日巩固")
-            StudyTodayReviewEntry(content: content)
+            StudyTodayReviewEntry(content: content, startReview: startReview)
             DailyVocabularyEntry(content: content, emphasized: words.isEmpty && letters.isEmpty)
             LearningPathEntry(content: content, highlighted: false)
 

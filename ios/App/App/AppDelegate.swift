@@ -25,12 +25,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if let tab = response.notification.request.content.userInfo["targetTab"] as? String {
-            Task { @MainActor in
-                StudyReminderManager.pendingTargetTab = tab
-                NotificationCenter.default.post(name: StudyReminderManager.openTabNotification, object: tab)
-            }
-        }
+        StudyReminderManager.requestOpen(for: response)
         completionHandler()
     }
 }
@@ -82,6 +77,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             NSLog("Alef could not load its study resources: %@", error.localizedDescription)
         }
         window.makeKeyAndVisible()
+        if let response = connectionOptions.notificationResponse {
+            StudyReminderManager.requestOpen(for: response)
+        }
     }
 
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
