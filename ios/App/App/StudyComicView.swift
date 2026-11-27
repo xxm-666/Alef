@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum StudyComicScenario: String, Identifiable {
+enum StudyComicScenario: String, CaseIterable, Identifiable {
     case telAvivCafe
     case oldCityDayTrip
 
@@ -11,6 +11,38 @@ enum StudyComicScenario: String, Identifiable {
         case .telAvivCafe: "特拉维夫咖啡馆"
         case .oldCityDayTrip: "旧城一日游"
         }
+    }
+
+    var cardTitle: String {
+        switch self {
+        case .telAvivCafe: "咖啡馆点单"
+        case .oldCityDayTrip: "旧城一日游"
+        }
+    }
+
+    var cardSubtitle: String {
+        switch self {
+        case .telAvivCafe: "入座要菜单、点奶咖、要冰水、夸好喝到买单"
+        case .oldCityDayTrip: "集市买石榴、老城问路、庭院畅聊与日落告别"
+        }
+    }
+
+    var categoryTag: String {
+        switch self {
+        case .telAvivCafe: "餐饮点单"
+        case .oldCityDayTrip: "旅行探索"
+        }
+    }
+
+    var coverImage: String {
+        switch self {
+        case .telAvivCafe: "CafeMenuOrder"
+        case .oldCityDayTrip: "OldCityMarket"
+        }
+    }
+
+    var actCountBadge: String {
+        "\(acts.count) 幕 · \(categoryTag)"
     }
 
     var partnerRole: String {
@@ -748,6 +780,111 @@ struct StudyCafeComicView: View {
 
     var body: some View {
         StudyScenarioComicView(content: content, scenario: scenario)
+    }
+}
+
+struct StudyScenarioPosterCard: View {
+    let scenario: StudyComicScenario
+    var cardWidth: CGFloat? = nil
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        Color.clear
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .frame(width: cardWidth)
+            .overlay {
+                GeometryReader { geo in
+                    ZStack(alignment: .bottomLeading) {
+                        Image(scenario.coverImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.24),
+                                Color.black.opacity(0.06),
+                                Color.black.opacity(0.76)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                Text(scenario.actCountBadge)
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .environment(\.colorScheme, .dark)
+                                Spacer()
+                            }
+
+                            Spacer(minLength: 8)
+
+                            HStack(alignment: .bottom, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(scenario.cardTitle)
+                                        .font(.headline.weight(.bold))
+                                        .foregroundStyle(Color.white)
+                                    Text(scenario.cardSubtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(Color.white.opacity(0.88))
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 4)
+                                HStack(spacing: 3) {
+                                    Text("开始")
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2.weight(.bold))
+                                }
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.22), in: Capsule())
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
+                            }
+                        }
+                        .padding(14)
+                    }
+                }
+            }
+            .clipShape(shape)
+            .overlay {
+                shape
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: Color.black.opacity(0.14), radius: 12, y: 6)
+            .contentShape(shape)
+    }
+}
+
+struct StudyScenarioTheaterHubView: View {
+    @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
+
+    var body: some View {
+        StudyPage {
+            StudyHeading(title: "情景剧场", eyebrow: "THEATER · 互动情景对话")
+            Text("跟随图文分镜与真人希伯来语配音，在真实生活语境中练习开口表达与画面互动。")
+                .font(.subheadline)
+                .foregroundStyle(progress.theme.mutedInk)
+
+            ForEach(StudyComicScenario.allCases) { scenario in
+                NavigationLink {
+                    StudyScenarioComicView(content: content, scenario: scenario)
+                } label: {
+                    StudyScenarioPosterCard(scenario: scenario)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .studyDetail("情景剧场")
     }
 }
 
