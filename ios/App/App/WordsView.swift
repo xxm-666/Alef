@@ -1984,24 +1984,27 @@ private struct StudyPackManagerView: View {
             ForEach(StudyWordPackGroup.allCases) { group in
                 let packs = content.allWordPacks.filter { $0.group == group }
                 StudySectionTitle(group.title)
-                packGrid(packs, highlighted: group == .content || group == .featured)
+                packGrid(packs)
             }
         }
         .studyDetail("包管理")
     }
 
-    private func packGrid(_ packs: [StudyWordPack], highlighted: Bool) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 280 : 156), spacing: 8)], spacing: 8) {
+    private func packGrid(_ packs: [StudyWordPack]) -> some View {
+        let column = GridItem(typeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 156), spacing: 8)
+        return LazyVGrid(columns: [column], alignment: .leading, spacing: 8) {
             ForEach(packs) { pack in
                 let pinned = progress.isWordPackPinned(pack.id)
                 let isDailyTarget = pack.kind == .words && progress.dailyVocabularyPackId == pack.id
-                StudyCard(highlighted: highlighted || isDailyTarget, padding: 12, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: pack.symbol)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(progress.theme.accent)
-                            .frame(width: 32, height: 32)
-                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                let style = progress.theme.packStyle(for: pack)
+                StudyCard(padding: 12, spacing: 6) {
+                    HStack(spacing: 4) {
+                        Label(style.label, systemImage: pack.symbol)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(style.tint)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 5)
+                            .background(style.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                         Spacer(minLength: 0)
                         Button {
                             progress.togglePinnedWordPack(pack.id)
@@ -2011,7 +2014,8 @@ private struct StudyPackManagerView: View {
                                 .foregroundStyle(pinned ? Color.white : progress.theme.mutedInk)
                                 .frame(width: 30, height: 30)
                                 .background(pinned ? progress.theme.primaryButton : progress.theme.insetSurface, in: Circle())
-                                .contentShape(Circle())
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(pinned ? "取消固定\(pack.title)" : "固定\(pack.title)到内容库")
@@ -2019,9 +2023,15 @@ private struct StudyPackManagerView: View {
                     NavigationLink {
                         destinationView(for: pack)
                     } label: {
-                        packCardContent(pack, isDailyTarget: isDailyTarget)
+                        packCardContent(pack, tint: style.tint, isDailyTarget: isDailyTarget)
                     }
                     .buttonStyle(.plain)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(style.tint.opacity(isDailyTarget ? 0.85 : 0.35), lineWidth: isDailyTarget ? 2 : 1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -2040,17 +2050,18 @@ private struct StudyPackManagerView: View {
     }
 
     @ViewBuilder
-    private func packCardContent(_ pack: StudyWordPack, isDailyTarget: Bool) -> some View {
+    private func packCardContent(_ pack: StudyWordPack, tint: Color, isDailyTarget: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(pack.title)
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(progress.theme.ink)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if isDailyTarget {
                         Text("今日")
                             .font(.caption2.weight(.bold))
+                            .fixedSize()
                             .foregroundStyle(progress.theme.accent)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -2093,7 +2104,7 @@ private struct StudyPackManagerView: View {
                         ZStack(alignment: .leading) {
                             Capsule().fill(progress.theme.insetSurface)
                             Capsule()
-                                .fill(progress.theme.accent)
+                                .fill(tint)
                                 .frame(width: max(0, geo.size.width * ratio))
                         }
                     }

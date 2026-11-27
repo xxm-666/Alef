@@ -230,6 +230,20 @@ extension StudyTheme {
     var reminder: Color { palette(light: 0x88612A, dark: 0xF3C989) }
     var reminderSurface: Color { palette(light: 0xFBF0DA, dark: 0x473B2D) }
 
+    func packStyle(for pack: StudyWordPack) -> (label: String, tint: Color) {
+        switch pack.kind {
+        case .phrases: return ("短语", palette(light: 0x136762, dark: 0x83D7CB))
+        case .readings: return ("阅读", palette(light: 0x57439A, dark: 0xC7B6FF))
+        case .words:
+            switch pack.group {
+            case .frequency: return ("分级词包", palette(light: 0x24558C, dark: 0xA2C8FF))
+            case .featured: return ("进阶专题", palette(light: 0x904821, dark: 0xFFBD8F))
+            case .core: return ("基础主题", palette(light: 0x426238, dark: 0xAED6A1))
+            case .content: return ("词汇", accent)
+            }
+        }
+    }
+
     private var dayAccent: UInt32 {
         switch self {
         case .rose: 0x893B58
