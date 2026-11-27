@@ -82,7 +82,7 @@ const entries: CompactWordEntry[] = [
   ['chaval', 'חֲבָל', 'חבל', 'Chaval', '/χaˈval/', '可惜、真遗憾', '感叹词', '感叹词', 'greetings'],
   ['litzor', 'לִיצֹר', 'ליצור', 'Litzor', '/liˈtsor/', '创造、制作', '动词', 'Pa’al 不定式', 'verbs'],
   ['hegyoni', 'הֶגְיוֹנִי', 'הגיוני', 'Hegyoni', '/heɡjoˈni/', '合理的、合乎逻辑', '形容词', '阳性单数', 'adjectives'],
-  ['livroa', 'לִבְרֹחַ', 'לברוח', 'Livroa', '/livˈroaχ/', '逃跑、逃离', '动词', 'Pa’al 不定式', 'verbs'],
+  ['livroa', 'לִבְרֹחַ', 'לברוח', 'Livroakh', '/livˈroaχ/', '逃跑、逃离', '动词', 'Pa’al 不定式', 'verbs'],
   ['akhen', 'אָכֵן', 'אכן', 'Akhen', '/aˈχen/', '确实、的确', '副词', '语气副词', 'work'],
 ];
 

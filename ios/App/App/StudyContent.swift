@@ -33,7 +33,7 @@ struct StudyContent: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         letters = try container.decode([StudyLetter].self, forKey: .letters)
         words = try container.decode([StudyWord].self, forKey: .words)
-        wordsByRoot = words.reduce(into: [:]) { index, word in
+        wordsByRoot = Self.uniqueVocabulary(words).reduce(into: [:]) { index, word in
             for root in word.rootKeys {
                 index[root, default: []].append(word)
             }
@@ -101,7 +101,8 @@ struct StudyContent: Decodable {
     func dailyVocabularyWords(in progress: StudyProgress, packId: String?, at date: Date = .now) -> [StudyWord] {
         guard let packId, let pack = wordPack(id: packId), pack.kind == .words else { return [] }
         let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
-        let pool = words(inPack: pack.id)
+        // Keep saved IDs available for daily plans created before vocabulary grouping.
+        let pool = words(inPack: pack.id, includingEquivalentEntries: true)
         let ranked = pool.map { word in
             let priority = (word.difficulty == .beginner ? 0 : 1, word.frequency.rank,
                             word.frequencyRank ?? Int.max, word.difficulty.rank,
@@ -136,7 +137,17 @@ struct StudyContent: Decodable {
         StudyWordPack.catalog.first { $0.id == id } ?? StudyWordPack.legacyCatalog.first { $0.id == id }
     }
 
-    func words(inPack id: String) -> [StudyWord] {
+    static func uniqueVocabulary(_ entries: [StudyWord]) -> [StudyWord] {
+        var seen: Set<String> = []
+        return entries.filter { seen.insert($0.equivalentTo ?? $0.id).inserted }
+    }
+
+    func words(inPack id: String, includingEquivalentEntries: Bool = false) -> [StudyWord] {
+        let entries = matchingWords(inPack: id)
+        return includingEquivalentEntries ? entries : Self.uniqueVocabulary(entries)
+    }
+
+    private func matchingWords(inPack id: String) -> [StudyWord] {
         switch id {
         case StudyWordPack.beginnerID:
             return words.filter { $0.difficulty == .beginner }
@@ -446,6 +457,7 @@ struct StudyWord: Decodable, Identifiable {
     let hebrew: String
     let hebrewUnpointed: String
     let alternateSpellings: [String]?
+    let equivalentTo: String?
     let transliteration: String
     let ipa: String
     let meaningZh: String

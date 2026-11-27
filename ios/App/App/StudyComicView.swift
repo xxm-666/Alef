@@ -25,7 +25,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
 
     var cardSubtitle: String {
         switch self {
-        case .telAvivCafe: "入座要菜单、点奶咖、要冰水、夸好喝到买单"
+        case .telAvivCafe: "入座要菜单、点奶咖、要冷水、夸好喝到买单"
         case .oldCityDayTrip: "集市买石榴、老城问路、庭院畅聊与日落告别"
         case .rainyTransfer: "问线路、找站点、听到站时间"
         }
@@ -89,7 +89,7 @@ private enum StudyDialogueScenario {
     var summaryDescription: String {
         switch self {
         case .telAvivCafe:
-            "从入座要菜单、点奶咖、要冰水、夸好喝到结账告别，你已完成完整特拉维夫点单对话"
+            "从入座要菜单、点奶咖、要冷水、夸好喝到结账告别，你已完成完整特拉维夫点单对话"
         case .oldCityDayTrip:
             "从集市买石榴、老城巷尾问路、庭院喝茶畅聊到日落露台道别，你已完成完整旅行情景对话"
         }
@@ -182,7 +182,7 @@ private struct ScenarioAct: Identifiable {
                 hebrew: "שָׁלוֹם, מַה שְׁלוֹמְךָ?",
                 unpointed: "שלום, מה שלומך?",
                 transliteration: "Shalom, ma shlomkha?",
-                meaningZh: "你好，今天过得怎么样？"
+                meaningZh: "你好，你近来怎么样？"
             ),
             userThought: "想先看看菜单再点单…",
             customerHotspot: CGPoint(x: 0.24, y: 0.44),
@@ -194,7 +194,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "CafeMenuOrder",
                     partnerReplyHebrew: "בְּוַדַּאי! הִנֵּה הַתַּפְרִיט.",
-                    partnerReplyZh: "当然！这是菜单，请慢看。",
+                    partnerReplyZh: "当然！这是菜单。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -204,7 +204,7 @@ private struct ScenarioAct: Identifiable {
                     outcomeImage: "CafeWaterHappy",
                     partnerReplyHebrew: nil,
                     partnerReplyZh: nil,
-                    wrongTip: "店员先给你端来一杯冰水！想先要菜单的话，找找含 תַּפְרִיט（菜单）的句子。"
+                    wrongTip: "店员先给你端来一杯冷水！想先要菜单的话，找找含 תַּפְרִיט（菜单）的句子。"
                 ),
                 ScenarioSceneChoice(
                     id: "p-dine-7",
@@ -241,10 +241,10 @@ private struct ScenarioAct: Identifiable {
             sceneNote: "店员端着香气扑鼻的咖啡托盘微笑走近，你准备点一杯以色列经典奶咖（Kafeh Hafuch）。",
             baseImage: "CafeCoffeeApproach",
             partner: ScenarioPartnerPrompt(
-                hebrew: "לָשֶׁבֶת כָּאן אוֹ לָקַחַת?",
-                unpointed: "לשבת כאן או לקחת?",
-                transliteration: "Lashevet kan o lakakhat?",
-                meaningZh: "在这里喝还是带走？想点什么呢？"
+                hebrew: "מָה תִּרְצֶה לִשְׁתּוֹת?",
+                unpointed: "מה תרצה לשתות?",
+                transliteration: "Ma tirtse lishtot?",
+                meaningZh: "你想喝什么？（对男性）"
             ),
             userThought: "就坐在这里，点一杯热奶咖吧！",
             customerHotspot: CGPoint(x: 0.24, y: 0.44),
@@ -256,7 +256,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: ["CafeCoffeeApproach", "CafeTastingHappy"],
                     outcomeImage: "CafeTastingHappy",
                     partnerReplyHebrew: "מְצֻיָּן! הִנֵּה הַקָּפֶה הֶהָפוּךְ שֶׁלְּךָ.",
-                    partnerReplyZh: "太棒了！热腾腾的招牌奶咖为你端上来了。",
+                    partnerReplyZh: "太好了！这是你的奶咖。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -292,15 +292,15 @@ private struct ScenarioAct: Identifiable {
                 propTipHebrew: "קָפֶה הָפוּךְ",
                 propTipSubtitle: "kafeh hafuch · 热气腾腾，不加糖",
                 burstEmoji: "☕💨",
-                tapAudioHebrew: "בְּלִי סֻכָּר, בְּבַקָּשָׁה.",
+                tapAudioHebrew: "קָפֶה הָפוּךְ",
                 culturalTip: "文化彩蛋：קָפֶה הָפוּךְ 字面是「倒过来的咖啡」；男性说 רוֹצֶה (rotzeh)，女性说 רוֹצָה (rotzah)。"
             )
         ),
         ScenarioAct(
             id: "water",
             stepLabel: "冷水",
-            title: "第三幕 · 顺便来杯冰水",
-            sceneNote: "午后阳光暖洋洋的，配着咖啡你想礼貌地向店员要一杯冰水解渴。",
+            title: "第三幕 · 顺便来杯冷水",
+            sceneNote: "午后阳光暖洋洋的，配着咖啡你想礼貌地向店员要一杯冷水解渴。",
             baseImage: "CafeWaterHappy",
             partner: ScenarioPartnerPrompt(
                 hebrew: "עוֹד מַשֶּׁהוּ בֵּינְתַיִם?",
@@ -308,7 +308,7 @@ private struct ScenarioAct: Identifiable {
                 transliteration: "Od mashehu beintayim?",
                 meaningZh: "还需要点别的吗？"
             ),
-            userThought: "好渴，再来一杯冰水吧…",
+            userThought: "好渴，再来一杯冷水吧…",
             customerHotspot: CGPoint(x: 0.24, y: 0.44),
             partnerHotspot: CGPoint(x: 0.72, y: 0.36),
             choices: [
@@ -318,7 +318,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "CafeWaterHappy",
                     partnerReplyHebrew: "בְּשִׂמְחָה! הִנֵּה מַיִם קָרִים.",
-                    partnerReplyZh: "乐意效劳！这是一杯冰水，请慢用。",
+                    partnerReplyZh: "乐意效劳！这是冷水。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -328,7 +328,7 @@ private struct ScenarioAct: Identifiable {
                     outcomeImage: "CafeMenuOrder",
                     partnerReplyHebrew: nil,
                     partnerReplyZh: nil,
-                    wrongTip: "菜单已经在你手边啦！我们要的是冰水（מַיִם קָרִים）哦。"
+                    wrongTip: "菜单已经在你手边啦！我们要的是冷水（מַיִם קָרִים）哦。"
                 ),
                 ScenarioSceneChoice(
                     id: "p-dine-7",
@@ -341,7 +341,7 @@ private struct ScenarioAct: Identifiable {
                 )
             ],
             interaction: ScenarioStageInteraction(
-                label: "轻点冰水杯 · 清凉喝一口",
+                label: "轻点冷水杯 · 清凉喝一口",
                 emoji: "💧",
                 xFraction: 0.52,
                 yFraction: 0.74,
@@ -349,12 +349,12 @@ private struct ScenarioAct: Identifiable {
                 doneText: "冰凉清爽！你顺便记住了「水」就是 מַיִם (mayim)。",
                 propID: "water",
                 propEmoji: "💧",
-                propLabel: "冰水",
-                propTipTitle: "冰水",
+                propLabel: "冷水",
+                propTipTitle: "冷水",
                 propTipHebrew: "מַיִם קָרִים",
                 propTipSubtitle: "mayim karim · 清凉解渴",
                 burstEmoji: "💧❄️✨",
-                tapAudioHebrew: "מַיִם",
+                tapAudioHebrew: "מַיִם קָרִים",
                 culturalTip: "词法提示：מַיִם（水）在希伯来语中永远是复数形式，所以形容词「冷的」也用复数 קָרִים (karim)。"
             )
         ),
@@ -380,7 +380,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "CafeTastingHappy",
                     partnerReplyHebrew: "תּוֹדָה רַבָּה! אֵיזֶה כֵּיף!",
-                    partnerReplyZh: "非常感谢！听你这么说真开心！",
+                    partnerReplyZh: "非常感谢！真开心！",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -416,7 +416,7 @@ private struct ScenarioAct: Identifiable {
                 propTipHebrew: "קָפֶה הָפוּךְ",
                 propTipSubtitle: "kafeh hafuch · 香醇可口",
                 burstEmoji: "💛☕✨",
-                tapAudioHebrew: "טָעִים",
+                tapAudioHebrew: "קָפֶה הָפוּךְ",
                 culturalTip: "高频词：טָעִים (taim) 既能夸菜好吃，也能夸咖啡好喝；加上 מְאֹד (meod) 就是「非常」。"
             )
         ),
@@ -442,7 +442,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "CafeBillHappy",
                     partnerReplyHebrew: "בְּוַדַּאי, הִנֵּה הַחֶשְׁבּוֹן. תּוֹדָה!",
-                    partnerReplyZh: "好的，这是账单。欢迎下次再来！",
+                    partnerReplyZh: "当然，这是账单。谢谢！",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -461,7 +461,7 @@ private struct ScenarioAct: Identifiable {
                     outcomeImage: "CafeWaterHappy",
                     partnerReplyHebrew: nil,
                     partnerReplyZh: nil,
-                    wrongTip: "店员又端来一杯冰水！准备结账要说 הַחֶשְׁבּוֹן (ha-cheshbon)。"
+                    wrongTip: "店员又端来一杯冷水！准备结账要说 הַחֶשְׁבּוֹן (ha-cheshbon)。"
                 )
             ],
             interaction: ScenarioStageInteraction(
@@ -478,8 +478,8 @@ private struct ScenarioAct: Identifiable {
                 propTipHebrew: "חֶשְׁבּוֹן",
                 propTipSubtitle: "cheshbon · 欢迎再来",
                 burstEmoji: "🧾🎉👋",
-                tapAudioHebrew: "לְהִתְרָאוֹת בְּקָרוֹב!",
-                culturalTip: "实战总结：תַּפְרִיט(菜单) → קָפֶה הָפוּךְ(奶咖) → מַיִם קָרִים(冰水) → טָעִים מְאֹד(超好喝) → חֶשְׁבּוֹן(账单)，一整套咖啡馆全流程通关！"
+                tapAudioHebrew: "חֶשְׁבּוֹן",
+                culturalTip: "实战总结：תַּפְרִיט(菜单) → קָפֶה הָפוּךְ(奶咖) → מַיִם קָרִים(冷水) → טָעִים מְאֹד(超好喝) → חֶשְׁבּוֹן(账单)，一整套咖啡馆全流程通关！"
             )
         )
     ]
@@ -497,7 +497,7 @@ private struct ScenarioAct: Identifiable {
                 hebrew: "שָׁלוֹם, מַה שְׁלוֹמְךָ?",
                 unpointed: "שלום, מה שלומך?",
                 transliteration: "Shalom, ma shlomkha?",
-                meaningZh: "你好！欢迎来到集市，今天过得怎么样？"
+                meaningZh: "你好，你近来怎么样？"
             ),
             userThought: "这堆新鲜石榴看起来真棒，问问多少钱吧！",
             customerHotspot: CGPoint(x: 0.20, y: 0.34),
@@ -509,7 +509,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "OldCityMarket",
                     partnerReplyHebrew: "הָרִמּוֹנִים טְרִיִּים הַיּוֹם! עֶשֶׂר שְׁקָלִים.",
-                    partnerReplyZh: "今天的石榴特别新鲜！十谢克尔。",
+                    partnerReplyZh: "今天的石榴很新鲜！十谢克尔。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -556,10 +556,10 @@ private struct ScenarioAct: Identifiable {
             sceneNote: "走出集市，她脱下围裙背上小包，正热心地在古老石墙边帮你看地图。你想问去老城地标该怎么走。",
             baseImage: "OldCityAlley",
             partner: ScenarioPartnerPrompt(
-                hebrew: "הַכֹּל בְּסֵדֶר, תּוֹדָה!",
-                unpointed: "הכול בסדר, תודה!",
-                transliteration: "Hakol beseder, todah!",
-                meaningZh: "没问题，我很熟悉老城巷子，你想去哪儿？"
+                hebrew: "שַׁעַר הָעִיר הָעַתִּיקָה קָרוֹב מִכָּאן.",
+                unpointed: "שער העיר העתיקה קרוב מכאן.",
+                transliteration: "Sha’ar ha’ir ha’atika karov mikan.",
+                meaningZh: "老城门离这里很近。"
             ),
             userThought: "老城石巷像迷宫一样，问问怎么去前面的老城门吧…",
             customerHotspot: CGPoint(x: 0.26, y: 0.30),
@@ -571,7 +571,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "OldCityAlley",
                     partnerReplyHebrew: "לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.",
-                    partnerReplyZh: "直走，然后向右转。顺路我带你一起过去吧！",
+                    partnerReplyZh: "直走，然后向右转。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -605,7 +605,7 @@ private struct ScenarioAct: Identifiable {
                 propLabel: "老城地图",
                 propTipTitle: "老城指路路线",
                 propTipHebrew: "לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.",
-                propTipSubtitle: "直走，然后向右转（步行 5 分钟）",
+                propTipSubtitle: "直走，然后向右转",
                 burstEmoji: "🗺️➡️✨",
                 tapAudioHebrew: "לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.",
                 culturalTip: "语法提示：לֵךְ (lech，直走) 与 פְּנֵה (pne，转弯) 是对男性的祈使句；对女性则说 לְכִי (lechi) 与 פְּנִי (pni)。"
@@ -615,15 +615,15 @@ private struct ScenarioAct: Identifiable {
             id: "courtyard",
             stepLabel: "畅聊",
             title: "第三幕 · 庭院小憩与畅聊",
-            sceneNote: "午后，你们在橄榄树与藤蔓环绕的庭院咖啡馆坐下，品着咖啡和点心。她好奇地问你叫什么、从哪里来。",
+            sceneNote: "午后，你们在橄榄树与藤蔓环绕的庭院咖啡馆坐下，品着咖啡和点心。她好奇地问你从哪里来。",
             baseImage: "OldCityCourtyard",
             partner: ScenarioPartnerPrompt(
-                hebrew: "אֵיךְ קוֹרְאִים לְךָ?",
-                unpointed: "איך קוראים לך?",
-                transliteration: "Eikh korim lekha?",
-                meaningZh: "你叫什么名字？你是从哪里来旅行的？"
+                hebrew: "מֵאֵיפֹה אַתָּה?",
+                unpointed: "מאיפה אתה?",
+                transliteration: "Me’eifo ata?",
+                meaningZh: "你从哪里来？（对男性）"
             ),
-            userThought: "告诉她我来自中国，也聊聊这趟有趣的旅程！",
+            userThought: "告诉她我来自中国。",
             customerHotspot: CGPoint(x: 0.25, y: 0.34),
             partnerHotspot: CGPoint(x: 0.78, y: 0.36),
             choices: [
@@ -633,7 +633,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "OldCityCourtyard",
                     partnerReplyHebrew: "נָעִים מְאֹד לְהַכִּיר אוֹתְךָ.",
-                    partnerReplyZh: "很高兴认识你！难怪你对老城历史这么感兴趣。",
+                    partnerReplyZh: "很高兴认识你。",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -670,7 +670,7 @@ private struct ScenarioAct: Identifiable {
                 propTipSubtitle: "Naim meod lehakir otkha · 很高兴认识你",
                 burstEmoji: "☕🥐💛",
                 tapAudioHebrew: "נָעִים מְאֹד לְהַכִּיר אוֹתְךָ.",
-                culturalTip: "构词技巧：前缀 מִ־ (mi-) 表示「来自……」，所以 מִסִּין (mi-Sin) 就是「来自中国」！同理还可以接任何城市名。"
+                culturalTip: "构词技巧：前缀 מִ־ (mi-) 表示「来自……」，所以 מִסִּין (mi-Sin) 就是「来自中国」！在某些字母前，前缀会变为 מֵ־ (me-)。"
             )
         ),
         ScenarioAct(
@@ -680,10 +680,10 @@ private struct ScenarioAct: Identifiable {
             sceneNote: "夕阳西下，金色余晖洒满老城穹顶。你们在观景石阶前停下脚步，互相挥手道别，约定保持联系。",
             baseImage: "OldCitySunset",
             partner: ScenarioPartnerPrompt(
-                hebrew: "שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!",
-                unpointed: "שיהיה לך יום נפלא!",
-                transliteration: "She-yihyeh lekha yom nifla!",
-                meaningZh: "祝你今天愉快！今天一起逛老城真开心！"
+                hebrew: "שֶׁיִּהְיֶה לְךָ עֶרֶב נָעִים!",
+                unpointed: "שיהיה לך ערב נעים!",
+                transliteration: "She-yihye lekha erev na’im!",
+                meaningZh: "祝你晚上愉快！（对男性）"
             ),
             userThought: "真是难忘的一天，挥手和她说「回头见」吧！",
             customerHotspot: CGPoint(x: 0.24, y: 0.30),
@@ -695,7 +695,7 @@ private struct ScenarioAct: Identifiable {
                     animationFrames: [],
                     outcomeImage: "OldCitySunset",
                     partnerReplyHebrew: "לְהִתְרָאוֹת! נִהְיֶה בְּקֶשֶׁר!",
-                    partnerReplyZh: "再见！保持联系，祝旅途顺利！",
+                    partnerReplyZh: "再见！保持联系！",
                     wrongTip: nil
                 ),
                 ScenarioSceneChoice(
@@ -728,10 +728,10 @@ private struct ScenarioAct: Identifiable {
                 propEmoji: "🌅",
                 propLabel: "日落约定",
                 propTipTitle: "旧城日落露台",
-                propTipHebrew: "שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!",
-                propTipSubtitle: "祝你今天愉快 · 保持联系",
+                propTipHebrew: "שֶׁיִּהְיֶה לְךָ עֶרֶב נָעִים!",
+                propTipSubtitle: "祝你晚上愉快",
                 burstEmoji: "🌅👋💛",
-                tapAudioHebrew: "שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!",
+                tapAudioHebrew: "שֶׁיִּהְיֶה לְךָ עֶרֶב נָעִים!",
                 culturalTip: "地道表达：לְהִתְרָאוֹת (lehitraot) 字面意为「彼此再相见」，比单纯说再见更有「期待重逢」的温度！"
             )
         )
@@ -746,20 +746,19 @@ struct ScenarioPopupItem: Identifiable {
     let transliteration: String
     let meaningZh: String
     let tag: String
-    let audioHebrew: String
 
     static let cafeMenu: [ScenarioPopupItem] = [
-        ScenarioPopupItem(id: "coffee", emoji: "☕", hebrew: "קָפֶה הָפוּךְ", unpointed: "קפה הפוך", transliteration: "kafeh hafuch", meaningZh: "以色列奶咖（招牌）", tag: "₪16", audioHebrew: "קָפֶה"),
-        ScenarioPopupItem(id: "water", emoji: "💧", hebrew: "כּוֹס מַיִם קָרִים", unpointed: "כוס מים קרים", transliteration: "kos mayim karim", meaningZh: "冰水", tag: "免费", audioHebrew: "מַיִם"),
-        ScenarioPopupItem(id: "salad", emoji: "🥗", hebrew: "סָלָט טָרִי", unpointed: "סלט טרי", transliteration: "salat tari", meaningZh: "新鲜田园沙拉", tag: "₪38", audioHebrew: "סָלָט"),
-        ScenarioPopupItem(id: "nosugar", emoji: "✨", hebrew: "בְּלִי סֻכָּר", unpointed: "בלי סוכר", transliteration: "bli sukar", meaningZh: "备注：不加糖", tag: "可选", audioHebrew: "סֻכָּר")
+        ScenarioPopupItem(id: "coffee", emoji: "☕", hebrew: "קָפֶה הָפוּךְ", unpointed: "קפה הפוך", transliteration: "kafeh hafuch", meaningZh: "以色列奶咖（招牌）", tag: "₪16"),
+        ScenarioPopupItem(id: "water", emoji: "💧", hebrew: "כּוֹס מַיִם קָרִים", unpointed: "כוס מים קרים", transliteration: "kos mayim karim", meaningZh: "冷水", tag: "免费"),
+        ScenarioPopupItem(id: "salad", emoji: "🥗", hebrew: "סָלָט טָרִי", unpointed: "סלט טרי", transliteration: "salat tari", meaningZh: "新鲜沙拉", tag: "₪38"),
+        ScenarioPopupItem(id: "nosugar", emoji: "✨", hebrew: "בְּלִי סֻכָּר", unpointed: "בלי סוכר", transliteration: "bli sukar", meaningZh: "备注：不加糖", tag: "可选")
     ]
 
     static let shukMarket: [ScenarioPopupItem] = [
-        ScenarioPopupItem(id: "shuk", emoji: "🏛️", hebrew: "שׁוּק", unpointed: "שוק", transliteration: "shuk", meaningZh: "露天传统集市", tag: "地标", audioHebrew: "שׁוּק"),
-        ScenarioPopupItem(id: "price", emoji: "💰", hebrew: "כַּמָּה זֶה עוֹלֶה?", unpointed: "כמה זה עולה?", transliteration: "kamah zeh oleh?", meaningZh: "这个多少钱？", tag: "必学", audioHebrew: "כַּמָּה זֶה עוֹלֶה?"),
-        ScenarioPopupItem(id: "bag", emoji: "🛍️", hebrew: "אֶפְשָׁר שַׂקִּית?", unpointed: "אפשר שקית?", transliteration: "efshar sakit?", meaningZh: "可以给个袋子吗？", tag: "实用", audioHebrew: "אֶפְשָׁר שַׂקִּית בְּבַקָּשָׁה?"),
-        ScenarioPopupItem(id: "tasty", emoji: "🍎", hebrew: "טָעִים", unpointed: "טעים", transliteration: "taim", meaningZh: "鲜甜美味的", tag: "夸赞", audioHebrew: "טָעִים")
+        ScenarioPopupItem(id: "shuk", emoji: "🏛️", hebrew: "שׁוּק", unpointed: "שוק", transliteration: "shuk", meaningZh: "露天传统集市", tag: "地标"),
+        ScenarioPopupItem(id: "price", emoji: "💰", hebrew: "כַּמָּה זֶה עוֹלֶה?", unpointed: "כמה זה עולה?", transliteration: "kamah zeh oleh?", meaningZh: "这个多少钱？", tag: "必学"),
+        ScenarioPopupItem(id: "bag", emoji: "🛍️", hebrew: "אֶפְשָׁר שַׂקִּית בְּבַקָּשָׁה?", unpointed: "אפשר שקית בבקשה?", transliteration: "efshar sakit bevakasha?", meaningZh: "可以给个袋子吗？", tag: "实用"),
+        ScenarioPopupItem(id: "tasty", emoji: "🍎", hebrew: "טָעִים", unpointed: "טעים", transliteration: "taim", meaningZh: "美味的", tag: "夸赞")
     ]
 }
 
@@ -779,7 +778,6 @@ private struct ScenarioTranscriptEntry: Identifiable {
     let isUser: Bool
     let hebrew: String
     let unpointed: String
-    let transliteration: String
     let meaningZh: String
 }
 
@@ -1215,15 +1213,13 @@ private struct StudyDialogueComicView: View {
                 alwaysShowMeaning: false
             )
         case .interact:
-            guard let sol = currentAct.solutionChoice else { return nil }
-            let phrase = phraseIndex[sol.id]
-            let replyAudio = sol.partnerReplyHebrew.flatMap { audio.referenceRecordingURL(for: $0) != nil ? $0 : nil }
+            guard let solution = currentAct.solutionChoice, let reply = solution.partnerReplyHebrew else { return nil }
             return StageBubbleContent(
                 speaker: "\(scenario.partnerRole)回应",
-                hebrew: sol.partnerReplyHebrew ?? (phrase?.hebrew ?? ""),
+                hebrew: showNiqqud ? reply : withoutHebrewMarks(reply),
                 transliteration: nil,
-                meaningZh: sol.partnerReplyZh,
-                audioHebrew: replyAudio ?? phrase?.hebrew,
+                meaningZh: solution.partnerReplyZh,
+                audioHebrew: reply,
                 tint: progress.theme.success,
                 surface: progress.theme.successSurface,
                 alwaysShowMeaning: true
@@ -1303,7 +1299,7 @@ private struct StudyDialogueComicView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 ForEach(scenario.popupItems) { item in
                     Button {
-                        speakIfAvailable(item.audioHebrew)
+                        speakIfAvailable(item.hebrew)
                     } label: {
                         VStack(alignment: .trailing, spacing: 4) {
                             HStack {
@@ -1625,16 +1621,22 @@ private struct StudyDialogueComicView: View {
                 isUser: false,
                 hebrew: currentAct.partner.hebrew,
                 unpointed: currentAct.partner.unpointed,
-                transliteration: currentAct.partner.transliteration,
                 meaningZh: currentAct.partner.meaningZh
             ))
             history.append(ScenarioTranscriptEntry(
                 isUser: true,
                 hebrew: phrase.hebrew,
                 unpointed: phrase.hebrewUnpointed,
-                transliteration: phrase.transliteration,
                 meaningZh: phrase.meaningZh
             ))
+            if let reply = choice.partnerReplyHebrew, let translation = choice.partnerReplyZh {
+                history.append(ScenarioTranscriptEntry(
+                    isUser: false,
+                    hebrew: reply,
+                    unpointed: withoutHebrewMarks(reply),
+                    meaningZh: translation
+                ))
+            }
             if choice.animationFrames.count > 1 {
                 playFrameSequence(choice.animationFrames, targetPhase: .interact)
             } else {

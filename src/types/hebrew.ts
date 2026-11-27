@@ -56,6 +56,7 @@ export interface ClassifiedHebrewWord extends HebrewWord {
   frequency: WordFrequency;
   difficulty: WordDifficulty;
   frequencyRank?: number;
+  equivalentTo?: string;
 }
 
 export type ThemeMode = 'dark' | 'parchment' | 'rose' | 'violet';

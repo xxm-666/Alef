@@ -76,7 +76,7 @@ const entries: CompactWordEntry[] = [
   ['lavo', 'לָבוֹא', 'לבוא', 'Lavo', '/laˈvo/', '来、到来', '动词', 'Pa’al 不定式', 'verbs'],
   ['lachshov', 'לַחְשֹׁב', 'לחשוב', 'Lachshov', '/laχˈʃov/', '思考、认为', '动词', 'Pa’al 不定式', 'verbs'],
   ['meaz', 'מֵאָז', 'מאז', 'Me-az', '/meˈaz/', '自从', '介词', '时间介词', 'time'],
-  ['bechazarah', 'בַּחֲזָרָה', 'בחזרה', 'Be-chazarah', '/baχazaˈra/', '回去、回来', '副词', '方向副词', 'city'],
+  ['bechazarah', 'בַּחֲזָרָה', 'בחזרה', 'Ba-chazarah', '/baχazaˈra/', '回去、回来', '副词', '方向副词', 'city'],
   ['kodem', 'קוֹדֶם', 'קודם', 'Kodem', '/ˈkodem/', '先、以前', '副词', '时间副词', 'time'],
   ['lehagia', 'לְהַגִּיעַ', 'להגיע', 'Lehagia', '/lehaˈɡia/', '到达、抵达', '动词', 'Hif’il 不定式', 'verbs'],
   ['barur', 'בָּרוּר', 'ברור', 'Barur', '/baˈrur/', '清楚的、当然', '形容词', '阳性单数', 'adjectives'],

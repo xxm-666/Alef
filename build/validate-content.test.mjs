@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -21,6 +21,31 @@ test('repository study content passes validation and matches DailyLetter.swift',
   assert.ok(baseContent.readings.filter(({ category }) => category === 'modern').length >= 24);
   assert.ok(baseContent.readings.filter(({ category }) => category === 'classic').length >= 14);
   assert.ok(summary.recordings > 0);
+});
+
+test('comic dialogue and props all have matching bundled audio', async () => {
+  const swiftSource = await readFile(new URL('ios/App/App/StudyComicView.swift', rootUrl), 'utf8');
+  const literalFields = /partnerReplyHebrew: "([^"]+)"|partner: ScenarioPartnerPrompt\(\s*hebrew: "([^"]+)"|tapAudioHebrew: "([^"]+)"|ScenarioPopupItem\([^\n]*?hebrew: "([^"]+)"/gu;
+  const clips = [...swiftSource.matchAll(literalFields)].map((match) => match.slice(1).find(Boolean));
+  const audio = new Map(Object.entries(baseContent.audio).map(([key, value]) => [key.normalize('NFC'), value]));
+  assert.ok(clips.length > 0);
+  for (const text of clips) {
+    assert.ok(audio.has(text.normalize('NFC')), `Missing comic audio for "${text}"`);
+  }
+});
+
+test('explicit vocabulary aliases point to a primary entry with the same pointed form', () => {
+  const wordsById = new Map(baseContent.words.map((word) => [word.id, word]));
+  const aliases = baseContent.words.filter((word) => word.equivalentTo);
+  assert.equal(wordsById.get('lematah')?.equivalentTo, 'lemata');
+  assert.ok(wordsById.has('mishtamesh') && wordsById.has('pack_tech_mishtamesh'));
+  assert.equal(wordsById.get('pack_tech_mishtamesh')?.equivalentTo, undefined);
+  for (const alias of aliases) {
+    const primary = wordsById.get(alias.equivalentTo);
+    assert.ok(primary, `Missing primary entry for ${alias.id}`);
+    assert.equal(primary.equivalentTo, undefined, `Alias chain at ${alias.id}`);
+    assert.equal(alias.hebrew.normalize('NFC'), primary.hebrew.normalize('NFC'), alias.id);
+  }
 });
 
 test('rejects duplicate word IDs', async () => {

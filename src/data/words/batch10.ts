@@ -75,7 +75,7 @@ const entries: CompactWordEntry[] = [
   ['mabat', 'מַבָּט', 'מבט', 'Mabat', '/maˈbat/', '眼神、目光、一瞥', '名词', '阳性单数', 'body'],
   ['levaker', 'לְבַקֵּר', 'לבקר', 'Levaker', '/levaˈker/', '拜访、参观', '动词', 'Pi’el 不定式', 'verbs'],
   ['pitom', 'פִּתְאוֹם', 'פתאום', 'Pit’om', '/pitˈom/', '突然、忽然', '副词', '时间副词', 'time'],
-  ['lehitzaref', 'לְהִצְטָרֵף', 'להצטרף', 'Lehitzaref', '/lehitstaˈref/', '加入、参与', '动词', 'Hitpa’el 不定式', 'verbs'],
+  ['lehitzaref', 'לְהִצְטָרֵף', 'להצטרף', 'Lehitstaref', '/lehitstaˈref/', '加入、参与', '动词', 'Hitpa’el 不定式', 'verbs'],
   ['tzaad', 'צַעַד', 'צעד', 'Tza’ad', '/ˈtsaad/', '一步、步骤、举措', '名词', '阳性单数', 'city'],
   ['bdicha', 'בְּדִיחָה', 'בדיחה', 'Bdicha', '/bdiˈχa/', '笑话、玩笑', '名词', '阴性单数', 'greetings'],
   ['lehorid', 'לְהוֹרִיד', 'להוריד', 'Lehorid', '/lehoˈrid/', '下载、拿下来', '动词', 'Hif’il 不定式', 'verbs'],

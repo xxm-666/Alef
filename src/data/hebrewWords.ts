@@ -602,7 +602,7 @@ const CORE_HEBREW_WORDS: HebrewWord[] = [
     note: '中间辅音 ח 读喉擦音 /χ/，与「昨天」אֶתְמוֹל (etmol) 相对。',
     sentence: {
       hebrew: 'מָחָר אֲנַחְנוּ נוֹסְעִים לִירוּשָׁלַיִם.',
-      transliteration: 'Machar anachnu nosim li-Yerushalayim.',
+      transliteration: 'Machar anachnu nosim lirushalayim.',
       meaningZh: '明天我们要去耶路撒冷。',
     },
   },
@@ -1829,9 +1829,85 @@ const ALL_RAW_WORDS: HebrewWord[] = [
   ...WORD_PACK_BUSINESS,
 ];
 
+// Curated aliases suppress repeated senses in combined lists. Keep every ID
+// and topic entry for saved reviews, favorites, and specialized examples.
+const EQUIVALENT_WORD_IDS: Partial<Record<string, string>> = {
+  'pack_coll_mazal_tov': 'mazal-tov',
+  'pack_coll_betach': 'betach',
+  'pack_coll_sababa': 'sababa',
+  'pack_coll_behatzlacha': 'be-hatzlachah',
+  'pack_coll_ein_beaya': 'ein-baayah',
+  'pack_biz_lakoach': 'lakoch',
+  'pack_news_orech_din': 'orech-din',
+  'pack_news_itonai': 'itona-i',
+  'pack_health_chom_guf': 'chom',
+  'pack_health_shena': 'shenah',
+  'pack_news_mishpat': 'mishpat',
+  'pack_tech_hodaah': 'hodaah',
+  'pack_tech_solela': 'solelah',
+  'pack_tech_miten': 'maten',
+  'pack_tech_ozniyot': 'ozniyot',
+  'pack_news_gvul': 'gvul',
+  'pack_news_memshala': 'memshalah',
+  'pack_news_knesset': 'kneset',
+  'pack_biz_maskoret': 'maskoret',
+  'pack_tech_netunim': 'netunim',
+  'pack_tech_tochna': 'tochnah',
+  'pack_tech_masach': 'masach',
+  'pack_tech_mikledet': 'mikledet',
+  'pack_tech_kovetz': 'kovetz',
+  'pack_tech_tikiya': 'tikiah',
+  'pack_news_shivyon': 'shivyon',
+  'pack_biz_matbea': 'matbea',
+  'pack_biz_ashrai': 'ashrai',
+  'pack_biz_hanacha': 'hanachah',
+  'pack_biz_mishloach': 'mishloach',
+  'pack_tech_aplikatzia': 'aplikatzyah',
+  'pack_news_shagrir': 'shagrir',
+  'pack_news_nasi': 'nasi',
+  'pack_news_shoft': 'shoftim',
+  'pack_health_tachboshet': 'tachboshet',
+  'pack_health_daleket': 'daleket',
+  'pack_health_miyun': 'kheder-miyun',
+  'pack_health_hachlama': 'hachlama',
+  'pack_health_neshima': 'neshima',
+  'pack_biz_revach': 'revach',
+  'pack_tech_machshev_nayad': 'machshev-nayad',
+  'pack_tech_idkun': 'idkun',
+  'pack_tech_hatzfana': 'hatspana',
+  'lefachot': 'lifchot',
+  'pack_coll_beetzem': 'beetzem',
+  'pack_coll_stam': 'stam',
+  'lematah': 'lemata',
+  'lemaalah': 'lemala',
+  'lehavi': 'lehavia',
+  'limtzo': 'limtso',
+  'lalekhet': 'lalechet',
+  'musag': 'mushag',
+  'pack_coll_beemet': 'beemet',
+  'pack_coll_mamash': 'mamash',
+  'pack_coll_madhim': 'madhim',
+  'pack_coll_magniv': 'magniv',
+  'pack_coll_metoraf': 'metoraf',
+  'pack_coll_bemetziut': 'birtzinut',
+  'pack_coll_lamrot': 'lamrot',
+  'pack_health_kadur': 'kadur',
+  'pack_biz_mas': 'mas',
+  'pack_coll_chaval': 'chaval',
+  'pack_coll_agav': 'agav',
+  'pack_coll_shtuyot': 'shtuyot',
+  'pack_coll_yalla': 'yalla',
+  'pack_biz_esek': 'esek',
+  'pack_biz_iska': 'iskah',
+};
+
 const seenIds = new Set<string>();
 export const HEBREW_WORDS: ClassifiedHebrewWord[] = ALL_RAW_WORDS.filter((w) => {
   if (seenIds.has(w.id)) return false;
   seenIds.add(w.id);
   return true;
-}).map(classifyWord);
+}).map((word) => {
+  const equivalentTo = EQUIVALENT_WORD_IDS[word.id];
+  const classified = classifyWord(word);
+  return equivalentTo ? { ...classified, equivalentTo } : classified;
+});

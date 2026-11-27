@@ -28,6 +28,17 @@ final class AlefCoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testCombinedVocabularyKeepsDistinctSensesAndRemovesExplicitAliases() {
+        let primary = makeWord(id: "lemata", hebrew: "לְמַטָּה", unpointed: "למטה")
+        let alias = makeWord(id: "lematah", hebrew: "לְמַטָּה", unpointed: "למטה", equivalentTo: primary.id)
+        let verb = makeWord(id: "mishtamesh", hebrew: "מִשְׁתַּמֵּשׁ", unpointed: "משתמש")
+        let noun = makeWord(id: "pack_tech_mishtamesh", hebrew: "מִשְׁתַּמֵּשׁ", unpointed: "משתמש")
+
+        XCTAssertEqual(StudyContent.uniqueVocabulary([primary, alias, verb, noun]).map(\.id),
+                       [primary.id, verb.id, noun.id])
+        XCTAssertEqual(StudyContent.uniqueVocabulary([alias]).map(\.id), [alias.id])
+    }
+
     func testRainyTransferKeepsTheCurrentQuestionAfterMistakesAndCompletesInOrder() {
         var session = RainyTransferSession()
         session.goToStop()
@@ -1994,12 +2005,14 @@ final class AlefCoreTests: XCTestCase {
 
     private func makeWord(id: String, hebrew: String, unpointed: String,
                           alternateSpellings: [String]? = nil,
-                          frequencyRank: Int? = nil) -> StudyWord {
+                          frequencyRank: Int? = nil,
+                          equivalentTo: String? = nil) -> StudyWord {
         StudyWord(
             id: id,
             hebrew: hebrew,
             hebrewUnpointed: unpointed,
             alternateSpellings: alternateSpellings,
+            equivalentTo: equivalentTo,
             transliteration: "test",
             ipa: "/test/",
             meaningZh: "测试",

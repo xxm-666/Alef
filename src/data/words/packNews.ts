@@ -41,7 +41,7 @@ export const WORD_PACK_NEWS: HebrewWord[] = [
     grammarTag: '阴性复数',
     category: 'news',
     root: 'ב-ח-ר',
-    note: '词根 ב-ח-ר 意为「选择」，复数形式 בְּחִירוֹת 专指政治选举。',
+    note: '词根 ב-ח-ר 意为「选择」，复数形式 בְּחִירוֹת 在政治语境中指选举，也可指多项选择。',
     sentence: { hebrew: 'הַבְּחִירוֹת יִתְקַיְּמוּ בַּחֹדֶשׁ הַבָּא.', transliteration: 'Ha-bechirot yitkaymu ba-chodesh ha-ba.', meaningZh: '选举将于下个月举行。' },
   },
   {

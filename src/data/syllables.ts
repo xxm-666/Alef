@@ -120,7 +120,7 @@ export const VOWEL_PATTERNS: VowelPattern[] = [
     nameZh: '轻音 / 静音',
     mark: '\u05B0',
     vowelRoman: 'e',
-    vowelIpa: 'ə / ∅',
+    vowelIpa: 'e / ∅',
     tip: '下方竖排两点：在音节尾静音；在词首既可静音（如 סְלִיחָה slicha），也可轻读 /e/（如 מְדַבֵּר medaber）。',
   },
 ];

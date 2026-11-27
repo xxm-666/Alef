@@ -235,7 +235,7 @@ export const WORD_PACK_COLLOQUIAL: HebrewWord[] = [
     hebrewUnpointed: 'מזל טוב',
     transliteration: 'Mazal Tov',
     ipa: '/maˈzal tov/',
-    meaningZh: '恭喜、祝贺、生日快乐',
+    meaningZh: '恭喜、祝贺（可用于生日）',
     partOfSpeech: '祝贺语',
     grammarTag: '固定搭配',
     category: 'colloquial',

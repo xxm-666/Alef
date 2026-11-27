@@ -6,8 +6,8 @@ export const GRAMMAR_AFFIXES: GrammarAffixItem[] = [
     kind: 'prefix',
     hebrew: 'הַ־',
     transliteration: 'ha-',
-    meaning: '定冠词“这 / 那”（the）',
-    rule: '加在名词和修饰它的形容词前（הַבַּיִת הַגָּדוֹל，这栋大房子）。通常后接字母带 Dagesh 加强点；在喉音 א ה ח ע ר 前不加点，常变为 הָ־ 或 הֶ־。',
+    meaning: '定冠词（英语 the）',
+    rule: '加在名词和修饰它的形容词前（הַבַּיִת הַגָּדוֹל，这栋大房子）。通常后接字母带达盖什加强点。在喉音 א ה ח ע 及行为相似的 ר 前，通常不加加强点。冠词可按词形写成 הַ־、הָ־ 或 הֶ־。',
     examples: [
       { hebrew: 'הַבַּיִת', transliteration: 'ha-bayit', meaning: '这栋房子 / 这个家', wordId: 'bayit' },
       { hebrew: 'הַסֵּפֶר', transliteration: 'ha-sefer', meaning: '这本书', wordId: 'sefer' },
@@ -20,7 +20,7 @@ export const GRAMMAR_AFFIXES: GrammarAffixItem[] = [
     hebrew: 'וְ־ / וּ־',
     transliteration: 've- / u-',
     meaning: '连词“和、与、并且”',
-    rule: '一般读 ve-（וְ）；在唇音 ב מ פ 前或后接 Shva 音节前通常读作 u-（וּ）；若原词已带定冠词 הַ־，则直接叠加为 וְהַ־（不同于 ב/ל/כ 的融合）。',
+    rule: '一般读 ve-（וְ）；在唇音 ב ו מ פ 或带词首 Shva 的词前，规范形式通常读 u-（וּ）；若原词已带定冠词 הַ־，则直接叠加为 וְהַ־（不同于 ב/ל/כ 的融合）。',
     examples: [
       { hebrew: 'לֶחֶם וּמַיִם', transliteration: 'lechem u-mayim', meaning: '面包和水（מ 前读 u-）', wordId: 'mayim' },
       { hebrew: 'שָׁלוֹם וְאַהֲבָה', transliteration: 'shalom ve-ahavah', meaning: '和平与爱', wordId: 'shalom' },
@@ -46,10 +46,10 @@ export const GRAMMAR_AFFIXES: GrammarAffixItem[] = [
     hebrew: 'לְ־ / לַ־',
     transliteration: 'le- / la-',
     meaning: '介词“向、去、给、为了”',
-    rule: '表示方向（去某地）、对象（给某人）或领属句型 יֵשׁ לִי（我有）。与定冠词 הַ־ 融合为 לַ־（la-），与 יְרוּשָׁלַיִם 结合变为 לִירוּשָׁלַיִם（li-Yerushalayim）。',
+    rule: '表示方向（去某地）、对象（给某人）或领属句型 יֵשׁ לִי（我有）。与定冠词 הַ־ 融合为 לַ־（la-），与 יְרוּשָׁלַיִם 结合变为 לִירוּשָׁלַיִם（lirushalayim）。',
     examples: [
       { hebrew: 'לַסִּפְרִיָּה', transliteration: 'la-sifriyah', meaning: '去图书馆（לְ + הַסִּפְרִיָּה）' },
-      { hebrew: 'לִירוּשָׁלַיִם', transliteration: 'li-Yerushalayim', meaning: '前往耶路撒冷', wordId: 'yerushalayim' },
+      { hebrew: 'לִירוּשָׁלַיִם', transliteration: 'lirushalayim', meaning: '前往耶路撒冷', wordId: 'yerushalayim' },
       { hebrew: 'לֶחָבֵר', transliteration: 'le-chaver', meaning: '给一位朋友', wordId: 'chaver' },
     ],
   },
@@ -59,7 +59,7 @@ export const GRAMMAR_AFFIXES: GrammarAffixItem[] = [
     hebrew: 'מִ־ / מֵ־',
     transliteration: 'mi- / me-',
     meaning: '介词“从、来自、比……”',
-    rule: '常读 mi- 并使下一字母加强；但在喉音 א ה ח ע ר 前变为长音 מֵ־（me-）；与 הַ־ 连用时通常保留 ה，写作 מֵהַ־（me-ha-，从那个……）。',
+    rule: '常读 mi- 并使下一字母加强；在喉音 א ה ח ע 和 ר 前通常变为 מֵ־（me-）；与 הַ־ 连用时通常保留 ה，写作 מֵהַ־（me-ha-，从那个……）。',
     examples: [
       { hebrew: 'מִתֵּל אָבִיב', transliteration: 'mi-Tel Aviv', meaning: '来自特拉维夫', wordId: 'tel-aviv' },
       { hebrew: 'מֵהַבַּיִת', transliteration: 'me-ha-bayit', meaning: '从家里出发', wordId: 'bayit' },
@@ -111,7 +111,7 @@ export const GRAMMAR_AFFIXES: GrammarAffixItem[] = [
     hebrew: '־ִים / ־וֹת / ־ַיִם',
     transliteration: '-im / -ot / -ayim',
     meaning: '名词复数与成双（双数）后缀',
-    rule: '一般阳性复数加 ־ִים（-im），阴性复数加 ־וֹת（-ot）；身体成对器官与时间单位常用双数 ־ַיִם（-ayim，如 יָדַיִם 双手、יוֹמַיִם 两天）。少数名词属“跨性别复数”（如 שֻׁלְחָן 桌子 → שֻׁלְחָנוֹת）。',
+    rule: '一般阳性复数加 ־ִים（-im），阴性复数加 ־וֹת（-ot）；身体成对器官与时间单位常用双数 ־ַיִם（-ayim，如 יָדַיִם 双手、יוֹמַיִם 两天）。部分名词用另一套复数词尾，性别仍保持原样。如阳性 שֻׁלְחָן（桌子）的复数是 שֻׁלְחָנוֹת。',
     examples: [
       { hebrew: 'סְפָרִים', transliteration: 'sfarim', meaning: '书（复数）', wordId: 'sefer' },
       { hebrew: 'מִלִּים / דְּבָרִים', transliteration: 'milim / dvarim', meaning: '词语 / 事情' },
@@ -141,7 +141,7 @@ export const GRAMMAR_BINYANIM: GrammarBinyanItem[] = [
     role: '基础主动动作',
     pattern: 'XוֹXֵX（现在时）/ לִXXוֹX（不定式）',
     presentPrefix: '无前缀，第 1 根音后带 o 音（כּוֹתֵב）',
-    tip: '最核心的基础词干。看到三个辅音中间夹着“o-e”元音（כּוֹתֵב、לוֹמֵד、קוֹרֵא），九成属于 Pa\'al 现在时。',
+    tip: '最核心的基础词干。看到三个辅音中间夹着“o-e”元音（כּוֹתֵב、לוֹמֵד、קוֹרֵא），是常见的 Pa\'al 阳性单数现在时形式。',
     exampleWordIds: ['kotev', 'lomed', 'kore', 'shomea'],
   },
   {
@@ -151,7 +151,7 @@ export const GRAMMAR_BINYANIM: GrammarBinyanItem[] = [
     role: '强化 / 及物动作',
     pattern: 'מְXַXֵּX（现在时）/ לְXַXֵּX（不定式）',
     presentPrefix: '词首带 מְ־ (me-)',
-    tip: '现在时以 מְ־ 开头，且第二根音常带重读强化感（מְדַבֵּר、מְסַפֵּר、מְבַשֵּׁל）。不定式以 לְ־ 开头而非 לִ־。',
+    tip: '现在时以 מְ־ 开头，且第二个词根辅音在规范点写中常带达盖什加强点（מְדַבֵּר、מְסַפֵּר、מְבַשֵּׁל）。不定式以 לְ־ 开头而非 לִ־。',
     exampleWordIds: ['medaber', 'mesaper', 'meshalem', 'mevashel'],
   },
   {
@@ -161,7 +161,7 @@ export const GRAMMAR_BINYANIM: GrammarBinyanItem[] = [
     role: '使动 / 引发动作',
     pattern: 'מַXXִיX（现在时）/ לְהַXXִיX（不定式）',
     presentPrefix: '词首带 מַ־ (ma-) 且尾音节常含 י (-i-)',
-    tip: '常表示“使……发生”或感知/开始（מַתְחִיל 开始、מַרְגִּישׁ 感觉、מֵבִין 理解）。现在时标志是 ma- 前缀 + i 元音。',
+    tip: '常表示“使……发生”或感知/开始（מַתְחִיל 开始、מַרְגִּישׁ 感觉、מֵבִין 理解）。ma- 前缀加 i 元音是常见的阳性单数模板。מֵבִין 则以 me- 起音。',
     exampleWordIds: ['mevin', 'makir', 'matchil', 'margish'],
   },
   {
@@ -171,7 +171,7 @@ export const GRAMMAR_BINYANIM: GrammarBinyanItem[] = [
     role: '反身 / 互相 / 渐进变化',
     pattern: 'מִתְXַXֵּX（现在时）/ לְהִתְXַXֵּX（不定式）',
     presentPrefix: '词首带 מִתְ־ (mit-)',
-    tip: '最容易识别的词干！看到 מִתְ־（或因清浊同化变为 מִשְׁתַּ־ / מִצְטַ־）就知道动作作用于自己，如穿衣 מִתְלַבֵּשׁ、淋浴 מִתְקַלֵּחַ。',
+    tip: '最容易识别的词干！现在时常以 מִתְ־ 开头，亦可因辅音换位和同化而出现 מִשְׁתַּ־ 或 מִצְטַ־ 等形式。部分动词表示动作作用于自己，如穿衣 מִתְלַבֵּשׁ、淋浴 מִתְקַלֵּחַ。',
     exampleWordIds: ['mitlabesh', 'mitkaleach'],
   },
   {

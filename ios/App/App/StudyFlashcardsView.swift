@@ -136,7 +136,7 @@ struct PracticeCenterView: View {
                 ForEach(WordQuizKind.allCases) { kind in
                     if kind != WordQuizKind.allCases.first { Divider() }
                     NavigationLink {
-                        WordQuizView(content: content, words: content.words, kind: kind)
+                        WordQuizView(content: content, words: StudyContent.uniqueVocabulary(content.words), kind: kind)
                     } label: {
                         StudyRow(title: kind.title, symbol: kind.symbol)
                     }

@@ -386,8 +386,8 @@ struct WordsView: View {
         let unpointedQuery = withoutHebrewMarks(query)
         let scope = settings.scope
         let topic = settings.selectedTopic
-        let sourceWords = content.words(inPack: activePack.id)
-        let words = sourceWords.filter { word in
+        let sourceWords = content.words(inPack: activePack.id, includingEquivalentEntries: true)
+        let matches = sourceWords.filter { word in
             let include = switch scope {
             case "favorites": favorites.contains(word.id)
             case "needs_review": progress.effectiveWordMastery(word.id) != .mastered
@@ -403,6 +403,7 @@ struct WordsView: View {
                 && (query.isEmpty || searchable.contains { $0.localizedStandardContains(query) }
                     || (!unpointedQuery.isEmpty && word.hebrewUnpointed.localizedStandardContains(unpointedQuery)))
         }
+        let words = scope == "all" ? StudyContent.uniqueVocabulary(matches) : matches
         switch settings.sortOrder {
         case "alpha":
             return words.sorted { $0.hebrewUnpointed < $1.hebrewUnpointed }

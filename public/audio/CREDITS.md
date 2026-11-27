@@ -523,3 +523,7 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 新增的十篇《希伯来圣经》选读取自 Dovi 与希伯来语维基文库贡献者编订的《Miqra according to the Masorah》，经 Sefaria 获取。学习版保留元音点，去除吟诵符号和版式标记，按语意分段。改编的希伯来语文本沿用 CC BY-SA 许可。[底本与编者说明](https://en.wikisource.org/wiki/User:Dovi/Miqra_according_to_the_Masorah/Introduction/Abstract) · [Sefaria 版本说明](https://www.sefaria.org/Genesis.1.4?with=About) · [署名－相同方式共享](https://creativecommons.org/licenses/by-sa/4.0/)
 
 两篇《先贤篇》节选来自 Sefaria 收录的公版 Torat Emet 357，分句及标点依练习调整。各篇的章节号列在阅读页题下。[《先贤篇》版本信息](https://www.sefaria.org/Pirkei_Avot?tab=versions)
+
+## 情景对白与词汇校订音频
+
+咖啡馆和老城情景补充的 18 段对白及道具发音，以及修订后的「סִנְכְרוּן」，使用 [eSpeak NG 1.52](https://github.com/espeak-ng/espeak-ng) 的希伯来语语音合成。输入使用经核对的音素和重音，录音经响度调整并编码为单声道 MP3。ID3 标签标注了合成来源。
