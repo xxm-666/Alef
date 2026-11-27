@@ -50,7 +50,7 @@ struct PracticeCenterView: View {
 
             StudySectionTitle("互动漫画")
             NavigationLink {
-                StudyCafeComicView(content: content)
+                StudyScenarioComicView(content: content, scenario: .telAvivCafe)
             } label: {
                 StudyCard(padding: 14, spacing: 8) {
                     HStack(spacing: 12) {
@@ -73,6 +73,43 @@ struct PracticeCenterView: View {
                                     .background(progress.theme.reminderSurface, in: Capsule())
                             }
                             Text("5 幕特拉维夫点单情景 · 支持画面点击互动")
+                                .font(.caption)
+                                .foregroundStyle(progress.theme.mutedInk)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(progress.theme.mutedInk)
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                StudyScenarioComicView(content: content, scenario: .oldCityDayTrip)
+            } label: {
+                StudyCard(padding: 14, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sun.horizon.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(progress.theme.accent)
+                            .frame(width: 42, height: 42)
+                            .background(progress.theme.highlightedSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text("旧城一日游")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(progress.theme.ink)
+                                Text("旅行单元")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(progress.theme.accent)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .background(progress.theme.highlightedSurface, in: Capsule())
+                            }
+                            Text("4 幕旅行偶遇情景 · 集市、问路、庭院与日落")
                                 .font(.caption)
                                 .foregroundStyle(progress.theme.mutedInk)
                         }

@@ -676,8 +676,9 @@
     activeAudioKey: null,
     toastTimer: null,
 
-    // Interactive Cafe Dialogue State
+    // Interactive Cafe & Old City Dialogue State
     cafe: {
+      scenario: 'cafe', // 'cafe' | 'oldCity'
       act: 0,
       phase: 'prompt', // 'prompt' | 'animating' | 'interact' | 'wrong' | 'summary'
       frameStep: 2,    // 0: Approach, 1: Transfer, 2: Outcome
@@ -855,7 +856,8 @@
         matchingGame: [renderMatchingGame, bindMatchingGame],
         learningPath: [renderLearningPath, bindLearningPath],
         stageDetail: [renderStageDetail, bindStageDetail],
-        cafeComic: [renderCafeComic, bindCafeComic],
+        cafeComic: [() => { if (state.cafe.scenario !== 'cafe') { state.cafe.scenario = 'cafe'; resetCafeState(); } return renderCafeComic(); }, bindCafeComic],
+        oldCityComic: [() => { if (state.cafe.scenario !== 'oldCity') { state.cafe.scenario = 'oldCity'; resetCafeState(); } return renderCafeComic(); }, bindCafeComic],
         syllableLab: [renderSyllableLab, bindSyllableLab],
         ruleDetail: [renderRuleDetail, bindRuleDetail],
         rootFamily: [renderRootFamily, bindRootFamily],
@@ -1999,8 +2001,13 @@
         </div>
 
         <button id="btn-go-comic" class="spring-tap w-full rounded-3xl p-4 text-left text-white shadow-lg flex items-center justify-between" style="background:linear-gradient(135deg,#D97706,#EA580C);">
-          <div><span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20">互动漫画</span><p class="text-base font-extrabold mt-1">☕ 咖啡馆点单</p><p class="text-xs text-white/90">沉浸式多分支台词体验</p></div>
+          <div><span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20">互动漫画 · 5 幕</span><p class="text-base font-extrabold mt-1">☕ 咖啡馆点单</p><p class="text-xs text-white/90">特拉维夫点单情景 · 支持画面点击互动</p></div>
           <span class="text-3xl">🥐</span>
+        </button>
+
+        <button id="btn-go-oldcity" class="spring-tap w-full rounded-3xl p-4 text-left text-white shadow-lg flex items-center justify-between" style="background:linear-gradient(135deg,#0E7490,#0F766E,#B45309);">
+          <div><span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20">旅行单元 · 4 幕</span><p class="text-base font-extrabold mt-1">🏛️ 旧城一日游</p><p class="text-xs text-white/90">集市偶遇、老城问路、庭院畅聊与日落告别</p></div>
+          <span class="text-3xl">🌅</span>
         </button>
       </div>
     `;
@@ -2015,6 +2022,7 @@
     document.getElementById('tile-min-pair')?.addEventListener('click', () => startQuiz('minimal', 'minimal'));
     document.getElementById('tile-games-hub')?.addEventListener('click', () => pushView('gamesHub'));
     document.getElementById('btn-go-comic')?.addEventListener('click', () => pushView('cafeComic'));
+    document.getElementById('btn-go-oldcity')?.addEventListener('click', () => pushView('oldCityComic'));
   }
 
   // Today Review & Mistake Book
@@ -2671,7 +2679,7 @@
   // =========================================================================
   const CAFE_IMG_BASE = '../ios/App/App/Assets.xcassets/';
   const cafeImg = (name) => `${CAFE_IMG_BASE}${name}.imageset/panel.jpg`;
-  const CAFE_PRELOADED_IMAGES = ['CafeMenuOrder', 'CafeCoffeeApproach', 'CafeWaterHappy', 'CafeTastingHappy', 'CafeBillHappy'].map(n => {
+  const CAFE_PRELOADED_IMAGES = ['CafeMenuOrder', 'CafeCoffeeApproach', 'CafeWaterHappy', 'CafeTastingHappy', 'CafeBillHappy', 'OldCityMarket', 'OldCityAlley', 'OldCityCourtyard', 'OldCitySunset'].map(n => {
     const img = new Image();
     img.src = cafeImg(n);
     return img;
@@ -2825,6 +2833,145 @@
     }
   ];
 
+  const SHUK_MARKET_ITEMS = [
+    { he: 'שׁוּק', unpointed: 'שוק', tr: 'shuk', zh: '露天传统集市', price: '地标', audio: 'he_6fccee9bd9fd.mp3', emoji: '🏛️' },
+    { he: 'כַּמָּה זֶה עוֹלֶה?', unpointed: 'כמה זה עולה?', tr: 'kamah zeh oleh?', zh: '这个多少钱？', price: '必学', audio: 'he_5f54bba14d74.mp3', emoji: '💰' },
+    { he: 'אֶפְשָׁר שַׂקִּית?', unpointed: 'אפשר שקית?', tr: 'efshar sakit?', zh: '可以给个袋子吗？', price: '实用', audio: 'he_92a0b0a3d013.mp3', emoji: '🛍️' },
+    { he: 'טָעִים', unpointed: 'טעים', tr: 'taim', zh: '鲜甜美味的', price: '夸赞', audio: 'he_dcd4c0d860a3.mp3', emoji: '🍎' }
+  ];
+
+  const OLD_CITY_ACTS = [
+    {
+      id: 'shuk',
+      stepLabel: '集市',
+      title: '第一幕 · 集市偶遇与问候',
+      sceneNote: '你背着背包走进热闹的露天集市（שׁוּק），在石榴与无花果摊前驻足。摊主热情地挥手问候，你想问问石榴多少钱。',
+      baseImg: 'OldCityMarket',
+      barista: { he: 'שָׁלוֹם, מַה שְׁלוֹמְךָ?', unpointed: 'שלום, מה שלומך?', tr: 'Shalom, ma shlomkha?', zh: '你好！欢迎来到集市，今天过得怎么样？', audio: 'he_235c2be58c29.mp3' },
+      thought: '这堆新鲜石榴看起来真棒，问问多少钱吧！',
+      choices: [
+        { id: 'p-shop-1', ok: true, anim: null, outcomeImg: 'OldCityMarket', he: 'כַּמָּה זֶה עוֹלֶה?', unpointed: 'כמה זה עולה?', tr: 'Kamah zeh oleh?', zh: '这个多少钱？', audio: 'he_5f54bba14d74.mp3', baristaReply: 'הָרִמּוֹנִים טְרִיִּים הַיּוֹם! עֶשֶׂר שְׁקָלִים.', baristaReplyZh: '今天的石榴特别新鲜！十谢克尔。' },
+        { id: 'p-shop-4', ok: false, anim: null, outcomeImg: 'OldCityMarket', he: 'אֲנִי רַק מִסְתַּכֵּל, תּוֹדָה.', unpointed: 'אני רק מסתכל, תודה.', tr: 'Ani rak mistakel, todah.', zh: '我只是随便看看，谢谢。', audio: 'he_2ce2405f9c8d.mp3', wrongTip: '你说「我只是随便看看」～如果想打听价格，找找含 כַּמָּה（多少）的那句！' },
+        { id: 'p-shop-6', ok: false, anim: null, outcomeImg: 'OldCityMarket', he: 'אֶפְשָׁר שַׂקִּית בְּבַקָּשָׁה?', unpointed: 'אפשר שקית בבקשה?', tr: 'Efshar sakit bevakasha?', zh: '请问可以给我一个袋子吗？', audio: 'he_92a0b0a3d013.mp3', wrongTip: '还没问价就先要袋子啦！先用 כַּמָּה זֶה עוֹלֶה? 问问价格吧。' }
+      ],
+      interact: {
+        label: '轻点石榴摊 · 探索集市风物卡',
+        emoji: '🍎',
+        x: '72%', y: '74%',
+        action: 'openMenu',
+        doneText: '你挑了两颗饱满的红石榴（רִמּוֹנִים），摊主还送了你一颗无花果！',
+        propKey: 'menu',
+        burst: '🍎✨',
+        audioOnTap: { file: 'he_6fccee9bd9fd.mp3', he: 'שׁוּק', tr: 'shuk · 露天集市' },
+        tip: '💡 文化小贴士：שׁוּק (shuk) 指以色列最具烟火气的露天集市；问价格最地道的一句就是 כַּמָּה זֶה עוֹלֶה?。'
+      }
+    },
+    {
+      id: 'alley',
+      stepLabel: '问路',
+      title: '第二幕 · 旧城问路与指引',
+      sceneNote: '走出集市，她脱下围裙背上小包，正热心地在古老石墙边帮你看地图。你想问去老城地标该怎么走。',
+      baseImg: 'OldCityAlley',
+      barista: { he: 'הַכֹּל בְּסֵדֶר, תּוֹדָה!', unpointed: 'הכול בסדר, תודה!', tr: 'Hakol beseder, todah!', zh: '没问题，我很熟悉老城巷子，你想去哪儿？', audio: 'he_733007ec2a08.mp3' },
+      thought: '老城石巷像迷宫一样，问问怎么去前面的老城门吧…',
+      choices: [
+        { id: 'p-dir-2', ok: true, anim: null, outcomeImg: 'OldCityAlley', he: 'אֵיךְ מַגִּיעִים לְשָׁם?', unpointed: 'איך מגיעים לשם?', tr: 'Eikh magiim le-sham?', zh: '请问怎么去那里？', audio: 'he_915baa001d56.mp3', baristaReply: 'לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.', baristaReplyZh: '直走，然后向右转。顺路我带你一起过去吧！' },
+        { id: 'p-dir-4', ok: false, anim: null, outcomeImg: 'OldCityAlley', he: 'הַאִם זֶה רָחוֹק מִכָּאן?', unpointed: 'האם זה רחוק מכאן?', tr: 'Haim zeh rachok mikan?', zh: '离这里远吗？', audio: 'he_5e477b3698e5.mp3', wrongTip: '你问了「离这里远吗」～这次想直接问「怎么去那里」，找含 אֵיךְ（怎么）的那句！' },
+        { id: 'p-dir-6', ok: false, anim: null, outcomeImg: 'OldCityAlley', he: 'אֵיפֹה הַשֵּׁרוּתִים בְּבַקָּשָׁה?', unpointed: 'איפה השירותים בבקשה?', tr: 'Eifo ha-sherutim bevakasha?', zh: '请问洗手间在哪里？', audio: 'he_4b3c096a83e1.mp3', wrongTip: '这句是在问洗手间在哪儿啦！问路要用 אֵיךְ מַגִּיעִים לְשָׁם?。' }
+      ],
+      interact: {
+        label: '轻点老城地图 · 听她指路方向',
+        emoji: '🗺️',
+        x: '38%', y: '72%',
+        action: 'mapHint',
+        doneText: '她指着前方石巷说：לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.（直走，然后右转）',
+        propKey: 'coffee',
+        burst: '🗺️➡️✨',
+        audioOnTap: { file: 'he_5fe0c44f1e83.mp3', he: 'לֵךְ יָשָׁר וְאַחַר כָּךְ פְּנֵה יָמִינָה.', tr: 'Lech yashar ve-achar kach pne yaminah.' },
+        tip: '💡 语法提示：לֵךְ (lech，直走) 与 פְּנֵה (pne，转弯) 是对男性的祈使句；对女性则说 לְכִי 与 פְּנִי。'
+      }
+    },
+    {
+      id: 'courtyard',
+      stepLabel: '畅聊',
+      title: '第三幕 · 庭院小憩与畅聊',
+      sceneNote: '午后，你们在橄榄树与藤蔓环绕的庭院咖啡馆坐下，品着咖啡和点心。她好奇地问你叫什么、从哪里来。',
+      baseImg: 'OldCityCourtyard',
+      barista: { he: 'אֵיךְ קוֹרְאִים לְךָ?', unpointed: 'איך קוראים לך?', tr: 'Eikh korim lekha?', zh: '你叫什么名字？是从哪里来旅行的？', audio: 'he_d51c1a5f8d7c.mp3' },
+      thought: '告诉她我来自中国，也聊聊这趟有趣的旅程！',
+      choices: [
+        { id: 'p-greet-6', ok: true, anim: null, outcomeImg: 'OldCityCourtyard', he: 'אֲנִי מִסִּין.', unpointed: 'אני מסין.', tr: 'Ani mi-Sin.', zh: '我来自中国。', audio: 'he_513f0673eb87.mp3', baristaReply: 'נָעִים מְאֹד לְהַכִּיר אוֹתְךָ.', baristaReplyZh: '很高兴认识你！难怪你对老城历史这么感兴趣。' },
+        { id: 'p-dine-2', ok: false, anim: null, outcomeImg: 'OldCityCourtyard', he: 'אֲנִי רוֹצֶה קָפֶה הָפוּךְ, בְּבַקָּשָׁה.', unpointed: 'אני רוצה קפה הפוך, בבקשה.', tr: 'Ani rotzeh kafeh hafuch, bevakasha.', zh: '请给我一杯奶咖。', audio: 'he_636074d9abd2.mp3', wrongTip: '桌上已经摆好两杯咖啡和点心啦～现在先回应她「我来自中国」（אֲנִי מִסִּין.）吧！' },
+        { id: 'p-study-1', ok: false, anim: null, outcomeImg: 'OldCityCourtyard', he: 'אֲנִי לוֹמֵד עִבְרִית לְאַט לְאַט.', unpointed: 'אני לומד עברית לאט לאט.', tr: 'Ani lomed Ivrit leat leat.', zh: '我正在一步步学希伯来语。', audio: 'he_bca77ebb6ee3.mp3', wrongTip: '她笑着夸你希伯来语不错！先告诉她你来自哪里（אֲנִי מִסִּין.）吧。' }
+      ],
+      interact: {
+        label: '轻点庭院茶点 · 干杯畅聊',
+        emoji: '☕',
+        x: '52%', y: '78%',
+        action: 'courtyardChat',
+        doneText: '你们端起杯子相视而笑：נָעִים מְאֹד לְהַכִּיר אוֹתְךָ.（很高兴认识你）',
+        propKey: 'water',
+        burst: '☕🥐💛',
+        audioOnTap: { file: 'he_a4583e04d035.mp3', he: 'נָעִים מְאֹד לְהַכִּיר אוֹתְךָ.', tr: 'Naim meod lehakir otkha.' },
+        tip: '💡 构词技巧：前缀 מִ־ (mi-) 表示「来自……」，所以 מִסִּין (mi-Sin) 就是「来自中国」！'
+      }
+    },
+    {
+      id: 'sunset',
+      stepLabel: '告别',
+      title: '第四幕 · 日落告别与约定',
+      sceneNote: '夕阳西下，金色余晖洒满老城穹顶。你们在观景石阶前停下脚步，互相挥手道别，约定保持联系。',
+      baseImg: 'OldCitySunset',
+      barista: { he: 'שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!', unpointed: 'שיהיה לך יום נפלא!', tr: 'She-yihyeh lekha yom nifla!', zh: '祝你今天愉快！今天一起逛老城真开心！', audio: 'he_ec0474f90763.mp3' },
+      thought: '真是难忘的一天，挥手和她说「回头见」吧！',
+      choices: [
+        { id: 'p-greet-8', ok: true, anim: null, outcomeImg: 'OldCitySunset', he: 'לְהִתְרָאוֹת בְּקָרוֹב!', unpointed: 'להתראות בקרוב!', tr: 'Lehitraot bekarov!', zh: '回头见！', audio: 'he_23e50f1b3230.mp3', baristaReply: 'לְהִתְרָאוֹת! נִהְיֶה בְּקֶשֶׁר!', baristaReplyZh: '再见！保持联系，祝旅途顺利！' },
+        { id: 'p-greet-2', ok: false, anim: null, outcomeImg: 'OldCitySunset', he: 'הַכֹּל בְּסֵדֶר, תּוֹדָה!', unpointed: 'הכול בסדר, תודה!', tr: 'Hakol beseder, todah!', zh: '一切都好，谢谢！', audio: 'he_733007ec2a08.mp3', wrongTip: '这句是「一切都好，谢谢」～日落道别最温暖的是「回头见」（לְהִתְרָאוֹת בְּקָרוֹב!）。' },
+        { id: 'p-greet-12', ok: false, anim: null, outcomeImg: 'OldCitySunset', he: 'זוֹ הַפַּעַם הָרִאשׁוֹנָה שֶׁלִּי כָּאן.', unpointed: 'זו הפעם הראשונה שלי כאן.', tr: 'Zo hapa\'am harishona sheli kan.', zh: '我是第一次来这里。', audio: 'he_646301cd032b.mp3', wrongTip: '这句是「我是第一次来这里」～现在已经到了告别时刻，选「回头见」吧！' }
+      ],
+      interact: {
+        label: '轻点夕阳挥手 · 约定保持联系',
+        emoji: '🌅',
+        x: '56%', y: '48%',
+        action: 'sunsetWave',
+        doneText: '金色晚霞映照着老城穹顶，你挥手道别：לְהִתְרָאוֹת בְּקָרוֹב!（回头见！）',
+        propKey: 'paid',
+        burst: '🌅👋💛',
+        audioOnTap: { file: 'he_ec0474f90763.mp3', he: 'שֶׁיִּהְיֶה לְךָ יוֹם נִפְלָא!', tr: 'She-yihyeh lekha yom nifla!' },
+        tip: '💡 地道表达：לְהִתְרָאוֹת (lehitraot) 字面意为「彼此再相见」，比单纯说再见更有「期待重逢」的温度！'
+      }
+    }
+  ];
+
+  function activeScenarioMeta() {
+    if (state.cafe.scenario === 'oldCity') {
+      return {
+        acts: OLD_CITY_ACTS,
+        menuItems: SHUK_MARKET_ITEMS,
+        navTitle: '旧城一日游 · 4 幕情景',
+        summaryNav: '旧城一日游 · 通关复盘',
+        summaryTitle: 'יוֹם נִפְלָא! 旧城一日游通关',
+        summaryDesc: '从集市买石榴、老城巷尾问路、庭院喝茶畅聊到日落露台道别，你已完成完整旅行情景对话',
+        summaryBadges: ['🍎 集市', '🗺️ 问路', '☕ 庭院', '🌅 日落'],
+        partnerRole: '当地向导',
+        menuTitle: '🍎 露天集市风物卡（שׁוּק）· 点击听读音',
+        stageAspect: '16 / 9.2'
+      };
+    }
+    return {
+      acts: CAFE_ACTS,
+      menuItems: CAFE_MENU_ITEMS,
+      navTitle: '特拉维夫咖啡馆 · 互动情景',
+      summaryNav: '特拉维夫咖啡馆 · 通关复盘',
+      summaryTitle: 'כָּל הַכָּבוֹד! 咖啡馆实战完成',
+      summaryDesc: '从入座要菜单、点奶咖、要冰水、夸好喝到结账告别，你已完成完整特拉维夫点单对话',
+      summaryBadges: ['📜 菜单', '☕ 奶咖', '💧 冰水', '🧾 买单'],
+      partnerRole: '店员',
+      menuTitle: '📜 特拉维夫双语菜单 · 点击词汇听读音',
+      stageAspect: '16 / 9.2'
+    };
+  }
+
   function resetCafeState() {
     state.cafe.animToken += 1;
     Object.assign(state.cafe, {
@@ -2846,6 +2993,7 @@
   }
 
   function startCafeAct(actIdx) {
+    const acts = activeScenarioMeta().acts;
     state.cafe.animToken += 1;
     state.cafe.act = actIdx;
     state.cafe.phase = 'prompt';
@@ -2857,7 +3005,7 @@
     state.cafe.hotspotTip = null;
     state.cafe.burstEmoji = null;
     state.cafe.showMenuSheet = false;
-    const act = CAFE_ACTS[actIdx];
+    const act = acts[actIdx];
     if (act && act.barista && act.barista.audio) {
       playCafeAudio(act.barista.audio, act.barista.he, act.barista.tr);
     }
@@ -2899,7 +3047,8 @@
 
   function currentCafeImageName() {
     const c = state.cafe;
-    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+    const acts = activeScenarioMeta().acts;
+    const act = acts[c.act] || acts[0];
     if (Array.isArray(c.animPrefix) && c.animPrefix.length > 0) {
       const idx = Math.min(c.frameStep, c.animPrefix.length - 1);
       return c.animPrefix[idx];
@@ -2916,7 +3065,9 @@
 
   function renderCafeComic() {
     const c = state.cafe;
-    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+    const meta = activeScenarioMeta();
+    const acts = meta.acts;
+    const act = acts[c.act] || acts[0];
     const heText = (obj) => c.showNiqqud ? obj.he : obj.unpointed;
 
     // Summary View
@@ -2924,29 +3075,26 @@
       const stars = c.mistakes === 0 ? 3 : c.mistakes <= 2 ? 2 : 1;
       return `
         <div class="view-enter space-y-3.5">
-          ${backHeader('特拉维夫咖啡馆 · 通关复盘')}
+          ${backHeader(meta.summaryNav)}
           <div class="alef-hero p-4 text-white space-y-2.5" style="background:linear-gradient(135deg,#B45309,#D97706,#EA580C);">
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/20">5 幕情景全部通关</span>
+              <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/20">${acts.length} 幕情景全部通关</span>
               <span class="text-base tracking-wider">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>
             </div>
-            <h3 class="text-lg font-extrabold">כָּל הַכָּבוֹד! 咖啡馆实战完成</h3>
-            <p class="text-xs opacity-90">从入座要菜单、点奶咖、要冰水、夸好喝到结账告别，你已完成完整特拉维夫点单对话（本轮小插曲 ${c.mistakes} 次）。</p>
-            <div class="flex items-center gap-2 pt-1 text-[11px] font-bold">
-              <span class="px-2.5 py-1 rounded-full bg-white/20">📜 菜单</span>
-              <span class="px-2.5 py-1 rounded-full bg-white/20">☕ 奶咖</span>
-              <span class="px-2.5 py-1 rounded-full bg-white/20">💧 冰水</span>
-              <span class="px-2.5 py-1 rounded-full bg-white/20">🧾 买单</span>
+            <h3 class="text-lg font-extrabold">${meta.summaryTitle}</h3>
+            <p class="text-xs opacity-90">${meta.summaryDesc}（本轮小插曲 ${c.mistakes} 次）。</p>
+            <div class="flex items-center gap-2 pt-1 text-[11px] font-bold flex-wrap">
+              ${meta.summaryBadges.map(b => `<span class="px-2.5 py-1 rounded-full bg-white/20">${b}</span>`).join('')}
             </div>
           </div>
 
           <div class="alef-card p-3.5 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-extrabold">本场核心台词复盘（点击朗读）</span>
-              <span class="text-[10px] font-semibold" style="color:var(--p-muted);">${CAFE_ACTS.length} 句实战表达</span>
+              <span class="text-[10px] font-semibold" style="color:var(--p-muted);">${acts.length} 句实战表达</span>
             </div>
             <div class="space-y-2">
-              ${CAFE_ACTS.map((a, idx) => {
+              ${acts.map((a, idx) => {
                 const sol = a.choices.find(ch => ch.ok);
                 return `
                   <button data-cc-speak-file="${sol.audio || ''}" data-cc-speak-he="${sol.he}" data-cc-speak-tr="${sol.tr}" class="spring-tap w-full p-2.5 rounded-2xl border text-left flex items-center gap-2.5" style="border-color:var(--p-border); background:var(--p-inset);">
@@ -2979,24 +3127,24 @@
     // Determine active speech bubble on stage
     let stageBubble = null;
     if (c.phase === 'prompt') {
-      stageBubble = { side: 'right', speaker: '店员', he: heText(act.barista), tr: act.barista.tr, zh: act.barista.zh, audio: act.barista.audio, tone: 'barista' };
+      stageBubble = { side: 'right', speaker: meta.partnerRole, he: heText(act.barista), tr: act.barista.tr, zh: act.barista.zh, audio: act.barista.audio, tone: 'barista' };
     } else if (c.phase === 'interact') {
-      stageBubble = { side: 'right', speaker: '店员回应', he: solution.baristaReply, tr: '', zh: solution.baristaReplyZh, audio: solution.audio, tone: 'success' };
+      stageBubble = { side: 'right', speaker: `${meta.partnerRole}回应`, he: solution.baristaReply, tr: '', zh: solution.baristaReplyZh, audio: solution.audio, tone: 'success' };
     } else if (c.phase === 'wrong' && c.lastWrong) {
       stageBubble = { side: 'left', speaker: '你刚才说了…', he: heText(c.lastWrong), tr: c.lastWrong.tr, zh: c.lastWrong.zh, audio: c.lastWrong.audio, tone: 'wrong' };
     }
 
     return `
       <div class="view-enter space-y-3">
-        ${backHeader('特拉维夫咖啡馆 · 互动情景', `
+        ${backHeader(meta.navTitle, `
           <button id="cc-toggle-transcript" class="spring-tap liquid-glass-subtle px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1">
             <span>💬</span><span>${c.history.length}</span>
           </button>
         `)}
 
-        <!-- 5-Act Interactive Progress Stepper -->
+        <!-- Multi-Act Interactive Progress Stepper -->
         <div class="flex items-center gap-1.5">
-          ${CAFE_ACTS.map((a, idx) => {
+          ${acts.map((a, idx) => {
             const active = idx === c.act;
             const done = idx < c.act;
             return `
@@ -3009,7 +3157,7 @@
 
         <!-- INTERACTIVE CINEMA STAGE (Fixed Stage, Multi-Interaction Hotspots + Frame Animation) -->
         <div class="alef-card overflow-hidden p-0">
-          <div id="cc-stage" class="relative w-full overflow-hidden bg-amber-950/90 ${isShaking ? 'cafe-shake' : ''}" style="aspect-ratio: 16 / 9.2;">
+          <div id="cc-stage" class="relative w-full overflow-hidden bg-amber-950/90 ${isShaking ? 'cafe-shake' : ''}" style="aspect-ratio: ${meta.stageAspect};">
             <img
               src="${cafeImg(imgName)}"
               alt="${act.title}"
@@ -3123,18 +3271,18 @@
               <button data-cc-toggle="${key}" class="spring-tap px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all" style="${c[key] ? 'background:var(--p-accent); color:#fff; border-color:transparent;' : 'background:var(--p-surface); color:var(--p-muted); border-color:var(--p-border);'}">${c[key] ? '✓ ' : ''}${label}</button>
             `).join('')}
           </div>
-          <span class="text-[10px] font-semibold" style="color:var(--p-muted);">第 ${c.act + 1}/${CAFE_ACTS.length} 幕</span>
+          <span class="text-[10px] font-semibold" style="color:var(--p-muted);">第 ${c.act + 1}/${acts.length} 幕</span>
         </div>
 
-        <!-- Interactive Bilingual Menu Sheet (Opened by Tapping Menu Prop!) -->
+        <!-- Interactive Bilingual Menu / Market Sheet (Opened by Tapping Prop!) -->
         ${c.showMenuSheet ? `
           <div class="cafe-bubble-pop alef-card p-3.5 space-y-2 border-2" style="border-color:rgba(217,119,6,0.45);">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-extrabold">📜 特拉维夫双语菜单 · 点击词汇听读音</span>
+              <span class="text-xs font-extrabold">${meta.menuTitle}</span>
               <button id="cc-close-menu" class="w-6 h-6 rounded-full text-xs font-bold" style="background:var(--p-inset);">✕</button>
             </div>
             <div class="grid grid-cols-2 gap-2">
-              ${CAFE_MENU_ITEMS.map(item => `
+              ${meta.menuItems.map(item => `
                 <button data-cc-speak-file="${item.audio}" data-cc-speak-he="${item.he}" data-cc-speak-tr="${item.tr}" class="spring-tap p-2.5 rounded-2xl text-left border space-y-0.5" style="border-color:var(--p-border); background:var(--p-inset);">
                   <div class="flex items-center justify-between">
                     <span class="text-sm">${item.emoji}</span>
@@ -3181,7 +3329,7 @@
               </div>
               <p class="text-[11px] leading-relaxed" style="color:var(--p-muted);">${act.interact.tip}</p>
               <button id="cc-next-act" class="spring-tap w-full py-3 rounded-2xl text-xs font-extrabold text-white shadow-md" style="background:linear-gradient(135deg,#0F7682,#2563EB);">
-                ${c.act < CAFE_ACTS.length - 1 ? `进入第 ${c.act + 2} 幕：${CAFE_ACTS[c.act + 1].stepLabel} →` : '完成点单 · 查看复盘 🎉'}
+                ${c.act < acts.length - 1 ? `进入第 ${c.act + 2} 幕：${acts[c.act + 1].stepLabel} →` : '完成本单元 · 查看复盘 🎉'}
               </button>
             ` : `
               <div class="flex items-center gap-2.5">
@@ -3232,7 +3380,8 @@
 
   function triggerCafeStageInteraction() {
     const c = state.cafe;
-    const act = CAFE_ACTS[c.act];
+    const acts = activeScenarioMeta().acts;
+    const act = acts[c.act];
     if (!act) return;
     c.stageInteracted = true;
     c.tableProps[act.interact.propKey] = true;
@@ -3255,7 +3404,9 @@
 
   function bindCafeComic() {
     const c = state.cafe;
-    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+    const meta = activeScenarioMeta();
+    const acts = meta.acts;
+    const act = acts[c.act] || acts[0];
 
     // Summary bindings
     document.getElementById('cc-restart-btn')?.addEventListener('click', () => {
@@ -3367,7 +3518,7 @@
 
     // Next Act button
     document.getElementById('cc-next-act')?.addEventListener('click', () => {
-      if (c.act < CAFE_ACTS.length - 1) {
+      if (c.act < acts.length - 1) {
         startCafeAct(c.act + 1);
       } else {
         c.phase = 'summary';
@@ -3871,7 +4022,7 @@
   const ROUTE_GROUPS = [
     { group: '字母模块', items: [['tab:alphabet', '字母总览'], ['push:letterDisplay', '13项卡片定制'], ['push:letterDetail', '字母详情 (含曲线/对照)'], ['push:letterWriting', '笔顺动画与描红'], ['push:sofit', '词尾变形总览']] },
     { group: '词库与阅读', items: [['tab:words', '单词/短语/阅读'], ['push:wordDetail', '单词详情 (跟读+AI+词形)'], ['push:readingDetail', '分级阅读详情 (3模式)']] },
-    { group: '练习与游戏', items: [['tab:practice', '练习中心'], ['push:todayReview', '今日复习'], ['push:mistakeBook', '错题本'], ['push:dailyVocab', '今日记词 (+希伯来键盘)'], ['push:flashcards', '3D 字母闪卡'], ['quiz:letter:dagesh', '字母专项测验'], ['quiz:word:spelling', '单词拼写测验'], ['quiz:minimal:minimal', '易混音辨析'], ['push:gamesHub', '4 款小游戏'], ['push:learningPath', '零基础路线'], ['push:cafeComic', '咖啡馆漫画']] },
+    { group: '练习与游戏', items: [['tab:practice', '练习中心'], ['push:todayReview', '今日复习'], ['push:mistakeBook', '错题本'], ['push:dailyVocab', '今日记词 (+希伯来键盘)'], ['push:flashcards', '3D 字母闪卡'], ['quiz:letter:dagesh', '字母专项测验'], ['quiz:word:spelling', '单词拼写测验'], ['quiz:minimal:minimal', '易混音辨析'], ['push:gamesHub', '4 款小游戏'], ['push:learningPath', '零基础路线'], ['push:cafeComic', '咖啡馆漫画 (5幕)'], ['push:oldCityComic', '旧城一日游 (4幕)']] },
     { group: '规则与我的', items: [['tab:rules', '规则索引'], ['push:syllableLab', '拼读探索 & 听测'], ['rule:roots', '词根家族搜索'], ['tab:settings', '我的 & Bento'], ['push:reminders', '学习提醒'], ['push:speech', '发音与音效'], ['push:aiSettings', 'AI 功能配置'], ['push:backupSync', '备份与 iCloud 同步'], ['push:widgets', '4 类小组件预览']] }
   ];
 
