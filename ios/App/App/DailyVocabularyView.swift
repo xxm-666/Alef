@@ -135,6 +135,12 @@ private struct DailyVocabularyView: View {
             .onChange(of: group, initial: true) { _, current in
                 updateChoiceOptions(for: current)
             }
+            .onChange(of: plan.groups.map(\.wordIds)) { _, _ in
+                progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
+            }
+            .onChange(of: progress.dailyVocabularyPackId) { _, _ in
+                progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     progress.prepareDailyVocabulary(words: content.dailyVocabularyWords(in: progress))
@@ -864,7 +870,7 @@ private struct DailyVocabularyPackPickerSheet: View {
                     .foregroundStyle(progress.theme.mutedInk)
             }
             ForEach(StudyWordPackGroup.allCases.filter { $0 != .content }) { group in
-                let packs = content.allWordPacks.filter { $0.group == group && $0.kind == .words }
+                let packs = content.wordPacks(in: progress).filter { $0.group == group && $0.kind == .words }
                 StudySectionTitle(group.title)
                 StudyCard(padding: 10, spacing: 2) {
                     ForEach(packs) { pack in

@@ -50,8 +50,6 @@ struct WordPreferences: Codable {
         topic = nil
         initialLetter = "all"
         frequency = nil
-        frequencyTier = nil
-        selectedPackId = nil
         difficulty = nil
     }
 }
@@ -86,8 +84,8 @@ struct WordsView: View {
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize,
                   showsScrollToTop: true) {
             StudyHeading(title: "内容库", eyebrow: "LIBRARY")
-            if activePack != nil {
-                searchControls
+            if let activePack {
+                searchControls(for: activePack.kind)
             }
             frequencyTierBar
             if let activePack {
@@ -150,45 +148,53 @@ struct WordsView: View {
         })
     }
 
-    private var searchControls: some View {
+    @ViewBuilder
+    private func searchControls(for kind: StudyWordPackKind) -> some View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
             : AnyLayout(HStackLayout(spacing: 6))
         let favoritesOnly = preferences.scope == "favorites"
-        return layout {
-            searchField
-            HStack(spacing: 6) {
-                Button {
-                    var state = preferences
-                    state.topic = state.selectedTopic
-                    state.activeFilter = favoritesOnly ? "all" : "favorites"
-                    progress.write(state, for: "alef.wordsState.v1")
-                } label: {
-                    Image(systemName: favoritesOnly ? "bookmark.fill" : "bookmark")
-                        .frame(width: 44, height: 44)
-                        .background(favoritesOnly ? progress.theme.highlightedSurface : progress.theme.insetSurface,
-                                    in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(Rectangle())
+        layout {
+            searchField(for: kind)
+            if kind == .words {
+                HStack(spacing: 6) {
+                    Button {
+                        var state = preferences
+                        state.topic = state.selectedTopic
+                        state.activeFilter = favoritesOnly ? "all" : "favorites"
+                        progress.write(state, for: "alef.wordsState.v1")
+                    } label: {
+                        Image(systemName: favoritesOnly ? "bookmark.fill" : "bookmark")
+                            .frame(width: 44, height: 44)
+                            .background(favoritesOnly ? progress.theme.highlightedSurface : progress.theme.insetSurface,
+                                        in: RoundedRectangle(cornerRadius: 12))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("仅看收藏")
+                    .accessibilityAddTraits(favoritesOnly ? .isSelected : [])
+                    Button { showsFilters = true } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .frame(width: 44, height: 44)
+                            .background(hasFilters ? progress.theme.highlightedSurface : progress.theme.insetSurface,
+                                        in: RoundedRectangle(cornerRadius: 12))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("筛选与排序")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("仅看收藏")
-                .accessibilityAddTraits(favoritesOnly ? .isSelected : [])
-                Button { showsFilters = true } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .frame(width: 44, height: 44)
-                        .background(hasFilters ? progress.theme.highlightedSurface : progress.theme.insetSurface,
-                                    in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("筛选与排序")
+                .foregroundStyle(progress.theme.accent)
             }
-            .foregroundStyle(progress.theme.accent)
         }
     }
 
-    private var searchField: some View {
-        HStack(spacing: 9) {
+    private func searchField(for kind: StudyWordPackKind) -> some View {
+        let hint: String = switch kind {
+        case .words: "按希伯来语、中文、音译或词根搜索"
+        case .phrases: "按希伯来语、中文、音译或用法说明搜索"
+        case .readings: "按篇名或出处搜索"
+        }
+        return HStack(spacing: 9) {
             Image(systemName: "magnifyingglass").foregroundStyle(progress.theme.mutedInk).accessibilityHidden(true)
             TextField(currentPack.map { "在「\($0.shortTitle)」中搜索" } ?? "搜索单词", text: setting(\.searchQuery))
                 .autocorrectionDisabled()
@@ -197,7 +203,7 @@ struct WordsView: View {
                 .submitLabel(.search)
                 .onSubmit { searchFocused = false }
                 .accessibilityLabel("在当前学习包中搜索")
-                .accessibilityHint("仅在当前显示的学习包内按希伯来语、中文、音译或词根搜索")
+                .accessibilityHint(hint)
             if !preferences.searchQuery.isEmpty {
                 Button {
                     setting(\.searchQuery).wrappedValue = ""
@@ -1982,7 +1988,7 @@ private struct StudyPackManagerView: View {
                 }
             }
             ForEach(StudyWordPackGroup.allCases) { group in
-                let packs = content.allWordPacks.filter { $0.group == group }
+                let packs = content.wordPacks(in: progress).filter { $0.group == group }
                 StudySectionTitle(group.title)
                 packGrid(packs)
             }

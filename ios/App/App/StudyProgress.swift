@@ -494,7 +494,8 @@ struct DailyVocabularyPlan: Codable, Equatable {
             group.wordIds.allSatisfy { mastery[$0] != .mastered && schedule[$0] == nil }
         }
         if isToday, !shouldReselect, valid.count == groups.count,
-           valid.allSatisfy({ $0.hasStarted || isEligibleUnstarted($0) }) {
+           valid.allSatisfy({ $0.hasStarted || isEligibleUnstarted($0) }),
+           groups.count >= groupsPerDay || remainingNewWordIds(from: words, mastery: mastery, schedule: schedule).isEmpty {
             return self
         }
 
@@ -926,7 +927,10 @@ struct StudyReviewBatch: Codable, Hashable {
     static let dailyVocabularyPackKey = "alef.dailyVocabPack.v1"
 
     var pinnedWordPackIds: [String] {
-        read(Self.pinnedWordPacksKey, default: StudyWordPack.defaultPinnedIDs)
+        if let saved: [String] = read(Self.pinnedWordPacksKey, default: Optional<[String]>.none) { return saved }
+        let preferences = read("alef.wordsState.v1", default: WordPreferences())
+        let legacySelection = StudyWordPack.legacyCatalog.first { $0.id == preferences.activePackId }
+        return StudyWordPack.defaultPinnedIDs + [legacySelection?.id].compactMap { $0 }
     }
 
     func isWordPackPinned(_ id: String) -> Bool {
@@ -950,7 +954,6 @@ struct StudyReviewBatch: Codable, Hashable {
 
     func setDailyVocabularyPack(_ packId: String?, words: [StudyWord], date: Date = .now) {
         let normalized = packId ?? ""
-        write(normalized, for: Self.dailyVocabularyPackKey)
 
         let today = DailyVocabularyPlan.dayKey(for: date)
         var plan = dailyVocabulary
@@ -967,7 +970,10 @@ struct StudyReviewBatch: Codable, Hashable {
         }
         plan = DailyVocabularyPlan(day: today, groupsPerDay: plan.groupsPerDay, groups: kept,
                                    spellingCombo: isToday ? plan.spellingCombo : 0, usesBeginnerFirstSelection: true)
-        write(plan, for: DailyVocabularyPlan.storageKey)
+        update { entries, encoder in
+            entries[Self.dailyVocabularyPackKey] = try encoder.encode(normalized)
+            entries[DailyVocabularyPlan.storageKey] = try encoder.encode(plan)
+        }
     }
 
     func prepareDailyVocabulary(words: [StudyWord], date: Date = .now) {

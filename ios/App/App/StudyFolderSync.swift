@@ -11,7 +11,8 @@ enum StudySyncMerger {
     private static let favoriteKeys = ["alef.favoriteWords.v1", "alef.native.phraseFavorites.v1"]
 
     private static let appearanceKeys = [StudyProgress.appearanceKey, StudyProgress.themeKey, StudyProgress.dayThemeKey]
-    private static let appearanceVersionItem = "selection"
+    private static let selectionVersionItem = "selection"
+    private static let dailyPackKey = StudyProgress.dailyVocabularyPackKey
 
     static func stampChanges(from old: [String: Data], to updated: inout [String: Data], at timestamp: Int64) {
         var versions = decode(ItemVersions.self, from: old[itemVersionsKey]) ?? [:]
@@ -35,7 +36,10 @@ enum StudySyncMerger {
             }
         }
         if appearanceKeys.contains(where: { old[$0] != updated[$0] }) {
-            versions[StudyProgress.appearanceKey, default: [:]][appearanceVersionItem] = timestamp
+            versions[StudyProgress.appearanceKey, default: [:]][selectionVersionItem] = timestamp
+        }
+        if old[dailyPackKey] != updated[dailyPackKey] {
+            versions[dailyPackKey, default: [:]][selectionVersionItem] = timestamp
         }
         if !versions.isEmpty { updated[itemVersionsKey] = encode(versions) }
     }
@@ -50,8 +54,8 @@ enum StudySyncMerger {
         remaining.remove(itemVersionsKey)
         if !versions.isEmpty { result[itemVersionsKey] = encode(versions) }
 
-        let localVersion = localVersions[StudyProgress.appearanceKey]?[appearanceVersionItem]
-        let remoteVersion = remoteVersions[StudyProgress.appearanceKey]?[appearanceVersionItem]
+        let localVersion = localVersions[StudyProgress.appearanceKey]?[selectionVersionItem]
+        let remoteVersion = remoteVersions[StudyProgress.appearanceKey]?[selectionVersionItem]
         let localHasAppearance = localVersion != nil || local[StudyProgress.appearanceKey] != nil || local[StudyProgress.themeKey] != nil
         let remoteHasAppearance = remoteVersion != nil || remote[StudyProgress.appearanceKey] != nil || remote[StudyProgress.themeKey] != nil
         if localHasAppearance || remoteHasAppearance {
@@ -135,6 +139,51 @@ enum StudySyncMerger {
             result[key] = encode(merged)
         }
 
+        let dailyPlanKey = DailyVocabularyPlan.storageKey
+        remaining.remove(dailyPackKey)
+        remaining.remove(dailyPlanKey)
+        let localDailyPack = decode(String.self, from: local[dailyPackKey])
+        let remoteDailyPack = decode(String.self, from: remote[dailyPackKey])
+        let localPackVersion = localVersions[dailyPackKey]?[selectionVersionItem]
+        let remotePackVersion = remoteVersions[dailyPackKey]?[selectionVersionItem]
+        let useRemotePack: Bool
+        switch (localDailyPack, remoteDailyPack) {
+        case (nil, _?): useRemotePack = true
+        case let (a?, b?):
+            if localPackVersion != remotePackVersion {
+                useRemotePack = (remotePackVersion ?? -1) > (localPackVersion ?? -1)
+            } else {
+                useRemotePack = (remoteUpdatedAt, b) > (localUpdatedAt, a)
+            }
+        default: useRemotePack = false
+        }
+        let selectedPack = useRemotePack ? remoteDailyPack : localDailyPack
+        if let selectedPack { result[dailyPackKey] = encode(selectedPack) }
+        let localPlan = decode(DailyVocabularyPlan.self, from: local[dailyPlanKey]).flatMap { $0.isValid ? $0 : nil }
+        let remotePlan = decode(DailyVocabularyPlan.self, from: remote[dailyPlanKey]).flatMap { $0.isValid ? $0 : nil }
+        if let a = localPlan, let b = remotePlan {
+            let useRemotePlan: Bool
+            if a.day != b.day {
+                useRemotePlan = b.day > a.day
+            } else if localUpdatedAt != remoteUpdatedAt {
+                useRemotePlan = remoteUpdatedAt > localUpdatedAt
+            } else {
+                useRemotePlan = canonicalJSON(local[dailyPlanKey] ?? Data())
+                    .lexicographicallyPrecedes(canonicalJSON(remote[dailyPlanKey] ?? Data()))
+            }
+            let preferred = useRemotePlan ? b : a
+            let other = useRemotePlan ? a : b
+            let selectionPlan = localDailyPack == remoteDailyPack ? preferred : (useRemotePack ? b : a)
+            result[dailyPlanKey] = encode(mergeDailyPlans(preferred, other, selectionPlan: selectionPlan,
+                                                        selectedPack: selectedPack))
+        } else if var plan = localPlan ?? remotePlan {
+            let sourcePack = localPlan == nil ? remoteDailyPack : localDailyPack
+            if sourcePack != selectedPack || selectedPack == "" {
+                plan.groups.removeAll { !$0.hasStarted }
+            }
+            result[dailyPlanKey] = encode(plan)
+        }
+
         for key in remaining {
             if let a = local[key], let b = remote[key] {
                 result[key] = mergeEntry(key: key, local: a, remote: b,
@@ -183,18 +232,6 @@ enum StudySyncMerger {
             }
             return encode(merged) ?? (remoteUpdatedAt > localUpdatedAt ? rData : lData)
 
-        case DailyVocabularyPlan.storageKey:
-            guard let l = decode(DailyVocabularyPlan.self, from: lData),
-                  let r = decode(DailyVocabularyPlan.self, from: rData) else {
-                return remoteUpdatedAt > localUpdatedAt ? rData : lData
-            }
-            if l.isValid != r.isValid { return r.isValid ? rData : lData }
-            if r.day != l.day { return r.day > l.day ? rData : lData }
-            let lScore = dailyScore(l)
-            let rScore = dailyScore(r)
-            if rScore != lScore { return rScore > lScore ? rData : lData }
-            return remoteUpdatedAt > localUpdatedAt ? rData : lData
-
         default:
             return remoteUpdatedAt > localUpdatedAt ? rData : lData
         }
@@ -219,14 +256,36 @@ enum StudySyncMerger {
         }
     }
 
-    private static func dailyScore(_ plan: DailyVocabularyPlan) -> Int {
-        let rounds = plan.groups.reduce(0) { $0 + $1.roundCount * 10_000 }
-        let completed = plan.completedCount * 1_000
-        let steps = plan.groups.reduce(0) { total, group in
-            let choiceSteps = group.completedChoiceCount * 2 + (group.choices?.selectedWordID == nil ? 0 : 1)
-            return total + group.studied + choiceSteps + group.answers.count + (group.isComplete ? 1 : 0)
+    private static func mergeDailyPlans(_ preferred: DailyVocabularyPlan, _ other: DailyVocabularyPlan,
+                                        selectionPlan: DailyVocabularyPlan, selectedPack: String?) -> DailyVocabularyPlan {
+        var plan = preferred
+        let sameDay = preferred.day == other.day
+        let started = (sameDay ? preferred.groups + other.groups : plan.groups).filter(\.hasStarted)
+        // Overlapping groups cannot share a word in a plan. Keep the newer round, then the furthest attempt.
+        let ranked = started.enumerated().sorted { lhs, rhs in
+            let a = groupProgress(lhs.element)
+            let b = groupProgress(rhs.element)
+            return a == b ? lhs.offset < rhs.offset : a > b
         }
-        return rounds + completed + steps
+        let unopened = selectionPlan.day == plan.day && selectedPack != ""
+            ? selectionPlan.groups.filter { !$0.hasStarted } : []
+        var assigned = Set<String>()
+        var winners: [String: DailyVocabularyGroup] = [:]
+        for group in ranked.map(\.element) + unopened {
+            guard winners.count < DailyVocabularyPlan.maxGroupsPerDay,
+                  assigned.isDisjoint(with: group.wordIds) else { continue }
+            assigned.formUnion(group.wordIds)
+            winners[group.id] = group
+        }
+
+        let order = preferred.groups + (sameDay ? other.groups : []) + unopened
+        plan.groups = order.compactMap { winners.removeValue(forKey: $0.id) }
+        return plan
+    }
+
+    private static func groupProgress(_ group: DailyVocabularyGroup) -> (Int, Int, Int, Int, Int) {
+        (group.roundCount, group.answers.count, group.completedChoiceCount, group.studied,
+         (group.isComplete ? 2 : 0) + (group.choices?.selectedWordID != nil ? 1 : 0))
     }
 
     private static func decode<T: Decodable>(_ type: T.Type, from data: Data?) -> T? {
@@ -248,9 +307,13 @@ enum StudySyncMerger {
     }
 }
 
+enum StudySyncFolderConflict: Error {
+    case changed
+}
+
 protocol StudySyncFolderStorage {
     func read(bookmarkData: Data, fileName: String) async throws -> (data: Data?, refreshedBookmark: Data?)
-    func write(_ data: Data, bookmarkData: Data, fileName: String) async throws -> Data?
+    func write(_ data: Data, replacing expected: Data?, bookmarkData: Data, fileName: String) async throws -> Data?
 }
 
 struct CoordinatedFolderStorage: StudySyncFolderStorage {
@@ -277,12 +340,8 @@ struct CoordinatedFolderStorage: StudySyncFolderStorage {
             var readError: Error?
 
             coordinator.coordinate(readingItemAt: fileURL, options: [], error: &coordError) { targetURL in
-                guard FileManager.default.fileExists(atPath: targetURL.path) else {
-                    readData = nil
-                    return
-                }
                 do {
-                    readData = try Data(contentsOf: targetURL)
+                    readData = try Self.readIfPresent(targetURL)
                 } catch {
                     readError = error
                 }
@@ -294,7 +353,7 @@ struct CoordinatedFolderStorage: StudySyncFolderStorage {
         }.value
     }
 
-    func write(_ data: Data, bookmarkData: Data, fileName: String) async throws -> Data? {
+    func write(_ data: Data, replacing expected: Data?, bookmarkData: Data, fileName: String) async throws -> Data? {
         try await Task.detached(priority: .utility) {
             var isStale = false
             let folderURL = try URL(
@@ -317,6 +376,7 @@ struct CoordinatedFolderStorage: StudySyncFolderStorage {
 
             coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordError) { targetURL in
                 do {
+                    guard try Self.readIfPresent(targetURL) == expected else { throw StudySyncFolderConflict.changed }
                     try data.write(to: targetURL, options: .atomic)
                 } catch {
                     writeError = error
@@ -327,6 +387,14 @@ struct CoordinatedFolderStorage: StudySyncFolderStorage {
             if let writeError { throw writeError }
             return refreshed
         }.value
+    }
+
+    private static func readIfPresent(_ url: URL) throws -> Data? {
+        do {
+            return try Data(contentsOf: url)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            return nil
+        }
     }
 }
 
@@ -409,8 +477,14 @@ final class StudyFolderSyncManager {
         isSyncing = true
         defer { isSyncing = false }
 
+        var conflictGeneration = folderGeneration
+        var remoteConflicts = 0
         while let initialBookmark = bookmarkData {
             let generation = folderGeneration
+            if conflictGeneration != generation {
+                conflictGeneration = generation
+                remoteConflicts = 0
+            }
             state = .syncing
             do {
                 let readResult = try await storage.read(bookmarkData: initialBookmark, fileName: Self.syncFileName)
@@ -459,8 +533,10 @@ final class StudyFolderSyncManager {
                     progress.observeSyncTimestamp(mergedUpdatedAt)
                     if remoteChanged {
                         let payload = try progress.encodeSyncDocument(entries: merged, updatedAt: mergedUpdatedAt)
-                        let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName)
+                        let refreshed = try await storage.write(payload, replacing: remoteData, bookmarkData: activeBookmark,
+                                                                fileName: Self.syncFileName)
                         guard folderGeneration == generation else { continue }
+                        remoteConflicts = 0
                         if let refreshed {
                             saveBookmark(refreshed, name: folderName)
                         }
@@ -486,8 +562,10 @@ final class StudyFolderSyncManager {
                     let timestamp = max(progress.localUpdatedAt, Int64(now.timeIntervalSince1970 * 1_000))
                     progress.observeSyncTimestamp(timestamp)
                     let payload = try progress.encodeSyncDocument(entries: localSnapshot, updatedAt: timestamp)
-                    let refreshed = try await storage.write(payload, bookmarkData: activeBookmark, fileName: Self.syncFileName)
+                    let refreshed = try await storage.write(payload, replacing: nil, bookmarkData: activeBookmark,
+                                                            fileName: Self.syncFileName)
                     guard folderGeneration == generation else { continue }
+                    remoteConflicts = 0
                     if let refreshed {
                         saveBookmark(refreshed, name: folderName)
                     }
@@ -505,6 +583,13 @@ final class StudyFolderSyncManager {
                 defaults.set(NSNumber(value: syncedMs), forKey: Self.lastSyncedAtKey)
                 state = .synced(now)
                 return
+            } catch StudySyncFolderConflict.changed {
+                guard folderGeneration == generation else { continue }
+                remoteConflicts += 1
+                if remoteConflicts >= 5 {
+                    state = .failed("同步文件持续变化，请稍后再试。")
+                    return
+                }
             } catch {
                 guard folderGeneration == generation else { continue }
                 state = .failed("同步失败：\(error.localizedDescription)")

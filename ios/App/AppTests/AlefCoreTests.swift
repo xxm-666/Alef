@@ -471,7 +471,7 @@ final class AlefCoreTests: XCTestCase {
 
     func testDailyVocabularyChoicesHaveDistinctLabelsAndAvoidHomophones() throws {
         let content = try StudyContent.load()
-        let group = Array(content.dailyVocabularyWords(in: progress).prefix(DailyVocabularyPlan.groupSize))
+        let group = Array(content.dailyVocabularyWords(in: progress, packId: "cat_greetings").prefix(DailyVocabularyPlan.groupSize))
         let word = try XCTUnwrap(group.first)
         for stage in DailyVocabularyChoiceStage.allCases {
             let options = content.dailyVocabularyOptions(for: word, stage: stage, groupWordIDs: group.map(\.id))
@@ -754,7 +754,7 @@ final class AlefCoreTests: XCTestCase {
     func testCurrentStageAndMissedWordsArePrioritized() throws {
         let content = try StudyContent.load()
         let stage = try XCTUnwrap(content.recommendedStage(in: progress))
-        let firstWord = try XCTUnwrap(content.dailyVocabularyWords(in: progress).first)
+        let firstWord = try XCTUnwrap(content.dailyVocabularyWords(in: progress, packId: "cat_greetings").first)
         XCTAssertTrue(stage.wordIds.contains(firstWord.id))
 
         let coreWordIDs = Set(content.learningPath.flatMap(\.wordIds))
@@ -1397,6 +1397,101 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(StudySyncMerger.canonicalEqual(cloud.entries, progress.syncSnapshot()))
     }
 
+    @MainActor
+    func testFolderSyncRetriesWhenAnotherDeviceWritesAfterRead() async throws {
+        let storage = MockStudySyncFolderStorage()
+        let manager = StudyFolderSyncManager(defaults: defaults, storage: storage)
+        let remoteSuite = suiteName + ".competing"
+        let remoteDefaults = try XCTUnwrap(UserDefaults(suiteName: remoteSuite))
+        defer { remoteDefaults.removePersistentDomain(forName: remoteSuite) }
+        let remote = StudyProgress(defaults: remoteDefaults)
+        progress.completeReview("shalom", grade: .good)
+        remote.completeReview("bayit", grade: .good)
+        let created = try remote.encodeSyncDocument(entries: remote.syncSnapshot(), updatedAt: remote.localUpdatedAt)
+
+        // Both devices see no file. The competing device creates it before this write.
+        storage.onNextWrite = { storage.data = created }
+        await manager.configureFolder(url: FileManager.default.temporaryDirectory, progress: progress)
+        XCTAssertEqual(storage.writeCount, 2)
+        XCTAssertNotNil(progress.schedule["bayit"])
+
+        // Both devices now update an existing file.
+        let cloud = try progress.parseSyncDocument(XCTUnwrap(storage.data))
+        remote.applySyncedEntries(cloud.entries, updatedAt: cloud.updatedAt)
+        remote.completeReview("todah", grade: .good)
+        progress.completeLetterReview("alef", grade: .good)
+        let replaced = try remote.encodeSyncDocument(entries: remote.syncSnapshot(), updatedAt: remote.localUpdatedAt)
+        storage.onNextWrite = { storage.data = replaced }
+        await manager.sync(progress: progress)
+
+        XCTAssertEqual(storage.writeCount, 4)
+        let final = try progress.parseSyncDocument(XCTUnwrap(storage.data))
+        XCTAssertTrue(StudySyncMerger.canonicalEqual(final.entries, progress.syncSnapshot()))
+        XCTAssertEqual(Set(progress.schedule.keys), Set(["shalom", "bayit", "todah"]))
+        XCTAssertNotNil(progress.letterSchedule["alef"])
+    }
+
+    func testDailySyncKeepsBothDevicesStartedGroupsAndUsesOnlySelectedPackForNewGroups() throws {
+        let encoder = JSONEncoder()
+        let planKey = DailyVocabularyPlan.storageKey
+        let packKey = StudyProgress.dailyVocabularyPackKey
+        let completed = DailyVocabularyGroup(wordIds: ["a"], studied: 1,
+                                             answers: [DailySpellingAnswer(input: "א", correct: true)])
+        let learning = DailyVocabularyGroup(wordIds: ["b", "c"], studied: 1)
+        let planA = DailyVocabularyPlan(day: "2026-11-10", groups: [completed, DailyVocabularyGroup(wordIds: ["old-pack"])])
+        let planB = DailyVocabularyPlan(day: planA.day, groups: [learning, DailyVocabularyGroup(wordIds: ["new-pack"])])
+        var a = [planKey: try encoder.encode(planA), packKey: try encoder.encode("pack_top1000")]
+        var b = [planKey: try encoder.encode(planB), packKey: try encoder.encode("cat_daily")]
+        StudySyncMerger.stampChanges(from: [:], to: &a, at: 1_000)
+        StudySyncMerger.stampChanges(from: [:], to: &b, at: 2_000)
+
+        // An unrelated update on A makes its document newer than B's selection.
+        let merged = StudySyncMerger.merge(local: a, remote: b, localUpdatedAt: 3_000, remoteUpdatedAt: 2_000)
+        let reversed = StudySyncMerger.merge(local: b, remote: a, localUpdatedAt: 2_000, remoteUpdatedAt: 3_000)
+        XCTAssertTrue(StudySyncMerger.canonicalEqual(merged, reversed))
+        XCTAssertEqual(try JSONDecoder().decode(String.self, from: XCTUnwrap(merged[packKey])), "cat_daily")
+        let plan = try JSONDecoder().decode(DailyVocabularyPlan.self, from: XCTUnwrap(merged[planKey]))
+        XCTAssertTrue(plan.isValid)
+        XCTAssertEqual(plan.groups.filter(\.hasStarted), [completed, learning])
+        XCTAssertEqual(plan.groups.filter { !$0.hasStarted }.map(\.id), ["new-pack"])
+    }
+
+    func testLegacyWordPacksStillResolveAndFilterResetKeepsTheActivePack() throws {
+        let content = try StudyContent.load()
+        XCTAssertNil(content.wordPacks(in: progress).first { $0.id == "pack_top2000" })
+        var preferences = WordPreferences()
+        preferences.frequencyTier = "top2000"
+        preferences.activeFilter = "favorites"
+        preferences.initialLetter = "א"
+        preferences.resetFilters()
+        XCTAssertEqual(preferences.activePackId, "pack_top2000")
+        XCTAssertEqual(preferences.scope, "all")
+        XCTAssertEqual(preferences.initialLetter, "all")
+        progress.write(preferences, for: "alef.wordsState.v1")
+        XCTAssertTrue(progress.pinnedWordPackIds.contains("pack_top2000"))
+
+        progress.write(["pack_top2000", "pack_common"], for: StudyProgress.pinnedWordPacksKey)
+        progress.write("pack_common", for: StudyProgress.dailyVocabularyPackKey)
+        XCTAssertEqual(Set(content.wordPacks(in: progress).filter { $0.id == "pack_top2000" || $0.id == "pack_common" }.map(\.id)),
+                       Set(["pack_top2000", "pack_common"]))
+        XCTAssertEqual(content.words(inPack: "pack_top2000").map(\.id),
+                       content.words.filter { ($0.frequencyRank ?? Int.max) <= 2_000 }.map(\.id))
+        XCTAssertEqual(Set(content.dailyVocabularyWords(in: progress).map(\.id)),
+                       Set(content.words.filter { $0.frequency == .common }.map(\.id)))
+        preferences.selectedPackId = "cat_health"
+        preferences.resetFilters()
+        XCTAssertEqual(preferences.activePackId, "cat_health")
+
+        let revision = progress.syncRevision
+        let replacement = content.dailyVocabularyWords(in: progress, packId: "cat_health")
+        progress.setDailyVocabularyPack("cat_health", words: replacement)
+        XCTAssertEqual(progress.syncRevision, revision + 1)
+        XCTAssertEqual(progress.dailyVocabularyPackId, "cat_health")
+        XCTAssertFalse(progress.dailyVocabulary.groups.isEmpty)
+        let eligible = Set(replacement.map(\.id))
+        XCTAssertTrue(progress.dailyVocabulary.groups.flatMap(\.wordIds).allSatisfy(eligible.contains))
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int = 12, minute: Int = 0) -> Date {
         gregorianUtc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
@@ -1418,10 +1513,11 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertTrue(refreshed.isValid)
     }
 
-    func testDailyVocabularyUsesBeginnerFirstThenFrequencyAcrossTheWholeLibrary() throws {
+    func testDailyVocabularyUsesBeginnerFirstThenFrequencyWithinSelectedPack() throws {
         let content = try StudyContent.load()
         let date = makeDate(year: 2026, month: 11, day: 1)
-        let words = content.dailyVocabularyWords(in: progress, at: date)
+        XCTAssertTrue(content.dailyVocabularyWords(in: progress, at: date).isEmpty)
+        let words = content.dailyVocabularyWords(in: progress, packId: "cat_greetings", at: date)
         let beginners = words.filter { $0.difficulty == .beginner }
         let remaining = words.filter { $0.difficulty != .beginner }
         let tiers = [beginners] + WordFrequency.allCases.map { frequency in
@@ -1445,8 +1541,9 @@ final class AlefCoreTests: XCTestCase {
     func testDailyVocabularyUpgradeReselectsOnlyUnstartedGroupsAndKeepsExtraGroupCount() throws {
         let content = try StudyContent.load()
         let date = makeDate(year: 2026, month: 11, day: 1)
-        let words = content.dailyVocabularyWords(in: progress, at: date)
+        let words = content.dailyVocabularyWords(in: progress, packId: "cat_greetings", at: date)
         let advanced = words.filter { $0.difficulty == .advanced }
+        XCTAssertGreaterThanOrEqual(advanced.count, 4)
         let started = DailyVocabularyGroup(wordIds: advanced.prefix(2).map(\.id), studied: 1)
         let old = DailyVocabularyPlan(day: DailyVocabularyPlan.dayKey(for: date), groups: [
             started,
@@ -1846,12 +1943,13 @@ private final class MockStudySyncFolderStorage: StudySyncFolderStorage {
         (data, nil)
     }
 
-    func write(_ data: Data, bookmarkData: Data, fileName: String) async throws -> Data? {
+    func write(_ data: Data, replacing expected: Data?, bookmarkData: Data, fileName: String) async throws -> Data? {
         writeCount += 1
         let edit = onNextWrite
         onNextWrite = nil
         await Task.yield()
         edit?()
+        guard self.data == expected else { throw StudySyncFolderConflict.changed }
         self.data = data
         return nil
     }

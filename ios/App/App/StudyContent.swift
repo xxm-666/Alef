@@ -115,12 +115,13 @@ struct StudyContent: Decodable {
         dailyVocabularyWords(in: progress, packId: progress.dailyVocabularyPackId, at: date)
     }
 
-    var allWordPacks: [StudyWordPack] {
-        StudyWordPack.catalog
+    func wordPacks(in progress: StudyProgress) -> [StudyWordPack] {
+        let savedIDs = Set(progress.pinnedWordPackIds + [progress.dailyVocabularyPackId].compactMap { $0 })
+        return StudyWordPack.catalog + StudyWordPack.legacyCatalog.filter { savedIDs.contains($0.id) }
     }
 
     func wordPack(id: String) -> StudyWordPack? {
-        StudyWordPack.catalog.first { $0.id == id }
+        StudyWordPack.catalog.first { $0.id == id } ?? StudyWordPack.legacyCatalog.first { $0.id == id }
     }
 
     func words(inPack id: String) -> [StudyWord] {
@@ -255,6 +256,11 @@ struct StudyWordPack: Identifiable, Hashable {
     var kind: StudyWordPackKind = .words
 
     static let defaultPinnedIDs = ["pack_top1000", "pack_top1001_2000", "pack_phrases", "pack_readings"]
+
+    static let legacyCatalog: [StudyWordPack] = [
+        StudyWordPack(id: "pack_top2000", title: "常用 Top 2000", shortTitle: "Top 2000", subtitle: "旧版词包 · he_50k 前 2000 名", symbol: "chart.bar.fill", group: .frequency),
+        StudyWordPack(id: "pack_common", title: "高频常用词", shortTitle: "常用词", subtitle: "旧版词包 · 高频常用词汇", symbol: "star.fill", group: .frequency),
+    ]
 
     static let catalog: [StudyWordPack] = [
         // 综合内容包
