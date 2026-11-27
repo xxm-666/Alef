@@ -227,6 +227,56 @@
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .view-enter { animation: viewEnter 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+    /* Cafe Interactive Stage Animations */
+    @keyframes cafeKenBurns {
+      0%, 100% { transform: scale(1.00) translate3d(0, 0, 0); }
+      50% { transform: scale(1.045) translate3d(-1.2%, -0.8%, 0); }
+    }
+    .cafe-ken-burns { animation: cafeKenBurns 9s ease-in-out infinite; will-change: transform; }
+
+    @keyframes cafeShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .cafe-shake { animation: cafeShake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+    @keyframes cafeHotspotPulse {
+      0% { transform: scale(0.9); opacity: 0.85; }
+      70% { transform: scale(1.65); opacity: 0; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+    .cafe-hotspot-ring { animation: cafeHotspotPulse 2.1s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+
+    @keyframes cafeBubblePop {
+      0% { opacity: 0; transform: translateY(8px) scale(0.92); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .cafe-bubble-pop { animation: cafeBubblePop 260ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+    @keyframes cafeSteamRise {
+      0% { opacity: 0; transform: translateY(6px) scale(0.85); }
+      40% { opacity: 0.85; }
+      100% { opacity: 0; transform: translateY(-20px) scale(1.18); }
+    }
+    .cafe-steam { animation: cafeSteamRise 2.2s ease-out infinite; }
+    .cafe-steam-2 { animation: cafeSteamRise 2.2s ease-out 0.75s infinite; }
+
+    @keyframes cafeFloatBurst {
+      0% { opacity: 0; transform: translateY(8px) scale(0.6); }
+      35% { opacity: 1; transform: translateY(-6px) scale(1.15); }
+      100% { opacity: 0; transform: translateY(-28px) scale(0.95); }
+    }
+    .cafe-burst { animation: cafeFloatBurst 1.1s ease-out forwards; }
+
+    @keyframes cafeGlowPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+      50% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+    }
+    .cafe-cta-pulse { animation: cafeGlowPulse 1.8s ease-in-out infinite; }
   </style>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-0">
@@ -624,7 +674,30 @@
     streakDays: 7,
     reviewsToday: 14,
     activeAudioKey: null,
-    toastTimer: null
+    toastTimer: null,
+
+    // Interactive Cafe Dialogue State
+    cafe: {
+      act: 0,
+      phase: 'prompt', // 'prompt' | 'animating' | 'interact' | 'wrong' | 'summary'
+      frameStep: 2,    // 0: Approach, 1: Transfer, 2: Outcome
+      animPrefix: null,
+      showNiqqud: true,
+      showTranslit: true,
+      showZh: false,
+      wrongIds: [],
+      lastWrong: null,
+      mistakes: 0,
+      stageInteracted: false,
+      hotspotTip: null,
+      burstEmoji: null,
+      showTranscript: false,
+      showMenuSheet: false,
+      tableProps: { menu: false, coffee: false, water: false, paid: false },
+      history: [],
+      animToken: 0,
+      shakeKey: 0
+    }
   };
 
   // =========================================================================
@@ -2593,39 +2666,757 @@
     document.getElementById('btn-sd-quiz')?.addEventListener('click', () => startQuiz('word', 'meaning'));
   }
 
+  // =========================================================================
+  // 8B. REDESIGNED INTERACTIVE CAFE DIALOGUE (5 ACTS + MULTI-INTERACTION STAGE)
+  // =========================================================================
+  const CAFE_IMG_BASE = '../ios/App/App/Assets.xcassets/';
+  const CAFE_WEBP_SETS = new Set(['CafeCoffeeApproach', 'CafeBillHappy']);
+  const cafeImg = (name) => `${CAFE_IMG_BASE}${name}.imageset/panel.${CAFE_WEBP_SETS.has(name) ? 'webp' : 'jpg'}`;
+  const CAFE_AUDIO_BASE = '../public/audio/';
+  let cafeAudioPlayer = null;
+
+  function playCafeAudio(file, he, meta) {
+    speakDemo(he, meta || '咖啡馆情景', 'cafe', state.speechRate);
+    if (!file) return;
+    try {
+      if (cafeAudioPlayer) { cafeAudioPlayer.pause(); cafeAudioPlayer = null; }
+      const audio = new Audio(`${CAFE_AUDIO_BASE}${file}`);
+      audio.playbackRate = state.speechRate || 1.0;
+      cafeAudioPlayer = audio;
+      audio.play().catch(() => {});
+    } catch (_) {}
+  }
+
+  const CAFE_MENU_ITEMS = [
+    { he: 'קָפֶה הָפוּךְ', unpointed: 'קפה הפוך', tr: 'kafeh hafuch', zh: '以色列奶咖（招牌）', price: '₪16', audio: 'he_878319b989ed.mp3', emoji: '☕' },
+    { he: 'כּוֹס מַיִם קָרִים', unpointed: 'כוס מים קרים', tr: 'kos mayim karim', zh: '冰水', price: '免费', audio: 'he_e6f241b1eb93.mp3', emoji: '💧' },
+    { he: 'סָלָט טָרִי', unpointed: 'סלט טרי', tr: 'salat tari', zh: '新鲜田园沙拉', price: '₪38', audio: 'he_e2dec2ad8872.mp3', emoji: '🥗' },
+    { he: 'בְּלִי סֻכָּר', unpointed: 'בלי סוכר', tr: 'bli sukar', zh: '备注：不加糖', price: '可选', audio: 'he_b30fa49886db.mp3', emoji: '✨' }
+  ];
+
+  const CAFE_ACTS = [
+    {
+      id: 'menu',
+      stepLabel: '入座',
+      title: '第一幕 · 入座要菜单',
+      sceneNote: '你刚在特拉维夫阳光咖啡馆坐下，店员笑着走来问候。你想先要一份菜单。',
+      baseImg: 'CafeMenuOrder',
+      barista: { he: 'שָׁלוֹם, מַה שְׁלוֹמְךָ?', unpointed: 'שלום, מה שלומך?', tr: 'Shalom, ma shlomkha?', zh: '你好，今天过得怎么样？', audio: 'he_235c2be58c29.mp3' },
+      thought: '想先看看菜单再点单…',
+      choices: [
+        { id: 'p-dine-1', ok: true, anim: null, outcomeImg: 'CafeMenuOrder', he: 'אֶפְשָׁר לְקַבֵּל תַּפְרִיט בְּבַקָּשָׁה?', unpointed: 'אפשר לקבל תפריט בבקשה?', tr: 'Efshar lekabel tafrit bevakasha?', zh: '请问可以给我一份菜单吗？', audio: 'he_d6b7fc53f0ff.mp3', baristaReply: 'בְּוַדַּאי! הִנֵּה הַתַּפְרִיט.', baristaReplyZh: '当然！这是菜单，请慢看。' },
+        { id: 'p-dine-3', ok: false, anim: null, outcomeImg: 'CafeWaterHappy', he: 'אֶפְשָׁר כּוֹס מַיִם קָרִים?', unpointed: 'אפשר כוס מים קרים?', tr: 'Efshar kos mayim karim?', zh: '可以给我一杯冷水吗？', audio: 'he_6bb5293bae3d.mp3', wrongTip: '店员先给你端来一杯冰水！想先要菜单的话，找找含 תַּפְרִיט（菜单）的句子。' },
+        { id: 'p-dine-7', ok: false, anim: null, outcomeImg: 'CafeMenuOrder', he: 'אֶפְשָׁר אֶת הַחֶשְׁבּוֹן בְּבַקָּשָׁה?', unpointed: 'אפשר את החשבון בבקשה?', tr: 'Efshar et ha-cheshbon bevakasha?', zh: '请问可以买单吗？', audio: 'he_c644ac8946f8.mp3', wrongTip: '还没点单就说买单啦！再选一次「菜单」吧。' }
+      ],
+      interact: {
+        label: '轻点接过菜单 · 翻看双语餐单',
+        emoji: '📜',
+        x: '46%', y: '68%',
+        action: 'openMenu',
+        doneText: '你翻开了特拉维夫双语菜单，锁定了招牌奶咖！',
+        propKey: 'menu',
+        burst: '📜✨',
+        tip: '💡 小贴士：אֶפְשָׁר (efshar) = 可以吗？是点单时最万能的礼貌开头！'
+      }
+    },
+    {
+      id: 'coffee',
+      stepLabel: '点单',
+      title: '第二幕 · 点一杯奶咖',
+      sceneNote: '店员端着香气扑鼻的咖啡托盘微笑走近，你准备点一杯以色列经典奶咖（Kafeh Hafuch）。',
+      baseImg: 'CafeCoffeeApproach',
+      barista: { he: 'לָשֶׁבֶת כָּאן אוֹ לָקַחַת?', unpointed: 'לשבת כאן או לקחת?', tr: 'Lashevet kan o lakakhat?', zh: '在这里喝还是带走？想点什么呢？', audio: 'he_11e0bed9dfb3.mp3' },
+      thought: '就坐在这里，点一杯热奶咖吧！',
+      choices: [
+        { id: 'p-dine-2', ok: true, animFrames: ['CafeCoffeeApproach', 'CafeTastingHappy'], outcomeImg: 'CafeTastingHappy', he: 'אֲנִי רוֹצֶה קָפֶה הָפוּךְ, בְּבַקָּשָׁה.', unpointed: 'אני רוצה קפה הפוך, בבקשה.', tr: 'Ani rotzeh kafeh hafuch, bevakasha.', zh: '请给我一杯奶咖。', audio: 'he_636074d9abd2.mp3', baristaReply: 'מְצֻיָּן! הִנֵּה הַקָּפֶה הֶהָפוּךְ שֶׁלְּךָ.', baristaReplyZh: '太棒了！热腾腾的招牌奶咖为你端上来了。' },
+        { id: 'p-dine-5', ok: false, anim: null, outcomeImg: 'CafeCoffeeApproach', he: 'הַאִם יֵשׁ מָנָה צִמְחוֹנִית?', unpointed: 'האם יש מנה צמחונית?', tr: 'Haim yesh manah tzimchonit?', zh: '请问有素食菜品吗？', audio: 'he_0cd9fc15a725.mp3', wrongTip: '你问了有没有素食菜品～现在想先点一杯奶咖（קָפֶה הָפוּךְ）哦！' },
+        { id: 'p-dine-14', ok: false, anim: null, outcomeImg: 'CafeCoffeeApproach', he: 'לָקַחַת, בְּבַקָּשָׁה.', unpointed: 'לקחת, בבקשה.', tr: 'Lakakhat, bevakasha.', zh: '请帮我打包带走。', audio: 'he_0b1027d10dba.mp3', wrongTip: '店员眨了眨眼：还没说要喝什么呢！先点一杯奶咖吧。' }
+      ],
+      interact: {
+        label: '轻点热咖啡杯 · 补充「不加糖」',
+        emoji: '☕',
+        x: '38%', y: '62%',
+        action: 'confirmNoSugar',
+        doneText: '你顺口补了一句：בְּלִי סֻכָּר, בְּבַקָּשָׁה.（请不要加糖）',
+        propKey: 'coffee',
+        burst: '☕💨',
+        audioOnTap: { file: 'he_04736b8acf05.mp3', he: 'בְּלִי סֻכָּר, בְּבַקָּשָׁה.', tr: 'Bli sukar, bevakasha.' },
+        tip: '💡 文化彩蛋：קָפֶה הָפוּךְ 字面是「倒过来的咖啡」；男性说 רוֹצֶה (rotzeh)，女性说 רוֹצָה (rotzah)。'
+      }
+    },
+    {
+      id: 'water',
+      stepLabel: '冷水',
+      title: '第三幕 · 顺便来杯冰水',
+      sceneNote: '午后阳光暖洋洋的，配着咖啡你想礼貌地向店员要一杯冰水解渴。',
+      baseImg: 'CafeWaterHappy',
+      barista: { he: 'עוֹד מַשֶּׁהוּ בֵּינְתַיִם?', unpointed: 'עוד משהו בינתיים?', tr: 'Od mashehu beintayim?', zh: '还需要点别的吗？', audio: null },
+      thought: '好渴，再来一杯冰水吧…',
+      choices: [
+        { id: 'p-dine-3', ok: true, anim: null, outcomeImg: 'CafeWaterHappy', he: 'אֶפְשָׁר כּוֹס מַיִם קָרִים?', unpointed: 'אפשר כוס מים קרים?', tr: 'Efshar kos mayim karim?', zh: '可以给我一杯冷水吗？', audio: 'he_6bb5293bae3d.mp3', baristaReply: 'בְּשִׂמְחָה! הִנֵּה מַיִם קָרִים.', baristaReplyZh: '乐意效劳！这是一杯冰水，请慢用。' },
+        { id: 'p-dine-1', ok: false, anim: null, outcomeImg: 'CafeMenuOrder', he: 'אֶפְשָׁר לְקַבֵּל תַּפְרִיט בְּבַקָּשָׁה?', unpointed: 'אפשר לקבל תפריט בבקשה?', tr: 'Efshar lekabel tafrit bevakasha?', zh: '请问可以给我一份菜单吗？', audio: 'he_d6b7fc53f0ff.mp3', wrongTip: '菜单已经在你手边啦！我们要的是冰水（מַיִם קָרִים）哦。' },
+        { id: 'p-dine-7', ok: false, anim: null, outcomeImg: 'CafeBillHappy', he: 'אֶפְשָׁר אֶת הַחֶשְׁבּוֹן בְּבַקָּשָׁה?', unpointed: 'אפשר את החשבון בבקשה?', tr: 'Efshar et ha-cheshbon bevakasha?', zh: '请问可以买单吗？', audio: 'he_c644ac8946f8.mp3', wrongTip: '咖啡都还没喝完呢，先别急着结账！选含 מַיִם（水）的那句。' }
+      ],
+      interact: {
+        label: '轻点冰水杯 · 清凉喝一口',
+        emoji: '💧',
+        x: '52%', y: '74%',
+        action: 'sipWater',
+        doneText: '冰凉清爽！你顺便记住了「水」就是 מַיִם (mayim)。',
+        propKey: 'water',
+        burst: '💧❄️✨',
+        audioOnTap: { file: 'he_e6f241b1eb93.mp3', he: 'מַיִם', tr: 'mayim · 水' },
+        tip: '💡 词法提示：מַיִם（水）在希伯来语中永远是复数形式，所以形容词「冷的」也用复数 קָרִים (karim)！'
+      }
+    },
+    {
+      id: 'taste',
+      stepLabel: '品尝',
+      title: '第四幕 · 品尝与赞美',
+      sceneNote: '你双手捧起温热的奶咖抿了一口，奶泡绵密香醇！店员微笑着祝你慢用。',
+      baseImg: 'CafeTastingHappy',
+      barista: { he: 'בְּתֵאָבוֹן!', unpointed: 'בתיאבון!', tr: 'Be-teavon!', zh: '请慢用（祝你好胃口）！', audio: 'he_b3f7fe607bc2.mp3' },
+      thought: '奶泡好绵密，太好喝了，夸一句吧！',
+      choices: [
+        { id: 'p-dine-4', ok: true, anim: null, outcomeImg: 'CafeTastingHappy', he: 'זֶה טָעִים מְאֹד!', unpointed: 'זה טעים מאוד!', tr: 'Zeh taim meod!', zh: '这非常好吃 / 好喝！', audio: 'he_7b7f77fdde54.mp3', baristaReply: 'תּוֹדָה רַבָּה! אֵיזֶה כֵּיף!', baristaReplyZh: '非常感谢！听你这么说真开心！' },
+        { id: 'p-dine-6', ok: false, anim: null, outcomeImg: 'CafeTastingHappy', he: 'בְּלִי סֻכָּר, בְּבַקָּשָׁה.', unpointed: 'בלי סוכר, בבקשה.', tr: 'Bli sukar, bevakasha.', zh: '请不要加糖。', audio: 'he_04736b8acf05.mp3', wrongTip: '这杯已经按你的要求没加糖啦～想夸它「非常美味」，找找 טָעִים (taim)！' },
+        { id: 'p-greet-2', ok: false, anim: null, outcomeImg: 'CafeTastingHappy', he: 'הַכֹּל בְּסֵדֶר, תּוֹדָה!', unpointed: 'הכול בסדר, תודה!', tr: 'Hakol beseder, todah!', zh: '一切都好，谢谢！', audio: 'he_733007ec2a08.mp3', wrongTip: '虽然很礼貌，但这里更想直接夸赞「太美味了」（זֶה טָעִים מְאֹד!）。' }
+      ],
+      interact: {
+        label: '轻点送出好评 · 与店员相视一笑',
+        emoji: '💛',
+        x: '68%', y: '34%',
+        action: 'cheerBarista',
+        doneText: '店员开心地笑起来，咖啡馆里洋溢着温暖的阳光！',
+        propKey: 'coffee',
+        burst: '💛☕✨',
+        audioOnTap: { file: 'he_dcd4c0d860a3.mp3', he: 'טָעִים', tr: 'taim · 美味的' },
+        tip: '💡 高频词：טָעִים (taim) 既能夸菜好吃，也能夸咖啡好喝；加上 מְאֹד (meod) 就是「非常」！'
+      }
+    },
+    {
+      id: 'bill',
+      stepLabel: '买单',
+      title: '第五幕 · 结账告别',
+      sceneNote: '惬意的咖啡时光结束，准备向店员礼貌地要账单结账离开。',
+      baseImg: 'CafeBillHappy',
+      barista: { he: 'הַכֹּל הָיָה בְּסֵדֶר?', unpointed: 'הכול היה בסדר?', tr: 'Hakol hayah beseder?', zh: '今天一切都还满意吗？', audio: null },
+      thought: '喝完啦，该礼貌地买单离开咯。',
+      choices: [
+        { id: 'p-dine-7', ok: true, anim: null, outcomeImg: 'CafeBillHappy', he: 'אֶפְשָׁר אֶת הַחֶשְׁבּוֹן בְּבַקָּשָׁה?', unpointed: 'אפשר את החשבון בבקשה?', tr: 'Efshar et ha-cheshbon bevakasha?', zh: '请问可以买单吗？', audio: 'he_c644ac8946f8.mp3', baristaReply: 'בְּוַדַּאי, הִנֵּה הַחֶשְׁבּוֹן. תּוֹדָה!', baristaReplyZh: '好的，这是账单。欢迎下次再来！' },
+        { id: 'p-dine-1', ok: false, anim: null, outcomeImg: 'CafeMenuOrder', he: 'אֶפְשָׁר לְקַבֵּל תַּפְרִיט בְּבַקָּשָׁה?', unpointed: 'אפשר לקבל תפריט בבקשה?', tr: 'Efshar lekabel tafrit bevakasha?', zh: '请问可以给我一份菜单吗？', audio: 'he_d6b7fc53f0ff.mp3', wrongTip: '店员以为你要加单！准备买单要找含 חֶשְׁבּוֹן（账单）的那句。' },
+        { id: 'p-dine-3', ok: false, anim: null, outcomeImg: 'CafeWaterHappy', he: 'אֶפְשָׁר כּוֹס מַיִם קָרִים?', unpointed: 'אפשר כוס מים קרים?', tr: 'Efshar kos mayim karim?', zh: '可以给我一杯冷水吗？', audio: 'he_6bb5293bae3d.mp3', wrongTip: '店员又端来一杯冰水！准备结账要说 הַחֶשְׁבּוֹן (ha-cheshbon)。' }
+      ],
+      interact: {
+        label: '轻点账单 · 付款并道别',
+        emoji: '🧾',
+        x: '49%', y: '66%',
+        action: 'payAndLeave',
+        doneText: '你挥手告别：לְהִתְרָאוֹת בְּקָרוֹב!（回头见！）',
+        propKey: 'paid',
+        burst: '🧾🎉👋',
+        audioOnTap: { file: 'he_23e50f1b3230.mp3', he: 'לְהִתְרָאוֹת בְּקָרוֹב!', tr: 'Lehitraot bekarov! · 回头见' },
+        tip: '💡 实战总结：תַּפְרִיט(菜单) → קָפֶה הָפוּךְ(奶咖) → מַיִם קָרִים(冰水) → טָעִים מְאֹד(超好喝) → חֶשְׁבּוֹן(账单)，一整套咖啡馆全流程通关！'
+      }
+    }
+  ];
+
+  function resetCafeState() {
+    state.cafe.animToken += 1;
+    Object.assign(state.cafe, {
+      act: 0,
+      phase: 'prompt',
+      frameStep: 2,
+      animPrefix: null,
+      wrongIds: [],
+      lastWrong: null,
+      mistakes: 0,
+      stageInteracted: false,
+      hotspotTip: null,
+      burstEmoji: null,
+      showTranscript: false,
+      showMenuSheet: false,
+      tableProps: { menu: false, coffee: false, water: false, paid: false },
+      history: []
+    });
+  }
+
+  function startCafeAct(actIdx) {
+    state.cafe.animToken += 1;
+    state.cafe.act = actIdx;
+    state.cafe.phase = 'prompt';
+    state.cafe.frameStep = 2;
+    state.cafe.animPrefix = null;
+    state.cafe.wrongIds = [];
+    state.cafe.lastWrong = null;
+    state.cafe.stageInteracted = false;
+    state.cafe.hotspotTip = null;
+    state.cafe.burstEmoji = null;
+    state.cafe.showMenuSheet = false;
+    const act = CAFE_ACTS[actIdx];
+    if (act && act.barista && act.barista.audio) {
+      playCafeAudio(act.barista.audio, act.barista.he, act.barista.tr);
+    }
+    renderAll(false);
+  }
+
+  function runCafeFrameSequence(frames, targetPhase, onComplete) {
+    const token = ++state.cafe.animToken;
+    state.cafe.animPrefix = frames;
+    state.cafe.phase = 'animating';
+    state.cafe.frameStep = 0;
+    renderAll(false);
+
+    if (frames.length <= 2) {
+      setTimeout(() => {
+        if (state.cafe.animToken !== token) return;
+        state.cafe.frameStep = frames.length - 1;
+        state.cafe.phase = targetPhase;
+        if (onComplete) onComplete();
+        renderAll(false);
+      }, 650);
+      return;
+    }
+
+    setTimeout(() => {
+      if (state.cafe.animToken !== token) return;
+      state.cafe.frameStep = 1;
+      renderAll(false);
+    }, 380);
+
+    setTimeout(() => {
+      if (state.cafe.animToken !== token) return;
+      state.cafe.frameStep = 2;
+      state.cafe.phase = targetPhase;
+      if (onComplete) onComplete();
+      renderAll(false);
+    }, 760);
+  }
+
+  function currentCafeImageName() {
+    const c = state.cafe;
+    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+    if (Array.isArray(c.animPrefix) && c.animPrefix.length > 0) {
+      const idx = Math.min(c.frameStep, c.animPrefix.length - 1);
+      return c.animPrefix[idx];
+    }
+    if (c.phase === 'interact') {
+      const sol = act.choices.find(ch => ch.ok);
+      return (sol && sol.outcomeImg) || act.baseImg;
+    }
+    if (c.phase === 'wrong' && c.lastWrong && c.lastWrong.outcomeImg) {
+      return c.lastWrong.outcomeImg;
+    }
+    return act.baseImg;
+  }
+
   function renderCafeComic() {
-    return `
-      <div class="view-enter space-y-3.5">
-        ${backHeader('咖啡馆点单 · 互动漫画')}
-        <div class="alef-card p-4 space-y-2.5 text-xs">
-          <div class="p-4 rounded-2xl text-white" style="background:linear-gradient(135deg,#D97706,#EA580C);">
-            <p class="text-base font-extrabold">☕ 场景：你刚在特拉维夫咖啡馆坐下</p>
-            <p class="opacity-90 mt-1">店员走过来，你想先要一份菜单。你会怎么说？</p>
+    const c = state.cafe;
+    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+    const heText = (obj) => c.showNiqqud ? obj.he : obj.unpointed;
+
+    // Summary View
+    if (c.phase === 'summary') {
+      const stars = c.mistakes === 0 ? 3 : c.mistakes <= 2 ? 2 : 1;
+      return `
+        <div class="view-enter space-y-3.5">
+          ${backHeader('特拉维夫咖啡馆 · 通关复盘')}
+          <div class="alef-hero p-4 text-white space-y-2.5" style="background:linear-gradient(135deg,#B45309,#D97706,#EA580C);">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/20">5 幕情景全部通关</span>
+              <span class="text-base tracking-wider">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>
+            </div>
+            <h3 class="text-lg font-extrabold">כָּל הַכָּבוֹד! 咖啡馆实战完成</h3>
+            <p class="text-xs opacity-90">从入座要菜单、点奶咖、要冰水、夸好喝到结账告别，你已完成完整特拉维夫点单对话（本轮小插曲 ${c.mistakes} 次）。</p>
+            <div class="flex items-center gap-2 pt-1 text-[11px] font-bold">
+              <span class="px-2.5 py-1 rounded-full bg-white/20">📜 菜单</span>
+              <span class="px-2.5 py-1 rounded-full bg-white/20">☕ 奶咖</span>
+              <span class="px-2.5 py-1 rounded-full bg-white/20">💧 冰水</span>
+              <span class="px-2.5 py-1 rounded-full bg-white/20">🧾 买单</span>
+            </div>
           </div>
-          ${[
-            ['אֶפְשָׁר תַּפְרִיט, בְּבַקָּשָׁה?', '请问可以给我菜单吗？', true, '😊 店员微笑着递来一份菜单！'],
-            ['אֶפְשָׁר כּוֹס מַיִם, בְּבַקָּשָׁה?', '麻烦来一杯水，谢谢。', false, '🥤 店员端来一杯冷水（还没拿菜单呢）。'],
-            ['הַחֶשְׁבּוֹן, בְּבַקָּשָׁה.', '麻烦结账，谢谢。', false, '🧾 店员把账单递给你（还没点餐哦）。']
-          ].map(([he, zh, ok, rep]) => `
-            <button data-cc-rep="${rep}" data-cc-ok="${ok}" class="w-full p-3 rounded-2xl border text-right space-y-1" style="border-color:var(--p-border);">
-              <p class="hebrew-print text-lg font-bold">${he}</p>
-              <p style="color:var(--p-muted);">${zh}</p>
-            </button>
-          `).join('')}
-          <div id="cc-feedback" class="hidden p-3 rounded-2xl font-bold"></div>
+
+          <div class="alef-card p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold">本场核心台词复盘（点击朗读）</span>
+              <span class="text-[10px] font-semibold" style="color:var(--p-muted);">${CAFE_ACTS.length} 句实战表达</span>
+            </div>
+            <div class="space-y-2">
+              ${CAFE_ACTS.map((a, idx) => {
+                const sol = a.choices.find(ch => ch.ok);
+                return `
+                  <button data-cc-speak-file="${sol.audio || ''}" data-cc-speak-he="${sol.he}" data-cc-speak-tr="${sol.tr}" class="spring-tap w-full p-2.5 rounded-2xl border text-left flex items-center gap-2.5" style="border-color:var(--p-border); background:var(--p-inset);">
+                    <span class="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-extrabold shrink-0" style="background:var(--p-surface); color:var(--p-accent);">${idx + 1}</span>
+                    <div class="flex-1 min-w-0">
+                      <p class="hebrew-print text-base font-bold text-right truncate">${sol.he}</p>
+                      <p class="text-[11px] font-medium truncate" style="color:var(--p-accent);">${sol.tr}</p>
+                      <p class="text-[11px] truncate" style="color:var(--p-muted);">${sol.zh}</p>
+                    </div>
+                    <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0" style="background:var(--p-surface);">🔊</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button id="cc-restart-btn" class="spring-tap py-3 rounded-2xl text-xs font-extrabold text-white shadow-md" style="background:linear-gradient(135deg,#0F7682,#2563EB);">↻ 再演一遍</button>
+            <button id="cc-replay-bill-btn" class="spring-tap py-3 rounded-2xl text-xs font-bold border" style="border-color:var(--p-border); background:var(--p-surface);">🎬 回到第 1 幕</button>
+          </div>
         </div>
+      `;
+    }
+
+    const imgName = currentCafeImageName();
+    const solution = act.choices.find(ch => ch.ok);
+    const showScrubber = !!c.animPrefix && (c.phase === 'animating' || c.phase === 'interact' || c.phase === 'wrong');
+    const isShaking = c.phase === 'wrong';
+
+    // Determine active speech bubble on stage
+    let stageBubble = null;
+    if (c.phase === 'prompt') {
+      stageBubble = { side: 'right', speaker: '店员', he: heText(act.barista), tr: act.barista.tr, zh: act.barista.zh, audio: act.barista.audio, tone: 'barista' };
+    } else if (c.phase === 'interact') {
+      stageBubble = { side: 'right', speaker: '店员回应', he: solution.baristaReply, tr: '', zh: solution.baristaReplyZh, audio: solution.audio, tone: 'success' };
+    } else if (c.phase === 'wrong' && c.lastWrong) {
+      stageBubble = { side: 'left', speaker: '你刚才说了…', he: heText(c.lastWrong), tr: c.lastWrong.tr, zh: c.lastWrong.zh, audio: c.lastWrong.audio, tone: 'wrong' };
+    }
+
+    return `
+      <div class="view-enter space-y-3">
+        ${backHeader('特拉维夫咖啡馆 · 互动情景', `
+          <button id="cc-toggle-transcript" class="spring-tap liquid-glass-subtle px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1">
+            <span>💬</span><span>${c.history.length}</span>
+          </button>
+        `)}
+
+        <!-- 5-Act Interactive Progress Stepper -->
+        <div class="flex items-center gap-1.5">
+          ${CAFE_ACTS.map((a, idx) => {
+            const active = idx === c.act;
+            const done = idx < c.act;
+            return `
+              <button data-cc-jump="${idx}" class="spring-tap flex-1 py-1.5 px-1 rounded-xl text-[10px] font-extrabold transition-all border" style="${active ? 'background:linear-gradient(135deg,#D97706,#EA580C); color:#fff; border-color:transparent;' : done ? 'background:var(--p-success-bg); color:var(--p-success); border-color:transparent;' : 'background:var(--p-surface); color:var(--p-muted); border-color:var(--p-border);'}">
+                ${done ? '✓ ' : `${idx + 1}.`}${a.stepLabel}
+              </button>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- INTERACTIVE CINEMA STAGE (Fixed Stage, Multi-Interaction Hotspots + Frame Animation) -->
+        <div class="alef-card overflow-hidden p-0">
+          <div id="cc-stage" class="relative w-full overflow-hidden bg-amber-950/90 ${isShaking ? 'cafe-shake' : ''}" style="aspect-ratio: 16 / 9.2;">
+            <img
+              src="${cafeImg(imgName)}"
+              alt="${act.title}"
+              class="w-full h-full object-cover ${c.phase === 'animating' ? '' : 'cafe-ken-burns'} transition-opacity duration-200"
+              onerror="this.style.opacity='0.25'"
+            />
+            <!-- Subtle warm vignette -->
+            <div class="pointer-events-none absolute inset-0" style="background:linear-gradient(180deg, rgba(15,23,42,0.34) 0%, rgba(15,23,42,0.02) 45%, rgba(15,23,42,0.52) 100%);"></div>
+
+            <!-- Top-left Act Tag & Accumulated Table Props -->
+            <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2 z-20">
+              <span class="liquid-glass px-2.5 py-1 rounded-full text-[10px] font-extrabold flex items-center gap-1.5" style="color:var(--p-ink);">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                <span>${act.title}</span>
+              </span>
+              <div class="flex items-center gap-1">
+                ${c.tableProps.menu ? `<button data-cc-prop="menu" class="spring-tap liquid-glass w-6 h-6 rounded-full text-xs flex items-center justify-center" title="查看菜单">📜</button>` : ''}
+                ${c.tableProps.coffee ? `<button data-cc-prop="coffee" class="spring-tap liquid-glass w-6 h-6 rounded-full text-xs flex items-center justify-center" title="热奶咖">☕</button>` : ''}
+                ${c.tableProps.water ? `<button data-cc-prop="water" class="spring-tap liquid-glass w-6 h-6 rounded-full text-xs flex items-center justify-center" title="冰水">💧</button>` : ''}
+                ${showScrubber ? `<button id="cc-replay-anim" class="spring-tap liquid-glass px-2 py-0.5 rounded-full text-[10px] font-bold" style="color:var(--p-ink);">↻ 重播</button>` : ''}
+              </div>
+            </div>
+
+            <!-- Rising Coffee Steam Overlay once ordered -->
+            ${c.tableProps.coffee ? `
+              <div class="pointer-events-none absolute left-[45%] bottom-[26%] z-10 flex gap-1.5 opacity-80">
+                <span class="cafe-steam text-sm text-white/90">〰</span>
+                <span class="cafe-steam-2 text-xs text-amber-100/90">〰</span>
+              </div>
+            ` : ''}
+
+            <!-- Floating Celebration Burst on Stage Interaction -->
+            ${c.burstEmoji ? `
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center z-30">
+                <span class="cafe-burst text-3xl drop-shadow-lg">${c.burstEmoji}</span>
+              </div>
+            ` : ''}
+
+            <!-- ALWAYS-ON Interactive Character Hotspots (Tap Barista / Customer / Props!) -->
+            ${c.phase !== 'animating' ? `
+              <!-- Customer Hotspot -->
+              <button data-cc-hotspot="customer" class="spring-tap absolute left-[24%] top-[44%] -translate-x-1/2 -translate-y-1/2 z-20 group" aria-label="点击顾客查看内心想法">
+                <span class="absolute inset-0 rounded-full bg-amber-300/60 cafe-hotspot-ring"></span>
+                <span class="relative flex items-center justify-center w-6 h-6 rounded-full bg-white/90 text-[11px] shadow-md border border-amber-400/70">💭</span>
+              </button>
+              <!-- Barista Hotspot -->
+              <button data-cc-hotspot="barista" class="spring-tap absolute left-[72%] top-[36%] -translate-x-1/2 -translate-y-1/2 z-20 group" aria-label="点击店员重听台词">
+                <span class="absolute inset-0 rounded-full bg-teal-300/60 cafe-hotspot-ring"></span>
+                <span class="relative flex items-center justify-center w-6 h-6 rounded-full bg-white/90 text-[11px] shadow-md border border-teal-400/70">🔊</span>
+              </button>
+            ` : ''}
+
+            <!-- DIRECT STAGE INTERACTION CTA (Second Interactive Animation Beat!) -->
+            ${c.phase === 'interact' && !c.stageInteracted ? `
+              <button id="cc-stage-interact" class="spring-tap cafe-cta-pulse absolute z-30 -translate-x-1/2 -translate-y-1/2 px-3.5 py-2 rounded-full text-xs font-extrabold text-white flex items-center gap-1.5 shadow-xl border border-white/50" style="left:${act.interact.x}; top:${act.interact.y}; background:linear-gradient(135deg,#D97706,#EA580C);">
+                <span class="text-sm">${act.interact.emoji}</span>
+                <span>${act.interact.label}</span>
+              </button>
+            ` : ''}
+
+            <!-- Hotspot Popover Tooltip -->
+            ${c.hotspotTip ? `
+              <div class="cafe-bubble-pop absolute bottom-2.5 left-2.5 right-2.5 z-30 liquid-glass rounded-2xl px-3 py-2 flex items-center justify-between gap-2 text-[11px]" style="color:var(--p-ink);">
+                <div class="min-w-0">
+                  <p class="font-extrabold truncate">${c.hotspotTip.title}</p>
+                  ${c.hotspotTip.he ? `<p class="hebrew-print text-sm font-bold text-right">${c.hotspotTip.he}</p>` : ''}
+                  <p class="text-[10px] opacity-85 truncate">${c.hotspotTip.sub}</p>
+                </div>
+                <button id="cc-close-tip" class="w-6 h-6 rounded-full bg-black/10 text-[10px] font-bold shrink-0">✕</button>
+              </div>
+            ` : ''}
+
+            <!-- Multi-Frame Handover Scrubber Bar -->
+            ${showScrubber && !c.hotspotTip ? `
+              <div class="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between gap-1.5">
+                <div class="liquid-glass rounded-full px-2 py-1 flex items-center gap-1 text-[10px] font-bold" style="color:var(--p-ink);">
+                  ${(Array.isArray(c.animPrefix) && c.animPrefix.length === 2 ? ['过场', '完成'] : ['递出', '传递', '接过']).map((lbl, i) => `
+                    <button data-cc-frame="${i}" class="px-2 py-0.5 rounded-full transition-all ${c.frameStep === i ? 'bg-amber-600 text-white' : 'opacity-70'}">${i + 1} ${lbl}</button>
+                  `).join('')}
+                </div>
+                <span class="liquid-glass px-2 py-1 rounded-full text-[10px] font-bold" style="color:var(--p-ink);">点击帧可定格回看</span>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Dialogue Speech Bubble Bar (Directly Attached to Stage, No Awkward Scroll Jump) -->
+          ${stageBubble ? `
+            <div class="p-3 border-t flex items-start gap-2.5" style="border-color:var(--p-border); background:${stageBubble.tone === 'success' ? 'var(--p-success-bg)' : stageBubble.tone === 'wrong' ? 'var(--p-error-bg)' : 'var(--p-surface)'};">
+              <button data-cc-speak-file="${stageBubble.audio || ''}" data-cc-speak-he="${stageBubble.he}" data-cc-speak-tr="${stageBubble.tr || stageBubble.zh}" class="spring-tap w-9 h-9 rounded-2xl flex items-center justify-center text-sm shrink-0 shadow-sm" style="background:var(--p-surface); color:var(--p-accent);" title="播放发音">🔊</button>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[10px] font-extrabold uppercase tracking-wider" style="color:${stageBubble.tone === 'success' ? 'var(--p-success)' : stageBubble.tone === 'wrong' ? 'var(--p-error)' : 'var(--p-accent)'};">${stageBubble.speaker}</span>
+                  ${c.phase === 'prompt' ? `<span class="text-[10px]" style="color:var(--p-muted);">轻点画面人物可互动</span>` : ''}
+                </div>
+                <p class="hebrew-print text-[19px] font-bold text-right leading-snug mt-0.5">${stageBubble.he}</p>
+                ${c.showTranslit && stageBubble.tr ? `<p class="text-[11px] font-semibold mt-0.5" style="color:var(--p-accent);">${stageBubble.tr}</p>` : ''}
+                ${(c.showZh || stageBubble.tone !== 'barista') && stageBubble.zh ? `<p class="text-[11px] mt-0.5" style="color:var(--p-muted);">${stageBubble.zh}</p>` : ''}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- 3-Tier Learning Scaffolding Bar (Niqqud / Translit / Chinese) -->
+        <div class="flex items-center justify-between gap-1.5 px-1">
+          <div class="flex items-center gap-1.5">
+            ${[
+              ['showNiqqud', '元音点'],
+              ['showTranslit', '音译'],
+              ['showZh', '中文']
+            ].map(([key, label]) => `
+              <button data-cc-toggle="${key}" class="spring-tap px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all" style="${c[key] ? 'background:var(--p-accent); color:#fff; border-color:transparent;' : 'background:var(--p-surface); color:var(--p-muted); border-color:var(--p-border);'}">${c[key] ? '✓ ' : ''}${label}</button>
+            `).join('')}
+          </div>
+          <span class="text-[10px] font-semibold" style="color:var(--p-muted);">第 ${c.act + 1}/${CAFE_ACTS.length} 幕</span>
+        </div>
+
+        <!-- Interactive Bilingual Menu Sheet (Opened by Tapping Menu Prop!) -->
+        ${c.showMenuSheet ? `
+          <div class="cafe-bubble-pop alef-card p-3.5 space-y-2 border-2" style="border-color:rgba(217,119,6,0.45);">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold">📜 特拉维夫双语菜单 · 点击词汇听读音</span>
+              <button id="cc-close-menu" class="w-6 h-6 rounded-full text-xs font-bold" style="background:var(--p-inset);">✕</button>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              ${CAFE_MENU_ITEMS.map(item => `
+                <button data-cc-speak-file="${item.audio}" data-cc-speak-he="${item.he}" data-cc-speak-tr="${item.tr}" class="spring-tap p-2.5 rounded-2xl text-left border space-y-0.5" style="border-color:var(--p-border); background:var(--p-inset);">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm">${item.emoji}</span>
+                    <span class="text-[10px] font-bold" style="color:var(--p-accent);">${item.price}</span>
+                  </div>
+                  <p class="hebrew-print text-sm font-bold text-right">${c.showNiqqud ? item.he : item.unpointed}</p>
+                  <p class="text-[10px] font-medium truncate" style="color:var(--p-muted);">${item.zh}</p>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Expandable Dialogue Transcript Drawer -->
+        ${c.showTranscript ? `
+          <div class="cafe-bubble-pop alef-card p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold">💬 本场对话记录</span>
+              <button id="cc-close-transcript" class="text-[11px] font-bold" style="color:var(--p-accent);">收起</button>
+            </div>
+            ${c.history.length === 0 ? `<p class="text-[11px]" style="color:var(--p-muted);">选出第一句台词后，对话记录会自动汇总在这里。</p>` : `
+              <div class="space-y-1.5 max-h-40 overflow-y-auto">
+                ${c.history.map(item => `
+                  <button data-cc-speak-file="${item.audio || ''}" data-cc-speak-he="${item.he}" data-cc-speak-tr="${item.tr || item.zh}" class="w-full p-2 rounded-xl flex items-center justify-between gap-2 text-left" style="background:${item.speaker === 'user' ? 'var(--p-success-bg)' : 'var(--p-inset)'};">
+                    <span class="text-[10px] font-extrabold shrink-0" style="color:var(--p-muted);">${item.speaker === 'user' ? '你' : '店员'}</span>
+                    <div class="flex-1 min-w-0 text-right">
+                      <p class="hebrew-print text-sm font-bold truncate">${c.showNiqqud ? item.he : item.unpointed}</p>
+                      <p class="text-[10px] truncate" style="color:var(--p-muted);">${item.zh}</p>
+                    </div>
+                  </button>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        ` : ''}
+
+        <!-- ACTION AREA: Choices OR Post-Interaction Continuation -->
+        ${c.phase === 'interact' ? `
+          <div class="alef-card p-3.5 space-y-2.5">
+            ${c.stageInteracted ? `
+              <div class="p-2.5 rounded-2xl text-xs font-bold flex items-start gap-2" style="background:var(--p-success-bg); color:var(--p-success);">
+                <span>✓</span>
+                <span>${act.interact.doneText}</span>
+              </div>
+              <p class="text-[11px] leading-relaxed" style="color:var(--p-muted);">${act.interact.tip}</p>
+              <button id="cc-next-act" class="spring-tap w-full py-3 rounded-2xl text-xs font-extrabold text-white shadow-md" style="background:linear-gradient(135deg,#0F7682,#2563EB);">
+                ${c.act < CAFE_ACTS.length - 1 ? `进入第 ${c.act + 2} 幕：${CAFE_ACTS[c.act + 1].stepLabel} →` : '完成点单 · 查看复盘 🎉'}
+              </button>
+            ` : `
+              <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-2xl flex items-center justify-center text-lg shrink-0" style="background:var(--p-warn-bg);">${act.interact.emoji}</span>
+                <div class="flex-1">
+                  <p class="text-xs font-extrabold">请先在上方动画画面中互动！</p>
+                  <p class="text-[11px]" style="color:var(--p-muted);">轻点画面中闪烁的「${act.interact.label}」按钮触发下一段交互。</p>
+                </div>
+              </div>
+              <button id="cc-stage-interact-alt" class="spring-tap w-full py-2.5 rounded-2xl text-xs font-bold border" style="border-color:rgba(217,119,6,0.4); color:#B45309; background:var(--p-warn-bg);">
+                ${act.interact.emoji} ${act.interact.label}
+              </button>
+            `}
+          </div>
+        ` : `
+          <div class="alef-card p-3.5 space-y-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <p class="text-xs font-bold leading-relaxed">${act.sceneNote}</p>
+            </div>
+
+            ${c.phase === 'wrong' && c.lastWrong ? `
+              <div class="cafe-bubble-pop p-2.5 rounded-2xl text-[11px] font-bold leading-relaxed" style="background:var(--p-warn-bg); color:var(--p-warn);">
+                😅 ${c.lastWrong.wrongTip}
+              </div>
+            ` : ''}
+
+            <div class="space-y-2">
+              ${act.choices.map(ch => {
+                const excluded = c.wrongIds.includes(ch.id);
+                return `
+                  <div class="flex items-center gap-1.5 p-1.5 rounded-2xl border transition-all" style="border-color:${excluded ? 'var(--p-error)' : 'var(--p-border)'}; background:${excluded ? 'var(--p-error-bg)' : 'var(--p-inset)'}; opacity:${excluded ? '0.62' : '1'};">
+                    <button data-cc-preview="${ch.id}" class="spring-tap w-9 h-9 rounded-xl flex items-center justify-center text-xs shrink-0" style="background:var(--p-surface); color:var(--p-accent);" title="先试听这句">🔊</button>
+                    <button data-cc-choose="${ch.id}" ${excluded || c.phase === 'animating' ? 'disabled' : ''} class="spring-tap flex-1 text-right px-2 py-1 min-w-0">
+                      <p class="hebrew-print text-[18px] font-bold leading-snug">${heText(ch)}</p>
+                      ${c.showTranslit ? `<p class="text-[11px] font-medium truncate" style="color:var(--p-accent);">${ch.tr}</p>` : ''}
+                      ${c.showZh ? `<p class="text-[11px] truncate" style="color:var(--p-muted);">${ch.zh}</p>` : ''}
+                    </button>
+                    ${excluded ? `<span class="text-xs font-bold px-1.5" style="color:var(--p-error);">✕</span>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `}
       </div>
     `;
   }
+
+  function triggerCafeStageInteraction() {
+    const c = state.cafe;
+    const act = CAFE_ACTS[c.act];
+    if (!act) return;
+    c.stageInteracted = true;
+    c.tableProps[act.interact.propKey] = true;
+    c.burstEmoji = act.interact.burst;
+    playTone(840, 0.14);
+    if (act.interact.action === 'openMenu') {
+      c.showMenuSheet = true;
+    }
+    if (act.interact.audioOnTap) {
+      playCafeAudio(act.interact.audioOnTap.file, act.interact.audioOnTap.he, act.interact.audioOnTap.tr);
+    }
+    renderAll(false);
+    const token = c.animToken;
+    setTimeout(() => {
+      if (state.cafe.animToken !== token) return;
+      state.cafe.burstEmoji = null;
+      renderAll(false);
+    }, 1150);
+  }
+
   function bindCafeComic() {
-    document.querySelectorAll('[data-cc-rep]').forEach(b => b.addEventListener('click', () => {
-      const ok = b.getAttribute('data-cc-ok') === 'true';
-      const el = document.getElementById('cc-feedback');
-      el.textContent = b.getAttribute('data-cc-rep');
-      el.style.background = ok ? 'var(--p-success-bg)' : 'var(--p-warn-bg)';
-      el.style.color = ok ? 'var(--p-success)' : 'var(--p-warn)';
-      el.classList.remove('hidden'); playTone(ok ? 720 : 380, 0.14);
-    }));
+    const c = state.cafe;
+    const act = CAFE_ACTS[c.act] || CAFE_ACTS[0];
+
+    // Summary bindings
+    document.getElementById('cc-restart-btn')?.addEventListener('click', () => {
+      resetCafeState();
+      renderAll(true);
+    });
+    document.getElementById('cc-replay-bill-btn')?.addEventListener('click', () => {
+      resetCafeState();
+      renderAll(true);
+    });
+
+    // Speak any phrase button
+    document.querySelectorAll('[data-cc-speak-he]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        playCafeAudio(btn.getAttribute('data-cc-speak-file'), btn.getAttribute('data-cc-speak-he'), btn.getAttribute('data-cc-speak-tr'));
+      });
+    });
+
+    // Act stepper jump
+    document.querySelectorAll('[data-cc-jump]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-cc-jump'));
+        startCafeAct(idx);
+      });
+    });
+
+    // Scaffolding toggles (Niqqud / Translit / Chinese)
+    document.querySelectorAll('[data-cc-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-cc-toggle');
+        c[key] = !c[key];
+        renderAll(false);
+      });
+    });
+
+    // Transcript toggle
+    document.getElementById('cc-toggle-transcript')?.addEventListener('click', () => {
+      c.showTranscript = !c.showTranscript;
+      renderAll(false);
+    });
+    document.getElementById('cc-close-transcript')?.addEventListener('click', () => {
+      c.showTranscript = false;
+      renderAll(false);
+    });
+
+    // Menu sheet close & prop badges
+    document.getElementById('cc-close-menu')?.addEventListener('click', () => {
+      c.showMenuSheet = false;
+      renderAll(false);
+    });
+    document.querySelectorAll('[data-cc-prop]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const prop = btn.getAttribute('data-cc-prop');
+        if (prop === 'menu') {
+          c.showMenuSheet = !c.showMenuSheet;
+          playCafeAudio('he_aec090d088e4.mp3', 'תַּפְרִיט', 'tafrit · 菜单');
+          renderAll(false);
+        } else if (prop === 'coffee') {
+          c.burstEmoji = '☕💨';
+          c.hotspotTip = { title: '☕ 你的特拉维夫奶咖', he: 'קָפֶה הָפוּךְ', sub: 'kafeh hafuch · 热气腾腾，不加糖' };
+          playCafeAudio('he_878319b989ed.mp3', 'קָפֶה', 'kafeh · 咖啡');
+          renderAll(false);
+        } else if (prop === 'water') {
+          c.burstEmoji = '💧❄️';
+          c.hotspotTip = { title: '💧 冰水', he: 'מַיִם קָרִים', sub: 'mayim karim · 清凉解渴' };
+          playCafeAudio('he_e6f241b1eb93.mp3', 'מַיִם', 'mayim · 水');
+          renderAll(false);
+        }
+      });
+    });
+
+    // Stage character hotspots
+    document.querySelectorAll('[data-cc-hotspot]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const who = btn.getAttribute('data-cc-hotspot');
+        if (who === 'customer') {
+          c.hotspotTip = { title: '💭 你的内心想法', he: '', sub: act.thought };
+          playTone(540, 0.08);
+        } else if (who === 'barista') {
+          c.hotspotTip = { title: '👩‍🍳 店员刚刚说', he: act.barista.he, sub: `${act.barista.tr} · ${act.barista.zh}` };
+          playCafeAudio(act.barista.audio, act.barista.he, act.barista.tr);
+        }
+        renderAll(false);
+      });
+    });
+    document.getElementById('cc-close-tip')?.addEventListener('click', () => {
+      c.hotspotTip = null;
+      renderAll(false);
+    });
+
+    // 3-Frame Scrubber & Replay
+    document.getElementById('cc-replay-anim')?.addEventListener('click', () => {
+      if (!c.animPrefix) return;
+      const targetPhase = c.phase === 'wrong' ? 'wrong' : 'interact';
+      runCafeFrameSequence(c.animPrefix, targetPhase);
+    });
+    document.querySelectorAll('[data-cc-frame]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        c.animToken += 1;
+        c.frameStep = Number(btn.getAttribute('data-cc-frame'));
+        if (c.phase === 'animating') c.phase = c.lastWrong ? 'wrong' : 'interact';
+        renderAll(false);
+      });
+    });
+
+    // Stage direct interaction CTA (on stage OR alt button)
+    document.getElementById('cc-stage-interact')?.addEventListener('click', triggerCafeStageInteraction);
+    document.getElementById('cc-stage-interact-alt')?.addEventListener('click', triggerCafeStageInteraction);
+
+    // Next Act button
+    document.getElementById('cc-next-act')?.addEventListener('click', () => {
+      if (c.act < CAFE_ACTS.length - 1) {
+        startCafeAct(c.act + 1);
+      } else {
+        c.phase = 'summary';
+        playTone(880, 0.16);
+        renderAll(true);
+      }
+    });
+
+    // Preview choice audio
+    document.querySelectorAll('[data-cc-preview]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ch = act.choices.find(x => x.id === btn.getAttribute('data-cc-preview'));
+        if (ch) playCafeAudio(ch.audio, ch.he, ch.tr);
+      });
+    });
+
+    // Choose dialogue line
+    document.querySelectorAll('[data-cc-choose]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ch = act.choices.find(x => x.id === btn.getAttribute('data-cc-choose'));
+        if (!ch || c.wrongIds.includes(ch.id)) return;
+        c.hotspotTip = null;
+        playCafeAudio(ch.audio, ch.he, ch.tr);
+
+        if (ch.ok) {
+          playTone(740, 0.14);
+          c.lastWrong = null;
+          c.history.push(
+            { speaker: 'barista', he: act.barista.he, unpointed: act.barista.unpointed, tr: act.barista.tr, zh: act.barista.zh, audio: act.barista.audio },
+            { speaker: 'user', he: ch.he, unpointed: ch.unpointed, tr: ch.tr, zh: ch.zh, audio: ch.audio }
+          );
+          if (Array.isArray(ch.animFrames) && ch.animFrames.length > 1) {
+            runCafeFrameSequence(ch.animFrames, 'interact');
+          } else {
+            c.animPrefix = null;
+            c.phase = 'interact';
+            renderAll(false);
+          }
+        } else {
+          playTone(340, 0.16);
+          c.mistakes += 1;
+          c.wrongIds.push(ch.id);
+          c.lastWrong = ch;
+          if (Array.isArray(ch.animFrames) && ch.animFrames.length > 1) {
+            runCafeFrameSequence(ch.animFrames, 'wrong');
+          } else {
+            c.animPrefix = null;
+            c.phase = 'wrong';
+            renderAll(false);
+          }
+        }
+      });
+    });
   }
 
   // =========================================================================

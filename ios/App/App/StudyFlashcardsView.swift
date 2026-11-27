@@ -72,7 +72,7 @@ struct PracticeCenterView: View {
                                     .padding(.vertical, 2)
                                     .background(progress.theme.reminderSurface, in: Capsule())
                             }
-                            Text("选对希伯来语台词，体验真实情景回应")
+                            Text("5 幕特拉维夫点单情景 · 支持画面点击互动")
                                 .font(.caption)
                                 .foregroundStyle(progress.theme.mutedInk)
                         }
