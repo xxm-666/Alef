@@ -85,8 +85,7 @@ struct WordsView: View {
         let activePack = currentPack
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize,
                   showsScrollToTop: true) {
-            StudyHeading(title: "内容库",
-                         eyebrow: "LIBRARY · \(content.words.count) 词 · \(content.phrases.count) 短语 · \(content.readings.count) 阅读")
+            StudyHeading(title: "内容库", eyebrow: "LIBRARY")
             if activePack != nil {
                 searchControls
             }

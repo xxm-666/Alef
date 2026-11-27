@@ -33,9 +33,19 @@ struct StudyRulesView: View {
         }
     }
 
+    private var quickSyllables: [(syllable: String, sound: String)] {
+        guard let consonant = content.consonants.first(where: { $0.id == "bet" }) ?? content.consonants.first else {
+            return []
+        }
+        let vowelIDs = ["patach", "chirik", "segol", "cholam", "shuruk"]
+        return vowelIDs.compactMap { id in
+            guard let vowel = content.vowels.first(where: { $0.id == id }) else { return nil }
+            return (consonant.glyph + vowel.mark + (vowel.suffix ?? ""), consonant.roman + vowel.vowelRoman)
+        }
+    }
+
     private var overview: some View {
-        let quickSyllables = [("בַּ", "ba"), ("בִּ", "bi"), ("בֶּ", "be"), ("בֹּ", "bo"), ("בֻּ", "bu")]
-        return StudyPage {
+        StudyPage {
             StudyHeading(title: "规则", eyebrow: "RULES & LAB")
             StudyHeroCard(colors: progress.theme.indigoGradient, spacing: 12) {
                 HStack(alignment: .top) {
@@ -60,7 +70,7 @@ struct StudyRulesView: View {
 
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
-                        ForEach(quickSyllables, id: \.0) { syllable, sound in
+                        ForEach(quickSyllables, id: \.syllable) { syllable, sound in
                             Button {
                                 audio.speak(syllable, rate: progress.speechRate, bundledOnly: true)
                             } label: {
@@ -73,6 +83,7 @@ struct StudyRulesView: View {
                                         .opacity(0.88)
                                 }
                                 .foregroundStyle(Color.white)
+                                .padding(.horizontal, 8)
                                 .frame(minWidth: 50, minHeight: 50)
                                 .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay {
