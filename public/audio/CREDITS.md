@@ -504,11 +504,13 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 ## Piper Noa 合成音频
 
+App Store 版继续从仓库的 `build/app-store-audio/` 打包这 428 段原录音。
 使用 thewh1teagle 的 [Piper Hebrew Noa 模型](https://huggingface.co/thewh1teagle/piper-he-noa)生成，模型采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。
 输入为带重音的希伯来语 IPA。生成结果经过响度调整并转为 MP3，片段的 ID3 标签附有模型和许可链接。
 
 ## eSpeak NG 合成音频
 
+App Store 版继续从仓库的 `build/app-store-audio/` 打包这 224 段原录音，其中 19 段见下文「情景对白与词汇校订音频」。
 第七批词汇中的 205 段补充发音由 [eSpeak NG 1.52](https://github.com/espeak-ng/espeak-ng) 的希伯来语语音生成。
 输入使用词条的现代希伯来语音素和重音，音频经静音裁剪后转为单声道 MP3，ID3 标签标注了合成来源。
 
@@ -530,4 +532,4 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 ## Fish Audio 合成音频
 
-当前侧载版使用本批次的 1,477 段录音，包括 1,200 段原有发音和 277 段补充的词条例句与语法示例。素材提供者确认其中 1,459 段通过 OpenRouter 使用 Fish Audio 的 `fish-audio/drama-3` 生成。另有 18 段由素材提供者另行上传，包括 6 段字母名、10 段拼读音节和 2 段词汇发音，生成模型待确认。仓库记录了每段录音的模型与导入文件的 SHA-256。本批次的商业分发授权待确认，App Store 打包继续按现有规则筛选录音。[逐文件清单](FISH-AUDIO.csv)
+当前侧载版有 2,111 段标记为 Fish Audio `fish-audio/drama-3` 的录音，其中 652 段替换了原先的 Piper Noa 和 eSpeak NG 发音。另有 18 段由素材提供者另行上传，包括 6 段字母名、10 段拼读音节和 2 段词汇发音，生成模型待确认。仓库记录了这些录音的模型与导入文件的 SHA-256。新录音的商业分发授权待确认，App Store 版继续使用来源与许可有记录的录音。[逐文件清单](FISH-AUDIO.csv)
