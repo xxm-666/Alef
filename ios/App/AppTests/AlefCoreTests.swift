@@ -142,6 +142,7 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(decoded.lapses, 0)
         XCTAssertTrue(decoded.isValid)
         XCTAssertNil(decoded.lastReview)
+        XCTAssertEqual(decoded.proficiencyReferenceDate, decoded.reviewDate.addingTimeInterval(-7 * 86_400))
 
         let legacyLearningJson = #"{"nextReviewAt":1795392000000,"intervalDays":1}"#
         let decodedLearning = try JSONDecoder().decode(ReviewSchedule.self, from: Data(legacyLearningJson.utf8))
@@ -1983,6 +1984,14 @@ final class AlefCoreTests: XCTestCase {
         progress.recordWordPractice("shalom", correct: false, date: day0)
         XCTAssertEqual(progress.wordProficiency("shalom", at: day0), 70)
         XCTAssertEqual(progress.effectiveWordMastery("shalom", at: day0), .learning)
+
+        let later = day0.addingTimeInterval(2 * 86_400)
+        let proficiencyBeforePractice = progress.wordProficiency("shalom", at: later)
+        progress.recordWordPractice("shalom", correct: true, date: later)
+        let latest = try XCTUnwrap(progress.schedule["shalom"])
+        XCTAssertEqual(latest.proficiencyReferenceDate, later)
+        XCTAssertEqual(latest.proficiency(at: later), proficiencyBeforePractice + 15)
+        XCTAssertEqual(latest.nextReviewAt, initialReviewAt)
 
         // Same for letters.
         progress.recordLetterPractice("alef", correct: true, date: day0)

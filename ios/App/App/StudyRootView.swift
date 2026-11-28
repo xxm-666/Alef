@@ -775,7 +775,8 @@ struct StudyProficiencyCard: View {
 
 struct StudyMemoryCurveEntry: View {
     enum Item {
-        case letter, word
+        case letter(String)
+        case word(String)
 
         var reviewInstructions: String {
             switch self {
@@ -793,7 +794,6 @@ struct StudyMemoryCurveEntry: View {
     }
 
     @State private var showsCurve = false
-    let schedule: ReviewSchedule?
     let item: Item
 
     var body: some View {
@@ -805,7 +805,7 @@ struct StudyMemoryCurveEntry: View {
         }
         .sheet(isPresented: $showsCurve) {
             NavigationStack {
-                StudyMemoryCurveView(schedule: schedule, item: item)
+                StudyMemoryCurveView(item: item)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("完成") { showsCurve = false }
@@ -818,86 +818,113 @@ struct StudyMemoryCurveEntry: View {
 
 private struct StudyMemoryCurveView: View {
     @Environment(StudyProgress.self) private var progress
-    let schedule: ReviewSchedule?
     let item: StudyMemoryCurveEntry.Item
 
+    private var record: (schedule: ReviewSchedule?, mastery: Mastery) {
+        switch item {
+        case .letter(let id): (progress.letterSchedule[id], progress.letterMastery[id] ?? .unlearned)
+        case .word(let id): (progress.schedule[id], progress.wordMastery[id] ?? .unlearned)
+        }
+    }
+
     var body: some View {
-        StudyPage {
-            if let schedule, schedule.intervalDays > 0, schedule.intervalDays <= ReviewSchedule.maxIntervalDays,
-               let startDate = Calendar.current.date(byAdding: .day, value: -schedule.intervalDays, to: schedule.reviewDate) {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            let (schedule, mastery) = record
+            StudyPage {
+                if let schedule {
+                    let now = timeline.date
+                    let start = schedule.proficiencyReferenceDate
+                    StudyCard {
+                        StudySectionTitle("当前熟练度")
+                        Text("\(schedule.proficiency(at: now, mastery: mastery)) / 100")
+                            .font(.title2.bold().monospacedDigit())
+                        curve(schedule: schedule, mastery: mastery, now: now)
+                        Text(schedule.reviewDate >= start
+                             ? "圆点是现在，虚线是复习日期。横轴从本轮起点算起，分数为模型估算。"
+                             : "圆点是现在。复习日期早于本轮起点，见下方排程。分数为模型估算。")
+                            .font(.footnote)
+                            .foregroundStyle(progress.theme.mutedInk)
+                    }
+                    StudyCard {
+                        if schedule.lastReview?.date != start {
+                            StudyRow(title: schedule.updatedAt == nil ? "本轮起点（推算）" : "本轮起点", symbol: "clock",
+                                     subtitle: start.formatted(date: .abbreviated, time: .shortened), chevron: false)
+                        }
+                        if let lastReview = schedule.lastReview {
+                            StudyRow(title: lastReview.date == start ? "最近正式复习（本轮起点）" : "最近正式复习",
+                                     symbol: "clock.arrow.circlepath",
+                                     subtitle: lastReview.date.formatted(date: .abbreviated, time: .shortened),
+                                     value: item.resultLabel(for: lastReview.grade), chevron: false)
+                        }
+                        StudyRow(title: schedule.isDue(at: now) ? "下次复习 · 已到期" : "下次复习", symbol: "calendar",
+                                 subtitle: schedule.reviewDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
+                        StudyRow(title: "当前间隔", symbol: "arrow.left.and.right",
+                                 value: schedule.intervalLabel, chevron: false)
+                    }
+                } else {
+                    ContentUnavailableView("暂无记忆曲线", systemImage: "chart.line.downtrend.xyaxis",
+                                           description: Text("完成一次练习或复习后，就能查看熟练度的变化。"))
+                }
                 StudyCard {
-                    StudySectionTitle("预计记忆保留")
-                    curve(interval: Double(schedule.intervalDays))
-                    Text("虚线标出下次复习。示意曲线从 100% 逐渐下降，并以计划复习日的 80% 为参考。百分比是模型假设，实际记忆因人而异。")
-                        .font(.footnote)
+                    StudySectionTitle("怎样算一次复习")
+                    Text(item.reviewInstructions)
+                    Text("普通练习会更新熟练度。同轮补练计入练习次数，沿用首次作答的排程。")
                         .foregroundStyle(progress.theme.mutedInk)
                 }
-                StudyCard {
-                    if let lastReview = schedule.lastReview {
-                        StudyRow(title: "最近正式复习", symbol: "clock",
-                                 subtitle: lastReview.date.formatted(date: .abbreviated, time: .shortened),
-                                 value: item.resultLabel(for: lastReview.grade), chevron: false)
-                    } else {
-                        StudyRow(title: "本轮起点（推算）", symbol: "clock",
-                                 subtitle: startDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
-                    }
-                    scheduleRow(schedule)
-                    StudyRow(title: "当前间隔", symbol: "arrow.left.and.right",
-                             value: schedule.intervalLabel, chevron: false)
-                }
-            } else if let schedule {
-                StudyCard { scheduleRow(schedule) }
-                Text("这条排程没有可用于绘制曲线的复习间隔。完成一次复习后即可查看。")
-                    .foregroundStyle(progress.theme.mutedInk)
-            } else {
-                ContentUnavailableView("暂无复习安排", systemImage: "chart.line.downtrend.xyaxis",
-                                       description: Text("将此项目标记为「学习中」，即可安排第一次复习。"))
+                .font(.subheadline)
             }
-            StudyCard {
-                StudySectionTitle("怎样算一次复习")
-                Text(item.reviewInstructions)
-                Text("首次答错会安排更早再练。同轮补练计入练习次数，沿用首次作答安排的复习时间。")
-                    .foregroundStyle(progress.theme.mutedInk)
-            }
-            .font(.subheadline)
         }
         .navigationTitle("记忆曲线")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func scheduleRow(_ schedule: ReviewSchedule) -> some View {
-        StudyRow(title: schedule.isDue ? "下次复习 · 已到期" : "下次复习", symbol: "calendar",
-                 subtitle: schedule.reviewDate.formatted(date: .abbreviated, time: .shortened), chevron: false)
-    }
+    private func curve(schedule: ReviewSchedule, mastery: Mastery, now: Date) -> some View {
+        let start = schedule.proficiencyReferenceDate
+        let secondsPerDay = 86_400.0
+        let today = max(0, now.timeIntervalSince(start) / secondsPerDay)
+        let reviewDay = schedule.reviewDate.timeIntervalSince(start) / secondsPerDay
+        let neededDays = max(today, reviewDay) + 1
+        let endDay = [14.0, 30, 60, 90, 180, 365].first { $0 >= neededDays } ?? ceil(neededDays / 90) * 90
+        let tickDays = [0.0, floor(endDay / 2), endDay]
+        let graceDay = Double(max(1, schedule.intervalDays)) / 2
+        var sampleDays = Set((0...80).map { Double($0) * endDay / 80 })
+        sampleDays.insert(today)
+        if graceDay <= endDay { sampleDays.insert(graceDay) }
 
-    private func curve(interval: Double) -> some View {
-        Chart {
-            ForEach(0...40, id: \.self) { step in
-                let fraction = Double(step) / 40 * 1.5
-                // Illustrative exponential decay, anchored at 80% on the scheduled review day.
-                LineMark(x: .value("排程后的天数", fraction * interval),
-                         y: .value("预计记忆保留", pow(0.8, fraction)))
+        return Chart {
+            if reviewDay >= 0 {
+                RuleMark(x: .value("下次复习", reviewDay))
+                    .foregroundStyle(progress.theme.mutedInk)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            }
+            ForEach(sampleDays.sorted(), id: \.self) { day in
+                let date = start.addingTimeInterval(day * secondsPerDay)
+                LineMark(x: .value("经过天数", day),
+                         y: .value("熟练度", schedule.proficiency(at: date, mastery: mastery)))
                     .foregroundStyle(progress.theme.learningAction)
             }
-            RuleMark(x: .value("下次复习", interval))
-                .foregroundStyle(progress.theme.mutedInk)
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            PointMark(x: .value("现在", today),
+                      y: .value("熟练度", schedule.proficiency(at: now, mastery: mastery)))
+                .foregroundStyle(progress.theme.accent)
+                .symbolSize(80)
         }
-        .chartXScale(domain: 0...(interval * 1.5))
+        .chartXScale(domain: 0...endDay)
         .chartXAxis {
-            AxisMarks(values: [0.0, interval]) { value in
+            AxisMarks(values: tickDays) { value in
                 AxisTick()
                 AxisValueLabel {
-                    if let day = value.as(Double.self) { Text("第 \(Int(day)) 天") }
+                    if let day = value.as(Double.self) {
+                        Text("第 \(day.formatted(.number.precision(.fractionLength(0)))) 天")
+                    }
                 }
             }
         }
-        .chartYScale(domain: 0.0...1.0)
+        .chartYScale(domain: 0...100)
         .chartYAxis {
-            AxisMarks(values: [0.0, 0.5, 1.0]) { value in
+            AxisMarks(values: [0, 50, 100]) { value in
                 AxisGridLine()
                 AxisValueLabel {
-                    if let ratio = value.as(Double.self) { Text(ratio, format: .percent) }
+                    if let score = value.as(Int.self) { Text(score, format: .number) }
                 }
             }
         }

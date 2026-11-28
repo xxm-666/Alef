@@ -780,7 +780,7 @@ struct LetterStudyView: View {
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .accessibilityLabel(progress.alphabetFromRight ? "上一个字母" : "下一个字母")
 
-                StudyMemoryCurveEntry(schedule: progress.letterSchedule[letter.id], item: .letter)
+                StudyMemoryCurveEntry(item: .letter(letter.id))
             }
         }
         .onChange(of: letter.id, initial: true) { _, id in progress.write(id, for: "alef.selectedLetterId.v1") }

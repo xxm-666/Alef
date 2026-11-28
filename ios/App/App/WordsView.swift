@@ -956,7 +956,7 @@ struct WordDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                StudyMemoryCurveEntry(schedule: progress.schedule[word.id], item: .word)
+                StudyMemoryCurveEntry(item: .word(word.id))
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

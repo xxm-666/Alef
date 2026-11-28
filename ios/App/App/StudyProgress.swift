@@ -151,12 +151,15 @@ struct ReviewSchedule: Codable, Equatable {
         return min(100, Double(25 + repetitions * 25))
     }
 
+    var proficiencyReferenceDate: Date {
+        updatedAt ?? lastReview?.date
+            ?? reviewDate.addingTimeInterval(-Double(max(1, intervalDays)) * 86_400)
+    }
+
     func proficiency(at now: Date = .now, mastery: Mastery = .learning) -> Int {
         let base = resolvedStrength(mastery: mastery)
         guard base > 0 else { return 0 }
-        let reference = updatedAt ?? lastReview?.date
-            ?? reviewDate.addingTimeInterval(-Double(max(1, intervalDays)) * 86_400)
-        let elapsedDays = max(0, now.timeIntervalSince(reference) / 86_400)
+        let elapsedDays = max(0, now.timeIntervalSince(proficiencyReferenceDate) / 86_400)
         let stabilityDays = Double(max(1, intervalDays))
         let graceDays = stabilityDays * 0.5
         if elapsedDays <= graceDays {
