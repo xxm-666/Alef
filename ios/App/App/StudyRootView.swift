@@ -13,6 +13,7 @@ struct StudyRootView: View {
     @State private var wordPath = NavigationPath()
     @State private var practicePath: [StudyPracticeRoute] = []
     @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
+    @State private var tabBarRequests: [String: StudyTabBarRequest] = [:]
 
     var body: some View {
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
@@ -24,6 +25,7 @@ struct StudyRootView: View {
                         }
                     }
             }
+            .modifier(tabBarHost(for: "grid"))
             .tabItem { Label("字母", systemImage: "book") }
             .id(widgetTabIDs[.alphabet]?.uuidString ?? "grid")
             .tag("grid")
@@ -35,6 +37,7 @@ struct StudyRootView: View {
                         }
                     }
             }
+            .modifier(tabBarHost(for: "words"))
             .tabItem { Label("内容", systemImage: "square.stack.3d.up") }
             .id(widgetTabIDs[.words]?.uuidString ?? "words")
             .tag("words")
@@ -49,10 +52,12 @@ struct StudyRootView: View {
                         }
                     }
             }
+            .modifier(tabBarHost(for: "flashcards"))
             .tabItem { Label("练习", systemImage: "pencil") }
             .id(widgetTabIDs[.practice]?.uuidString ?? "flashcards")
             .tag("flashcards")
             NavigationStack { StudyRulesView(content: content) }
+                .modifier(tabBarHost(for: "rules"))
                 .tabItem { Label("规则", systemImage: "list.bullet.rectangle") }
                 .id(widgetTabIDs[.rules]?.uuidString ?? "rules")
                 .tag("rules")
@@ -60,7 +65,7 @@ struct StudyRootView: View {
                 .tabItem { Label("我的", systemImage: "person.crop.circle") }
                 .tag("settings")
         }
-        .modifier(StudyTabBarMinimization())
+        .modifier(StudyTabBarMinimization(isHidden: tabBarRequests[selectedTab]?.showsTabBar == false))
         .background(progress.theme.canvas)
         .tint(progress.theme.accent)
         .preferredColorScheme(progress.theme.preferredScheme)
@@ -100,6 +105,17 @@ struct StudyRootView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(audio.playbackError ?? "")
+        }
+    }
+
+    private func tabBarHost(for tab: String) -> StudyTabBarHost {
+        StudyTabBarHost(showsTabBar: tabBarRequests[tab]?.showsTabBar) { id, showsTabBar in
+            if let showsTabBar {
+                let request = StudyTabBarRequest(id: id, showsTabBar: showsTabBar)
+                if tabBarRequests[tab] != request { tabBarRequests[tab] = request }
+            } else if tabBarRequests[tab]?.id == id {
+                tabBarRequests[tab] = nil
+            }
         }
     }
 
@@ -1000,11 +1016,11 @@ extension View {
         modifier(StudyHomeBars())
     }
 
-    func studyDetail(_ title: String, showsTabBar: Bool = false) -> some View {
+    func studyDetail(_ title: String, showsTabBar: Bool? = nil) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
-            .toolbar(showsTabBar ? .visible : .hidden, for: .tabBar)
+            .modifier(StudyDetailTabBar(showsTabBar: showsTabBar))
     }
 
     func studyGlassSurface(cornerRadius: CGFloat = 22, interactive: Bool = false) -> some View {
@@ -1012,10 +1028,65 @@ extension View {
     }
 }
 
+private struct StudyTabBarRequest: Equatable {
+    let id: UUID
+    let showsTabBar: Bool
+}
+
+private struct StudyTabBarUpdateKey: EnvironmentKey {
+    static let defaultValue: (@MainActor (UUID, Bool?) -> Void)? = nil
+}
+
+private extension EnvironmentValues {
+    var studyTabBarUpdate: (@MainActor (UUID, Bool?) -> Void)? {
+        get { self[StudyTabBarUpdateKey.self] }
+        set { self[StudyTabBarUpdateKey.self] = newValue }
+    }
+}
+
+private struct StudyTabBarHost: ViewModifier {
+    let showsTabBar: Bool?
+    let update: @MainActor (UUID, Bool?) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.studyTabBarUpdate, update)
+            .toolbar(showsTabBar.map { $0 ? .visible : .hidden } ?? .automatic, for: .tabBar)
+    }
+}
+
+private struct StudyDetailTabBar: ViewModifier {
+    @Environment(\.studyTabBarUpdate) private var update
+    @State private var id = UUID()
+    @State private var isOnScreen = false
+    let showsTabBar: Bool?
+
+    func body(content: Content) -> some View {
+        if let update, let showsTabBar {
+            content
+                .onAppear {
+                    isOnScreen = true
+                    update(id, showsTabBar)
+                }
+                .onChange(of: showsTabBar) { _, visible in
+                    if isOnScreen { update(id, visible) }
+                }
+                .onDisappear {
+                    isOnScreen = false
+                    update(id, nil)
+                }
+        } else {
+            content.toolbar(showsTabBar == true ? .visible : .hidden, for: .tabBar)
+        }
+    }
+}
+
 private struct StudyTabBarMinimization: ViewModifier {
+    let isHidden: Bool
+
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
-            content.tabBarMinimizeBehavior(.onScrollDown)
+            content.tabBarMinimizeBehavior(isHidden ? .never : .onScrollDown)
         } else {
             content
         }
@@ -1061,7 +1132,6 @@ private struct StudyHomeBars: ViewModifier {
     func body(content: Content) -> some View {
         let page = content
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar(.visible, for: .tabBar)
         if reduceTransparency {
             page
                 .toolbarBackground(progress.theme.cardSurface, for: .tabBar)
