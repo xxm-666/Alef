@@ -500,7 +500,7 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 | `he_49d5109c62c2.mp3` | 《诗篇》23:2（传统吟诵） | 7.93–16.25 s | [录音来源](https://www.oakleys.org.uk/blog/2025/07/psalms_book_1_141_chanted_hebrew_rabbi_dan_beeri) |
 | `he_d9c66a85ff78.mp3` | 《诗篇》23:3（传统吟诵） | 16.91–25.33 s | [录音来源](https://www.oakleys.org.uk/blog/2025/07/psalms_book_1_141_chanted_hebrew_rabbi_dan_beeri) |
 
-《创世记》1:1 使用 `he_154104cc0bd0.mp3`，由 he-IL-HilaNeural 合成现代发音。
+《创世记》1:1 的现代合成发音 `he_154104cc0bd0.mp3` 来自下方的 Fish Audio 批次。
 
 ## Piper Noa 合成音频
 
@@ -514,11 +514,11 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 
 ## Edge TTS (he-IL-HilaNeural) 补充音频
 
-第八批（Top 500）75 段、第九/十批（Top 1000 / Top 2000）159 段以及五个高频主题包（新闻与社会、科技与互联网、影视与地道口语、医疗与健康、商业与金融）182 段补充发音均由 Microsoft Edge TTS（`he-IL-HilaNeural`）合成现代希伯来语发音。
+第八批（Top 500）、第九/十批（Top 1000 / Top 2000）和五个高频主题包的早期录音使用 Microsoft Edge TTS（`he-IL-HilaNeural`）。已替换片段的现用来源见下方的 Fish Audio 批次。
 
 ## 情景短句和阅读扩充
 
-新增的 168 段 MP3 使用 Windows 的 Microsoft Asaf（he-IL）合成，经首尾静音裁剪和音量调整。短句和阅读中相同的句子共用一份录音。新增经典选段在应用内标为“现代合成发音”，其中四字神名按 Adonai 朗读。
+早期的情景短句和阅读扩充使用 Windows 的 Microsoft Asaf（he-IL）合成，经首尾静音裁剪和音量调整。已替换片段的现用来源见下方的 Fish Audio 批次。短句和阅读中相同的句子共用一份录音。
 
 新增的十篇《希伯来圣经》选读取自 Dovi 与希伯来语维基文库贡献者编订的《Miqra according to the Masorah》，经 Sefaria 获取。学习版保留元音点，去除吟诵符号和版式标记，按语意分段。改编的希伯来语文本沿用 CC BY-SA 许可。[底本与编者说明](https://en.wikisource.org/wiki/User:Dovi/Miqra_according_to_the_Masorah/Introduction/Abstract) · [Sefaria 版本说明](https://www.sefaria.org/Genesis.1.4?with=About) · [署名－相同方式共享](https://creativecommons.org/licenses/by-sa/4.0/)
 
@@ -527,3 +527,7 @@ MP3 保留原文件所列许可。处理包括裁掉首尾空白、调整响度�
 ## 情景对白与词汇校订音频
 
 咖啡馆和老城情景补充的 18 段对白及道具发音，以及修订后的「סִנְכְרוּן」，使用 [eSpeak NG 1.52](https://github.com/espeak-ng/espeak-ng) 的希伯来语语音合成。输入使用经核对的音素和重音，录音经响度调整并编码为单声道 MP3。ID3 标签标注了合成来源。
+
+## Fish Audio 合成音频
+
+本批次替换了 1,200 段已有录音，并补充 277 段词条例句和语法示例。生成清单记录了 719 段 `fish-audio/s2.1-pro-free:free` 和 758 段 `fish-audio/drama-3`。附件未提供这些录音的商业分发授权，App Store 打包继续按现有规则筛选录音。仓库保留了每段录音的模型与 SHA-256。[逐文件清单](FISH-AUDIO.csv)
