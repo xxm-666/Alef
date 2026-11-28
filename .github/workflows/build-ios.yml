@@ -3,6 +3,21 @@ name: Build Alef iOS IPA
 on:
   workflow_dispatch:
     inputs:
+      distribution:
+        description: Which distribution package to build
+        type: choice
+        options:
+          - sideload
+          - app-store
+        default: sideload
+      app_store_version:
+        description: App Store version
+        type: string
+        default: '3.0.0'
+      app_store_build_number:
+        description: App Store build number (defaults to this workflow run number)
+        type: string
+        required: false
       toolchain:
         description: Xcode version to build with
         type: choice
@@ -56,6 +71,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Build unsigned device app
+        if: ${{ inputs.distribution != 'app-store' }}
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
@@ -65,11 +81,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
 
       - name: Package IPA with the learning widgets
+        if: ${{ inputs.distribution != 'app-store' }}
         run: |
           app="$RUNNER_TEMP/alef-ios/Build/Products/Release-iphoneos/App.app"
           widget="$app/PlugIns/DailyLetterWidget.appex"
           entitlements="ios/App/Shared/StudyWidgets.entitlements"
           test -s "$app/StudyAssets/content.json"
+          test -s "$app/StudyAssets/privacy.txt"
+          test -s "$app/PrivacyInfo.xcprivacy"
           test -s "$app/StudyAssets/GveretLevin-Regular.ttf"
           test -s "$app/StudyAssets/audio/he_2e0fc6efece8.mp3"
           test -s "$app/StudyAssets/audio/correct.wav"
@@ -84,7 +103,105 @@ jobs:
           ditto -c -k --keepParent Payload Alef.ipa
 
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.distribution != 'app-store' }}
         with:
           name: Alef-iOS
           path: Alef.ipa
           if-no-files-found: error
+
+      - name: Install App Store distribution signing
+        if: ${{ inputs.distribution == 'app-store' }}
+        env:
+          ALEF_DEVELOPMENT_TEAM: ${{ vars.ALEF_DEVELOPMENT_TEAM }}
+          DISTRIBUTION_P12: ${{ secrets.ALEF_DISTRIBUTION_P12_BASE64 }}
+          DISTRIBUTION_PASSWORD: ${{ secrets.ALEF_DISTRIBUTION_P12_PASSWORD }}
+          APP_PROFILE: ${{ secrets.ALEF_APP_STORE_PROFILE_BASE64 }}
+          WIDGET_PROFILE: ${{ secrets.ALEF_WIDGET_STORE_PROFILE_BASE64 }}
+        shell: bash
+        run: |
+          : "${ALEF_DEVELOPMENT_TEAM:?Set the ALEF_DEVELOPMENT_TEAM repository variable}"
+          : "${DISTRIBUTION_P12:?Set the ALEF_DISTRIBUTION_P12_BASE64 secret}"
+          : "${DISTRIBUTION_PASSWORD:?Set the ALEF_DISTRIBUTION_P12_PASSWORD secret}"
+          : "${APP_PROFILE:?Set the ALEF_APP_STORE_PROFILE_BASE64 secret}"
+          : "${WIDGET_PROFILE:?Set the ALEF_WIDGET_STORE_PROFILE_BASE64 secret}"
+          signing="$RUNNER_TEMP/alef-signing"
+          mkdir -p "$signing"
+          umask 077
+          printf '%s' "$DISTRIBUTION_P12" | base64 -D > "$signing/distribution.p12"
+          printf '%s' "$APP_PROFILE" | base64 -D > "$signing/app.mobileprovision"
+          printf '%s' "$WIDGET_PROFILE" | base64 -D > "$signing/widget.mobileprovision"
+          keychain="$signing/distribution.keychain-db"
+          password=$(openssl rand -hex 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$signing/distribution.p12" -P "$DISTRIBUTION_PASSWORD" -t cert -f pkcs12 \
+            -T /usr/bin/codesign -T /usr/bin/security -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          security list-keychains -d user | sed -n 's/^[[:space:]]*"\(.*\)"$/\1/p' > "$signing/keychains"
+          existing_keychains=()
+          while IFS= read -r path; do existing_keychains+=("$path"); done < "$signing/keychains"
+          security list-keychains -d user -s "$keychain" ${existing_keychains[@]+"${existing_keychains[@]}"}
+          profiles="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$profiles"
+          install_profile() {
+            local target="$1" bundle_id="$2" variable="$3" plist uuid team identifier
+            plist="$signing/$target.plist"
+            security cms -D -i "$signing/$target.mobileprovision" -o "$plist"
+            uuid=$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$plist")
+            team=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$plist")
+            identifier=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$plist")
+            if [[ ! "$uuid" =~ ^[[:xdigit:]-]{36}$ || "$team" != "$ALEF_DEVELOPMENT_TEAM" ||
+                  "$identifier" != *."$bundle_id" ]]; then
+              echo "The $target profile does not match the signing team and bundle ID." >&2
+              return 1
+            fi
+            if /usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$plist" >/dev/null 2>&1 ||
+               [[ $(/usr/libexec/PlistBuddy -c 'Print :ProvisionsAllDevices' "$plist" 2>/dev/null || true) == true ]] ||
+               [[ $(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$plist" 2>/dev/null || true) == true ]]; then
+              echo "Use an App Store distribution profile for $target." >&2
+              return 1
+            fi
+            if [[ ! -e "$profiles/$uuid.mobileprovision" ]]; then
+              printf '%s\n' "$uuid" >> "$signing/installed-profiles"
+              cp "$signing/$target.mobileprovision" "$profiles/$uuid.mobileprovision"
+            fi
+            printf '%s=%s\n' "$variable" "$uuid" >> "$GITHUB_ENV"
+          }
+          install_profile app com.xxm666.alef ALEF_APP_PROFILE
+          install_profile widget com.xxm666.alef.dailyletter ALEF_WIDGET_PROFILE
+
+      - name: Archive and export for App Store Connect
+        if: ${{ inputs.distribution == 'app-store' }}
+        env:
+          ALEF_DEVELOPMENT_TEAM: ${{ vars.ALEF_DEVELOPMENT_TEAM }}
+          ALEF_MARKETING_VERSION: ${{ inputs.app_store_version || '3.0.0' }}
+          ALEF_BUILD_NUMBER: ${{ inputs.app_store_build_number || github.run_number }}
+          ALEF_ARCHIVE_OUTPUT: ${{ runner.temp }}/alef-app-store
+        run: bash build/archive-app-store.sh
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.distribution == 'app-store' }}
+        with:
+          name: Alef-App-Store
+          path: ${{ runner.temp }}/alef-app-store/export/*.ipa
+          if-no-files-found: error
+
+      - name: Remove temporary distribution signing files
+        if: ${{ always() && inputs.distribution == 'app-store' }}
+        shell: bash
+        run: |
+          signing="$RUNNER_TEMP/alef-signing"
+          profiles="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          if [[ -f "$signing/installed-profiles" ]]; then
+            while IFS= read -r uuid; do rm -f "$profiles/$uuid.mobileprovision"; done < "$signing/installed-profiles"
+          fi
+          if [[ -f "$signing/keychains" ]]; then
+            existing_keychains=()
+            while IFS= read -r path; do existing_keychains+=("$path"); done < "$signing/keychains"
+            security list-keychains -d user -s ${existing_keychains[@]+"${existing_keychains[@]}"}
+          fi
+          if [[ -e "$signing/distribution.keychain-db" ]]; then
+            security delete-keychain "$signing/distribution.keychain-db"
+          fi
+          rm -rf "$signing"

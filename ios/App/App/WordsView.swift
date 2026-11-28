@@ -84,11 +84,13 @@ struct WordsView: View {
         StudyPage(keyboardDismissMode: .immediately, verticalBounce: searchFocused ? .always : .basedOnSize,
                   showsScrollToTop: true) {
             StudyHeading(title: "内容库", eyebrow: "LIBRARY")
-            if let activePack {
+            if let activePack, !content.isFreeEdition || content.isFreePack(activePack) {
                 searchControls(for: activePack.kind)
             }
             frequencyTierBar
-            if let activePack {
+            if let activePack, content.isFreeEdition && !content.isFreePack(activePack) {
+                StudyWordPackPreview(pack: activePack, content: content)
+            } else if let activePack {
                 switch activePack.kind {
                 case .phrases:
                     phraseLibrary
@@ -245,7 +247,8 @@ struct WordsView: View {
         return ScrollView(.horizontal) {
             HStack(spacing: 6) {
                 ForEach(pinnedPacks) { pack in
-                    packBarPill(pack.shortTitle, symbol: pack.symbol, active: selected == pack.id) {
+                    let symbol = content.isFreeEdition && !content.isFreePack(pack) ? "lock" : pack.symbol
+                    packBarPill(pack.shortTitle, symbol: symbol, active: selected == pack.id) {
                         var state = preferences
                         state.selectedPackId = pack.id
                         state.frequencyTier = nil
@@ -826,6 +829,7 @@ private struct WordFilterSheet: View {
 }
 
 private struct StudyReadingLibrary: View {
+    @Environment(StudyPurchases.self) private var purchases
     let content: StudyContent
     @Binding var showNiqqud: Bool
     @Binding var showCursive: Bool
@@ -846,10 +850,12 @@ private struct StudyReadingLibrary: View {
                     ForEach(items) { reading in
                         if reading.id != items.first?.id { Divider() }
                         NavigationLink {
-                            StudyReadingView(reading: reading, showNiqqud: $showNiqqud, showCursive: $showCursive)
+                            StudyReadingView(reading: reading, isFree: content.isFreeReading(reading.id),
+                                             showNiqqud: $showNiqqud, showCursive: $showCursive)
                         } label: {
                             let details = ["\(reading.sentences.count) 句", "阅读理解"] + reading.audioStyles.map(\.title)
-                            StudyRow(title: reading.title, symbol: "text.book.closed",
+                            let canRead = purchases.hasFullAccess || content.isFreeReading(reading.id)
+                            StudyRow(title: reading.title, symbol: canRead ? "text.book.closed" : "lock",
                                      subtitle: details.joined(separator: " · "))
                         }
                         .buttonStyle(.plain)
@@ -1059,9 +1065,11 @@ struct WordDetailView: View {
 }
 
 struct StudyReadingView: View {
+    @Environment(StudyPurchases.self) private var purchases
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     let reading: StudyReading
+    let isFree: Bool
     private var showNiqqudBinding: Binding<Bool>?
     private var showCursiveBinding: Binding<Bool>?
     @State private var niqqudMode: ReadingNiqqudMode
@@ -1075,8 +1083,9 @@ struct StudyReadingView: View {
     @State private var shadowingSentence: Int?
     @State private var isRecording = false
 
-    init(reading: StudyReading, showNiqqud: Binding<Bool>? = nil, showCursive: Binding<Bool>? = nil) {
+    init(reading: StudyReading, isFree: Bool, showNiqqud: Binding<Bool>? = nil, showCursive: Binding<Bool>? = nil) {
         self.reading = reading
+        self.isFree = isFree
         self.showNiqqudBinding = showNiqqud
         self.showCursiveBinding = showCursive
         _niqqudMode = State(initialValue: (showNiqqud?.wrappedValue ?? true) ? .full : .unpointed)
@@ -1089,6 +1098,27 @@ struct StudyReadingView: View {
     }
 
     var body: some View {
+        if purchases.hasFullAccess || isFree {
+            reader
+        } else {
+            StudyPage {
+                StudyCard {
+                    StudySectionTitle(reading.title)
+                    Text("阅读预览 · 全文共 \(reading.sentences.count) 句")
+                        .font(.subheadline).foregroundStyle(progress.theme.mutedInk)
+                    if let first = reading.sentences.first {
+                        HebrewText(text: first.hebrew, size: 28)
+                        Text(first.chinese).font(.subheadline)
+                        PronunciationButton(hebrew: first.hebrew, title: "试听首句")
+                    }
+                    StudyFullEditionLink()
+                }
+            }
+            .studyDetail(reading.title, showsTabBar: true)
+        }
+    }
+
+    private var reader: some View {
         StudyPage {
             if let source = reading.source {
                 Text(source).font(.subheadline).foregroundStyle(progress.theme.mutedInk)
@@ -1962,6 +1992,7 @@ private struct TopicPackDetailView: View {
 }
 
 private struct StudyPackManagerView: View {
+    @Environment(StudyPurchases.self) private var purchases
     @Environment(StudyProgress.self) private var progress
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
@@ -2051,7 +2082,13 @@ private struct StudyPackManagerView: View {
         case .readings:
             ReadingPackDetailView(pack: pack, content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
         case .words:
-            TopicPackDetailView(pack: pack, content: content, showNiqqud: $showNiqqud, showCursive: $showCursive)
+            if purchases.hasFullAccess || content.isFreePack(pack) {
+                TopicPackDetailView(pack: pack, content: content.edition(hasFullAccess: purchases.hasFullAccess),
+                                    showNiqqud: $showNiqqud, showCursive: $showCursive)
+            } else {
+                StudyPage { StudyWordPackPreview(pack: pack, content: content) }
+                    .studyDetail(pack.title, showsTabBar: true)
+            }
         }
     }
 
@@ -2064,6 +2101,9 @@ private struct StudyPackManagerView: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(progress.theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !purchases.hasFullAccess && !content.isFreePack(pack) {
+                        Image(systemName: "lock").accessibilityLabel("完整版")
+                    }
                     if isDailyTarget {
                         Text("今日")
                             .font(.caption2.weight(.bold))
@@ -2100,7 +2140,8 @@ private struct StudyPackManagerView: View {
                 .monospacedDigit()
                 .foregroundStyle(progress.theme.mutedInk)
             case .words:
-                let packWords = content.words(inPack: pack.id)
+                let packWords = content.edition(hasFullAccess: purchases.hasFullAccess || !content.isFreePack(pack))
+                    .words(inPack: pack.id)
                 let mastered = packWords.reduce(into: 0) { count, word in
                     if progress.effectiveWordMastery(word.id) == .mastered { count += 1 }
                 }
@@ -2128,6 +2169,28 @@ private struct StudyPackManagerView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+private struct StudyWordPackPreview: View {
+    let pack: StudyWordPack
+    let content: StudyContent
+
+    var body: some View {
+        let words = content.edition(hasFullAccess: true).words(inPack: pack.id)
+        StudyCard {
+            StudySectionTitle(pack.title)
+            Text("\(pack.subtitle) · \(words.count) 词").font(.subheadline)
+            ForEach(words.prefix(3)) { word in
+                HStack {
+                    HebrewText(text: word.hebrew, size: 24)
+                    Text(word.meaningZh).font(.subheadline)
+                    Spacer()
+                    PronunciationButton(hebrew: word.hebrew, iconOnly: true)
+                }
+            }
+            StudyFullEditionLink()
+        }
     }
 }
 

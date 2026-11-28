@@ -42,7 +42,8 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
 
             let recordingFirst = prefersRecordings || bundledOnly
             if recordingFirst, playRecording(text, rate: safeRate) { return }
-            if !bundledOnly, let hebrewVoice = AVSpeechSynthesisVoice(language: "he-IL") {
+            let canSynthesize = !bundledOnly || (StudyDistribution.isAppStore && referenceRecordingURL(for: text) == nil)
+            if canSynthesize, let hebrewVoice = AVSpeechSynthesisVoice(language: "he-IL") {
                 let spoken = AVSpeechUtterance(string: text)
                 spoken.voice = hebrewVoice
                 spoken.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate,
@@ -53,7 +54,7 @@ final class StudyAudio: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpe
                 return
             }
             if !recordingFirst, playRecording(text, rate: safeRate) { return }
-            playbackError = bundledOnly
+            playbackError = !canSynthesize
                 ? "无法播放此发音的内置音频。"
                 : "没有可播放的希伯来语音频。可在 iOS 的辅助功能语音设置中下载希伯来语。"
             releaseSessionIfIdle()

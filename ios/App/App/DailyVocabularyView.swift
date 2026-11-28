@@ -14,7 +14,7 @@ struct DailyVocabularyEntry: View {
             let words = starterWords.isEmpty ? content.dailyVocabularyWords(in: progress, at: timeline.date) : starterWords
             let plan = progress.dailyVocabularyPlan(words: words, date: timeline.date)
             let starterGroup = starterWords.isEmpty ? nil : plan.nextGroup
-            let activePack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
+            let activePack = content.dailyVocabularyPack(in: progress)
             let status = activePack == nil ? "请先选取学习词包" : (plan.groups.isEmpty ? "暂无待学新词" : "已完成 \(plan.completedCount) / \(plan.groups.count) 组")
             Button {
                 guard !showsDailyVocabulary else { return }
@@ -291,7 +291,7 @@ private struct DailyVocabularyView: View {
     }
 
     private func planContent(_ today: DailyVocabularyPlan) -> some View {
-        let activePack = progress.dailyVocabularyPackId.flatMap { content.wordPack(id: $0) }
+        let activePack = content.dailyVocabularyPack(in: progress)
         let remaining = today.remainingNewWordIds(from: content.dailyVocabularyWords(in: progress),
                                                   mastery: progress.wordMastery,
                                                   schedule: progress.schedule)
@@ -798,7 +798,8 @@ private struct DailyVocabularyView: View {
     }
 
     private func word(_ id: String) -> StudyWord? {
-        content.words.first { $0.id == id }
+        // Continue groups already started before switching back to the free edition.
+        content.savedDailyWord(id)
     }
 
     private func openGroup(_ id: String?) {
@@ -884,7 +885,7 @@ private struct DailyVocabularyPackPickerSheet: View {
     }
 
     var body: some View {
-        let selected = progress.dailyVocabularyPackId
+        let selected = content.dailyVocabularyPack(in: progress)?.id
         StudyPage {
             StudyCard(padding: 12) {
                 Text("为「今日记词」单独选择一个单词包（不受内容页固定词包影响）。切换后，今日尚未开始的分组会立即从所选词包抽词；已开始或已完成的分组会保留。")
@@ -892,17 +893,24 @@ private struct DailyVocabularyPackPickerSheet: View {
                     .foregroundStyle(progress.theme.mutedInk)
             }
             ForEach(StudyWordPackGroup.allCases.filter { $0 != .content }) { group in
-                let packs = content.wordPacks(in: progress).filter { $0.group == group && $0.kind == .words }
-                StudySectionTitle(group.title)
-                StudyCard(padding: 10, spacing: 2) {
-                    ForEach(packs) { pack in
-                        if pack.id != packs.first?.id { Divider() }
-                        let total = content.words(inPack: pack.id).count
-                        packRow(id: pack.id, title: pack.title, subtitle: pack.subtitle, symbol: pack.symbol,
-                                total: total, remaining: unlearnedCount(for: pack.id), selected: selected == pack.id,
-                                inCard: true)
+                let packs = content.wordPacks(in: progress).filter {
+                    $0.group == group && $0.kind == .words && (!content.isFreeEdition || content.isFreePack($0))
+                }
+                if !packs.isEmpty {
+                    StudySectionTitle(group.title)
+                    StudyCard(padding: 10, spacing: 2) {
+                        ForEach(packs) { pack in
+                            if pack.id != packs.first?.id { Divider() }
+                            let total = content.words(inPack: pack.id).count
+                            packRow(id: pack.id, title: pack.title, subtitle: pack.subtitle, symbol: pack.symbol,
+                                    total: total, remaining: unlearnedCount(for: pack.id), selected: selected == pack.id,
+                                    inCard: true)
+                        }
                     }
                 }
+            }
+            if content.isFreeEdition {
+                StudyFullEditionLink()
             }
         }
         .studyDetail("选择今日学习词包")

@@ -2,7 +2,10 @@ import Foundation
 
 struct StudyContent: Decodable {
     let letters: [StudyLetter]
-    let words: [StudyWord]
+    var words: [StudyWord] { isFreeEdition ? beginnerWords : allWords }
+    private(set) var isFreeEdition = false
+    private let allWords: [StudyWord]
+    private let beginnerWords: [StudyWord]
     let wordCategories: [String: StudyCategory]
     let phrases: [StudyPhrase]
     let phraseCategories: [String: StudyCategory]
@@ -22,6 +25,7 @@ struct StudyContent: Decodable {
     let learningPath: [StudyPathStage]
     private let ambiguousSpellings: Set<String>
     private let wordsByRoot: [String: [StudyWord]]
+    private let beginnerWordsByRoot: [String: [StudyWord]]
 
     enum CodingKeys: CodingKey {
         case letters, words, wordCategories, phrases, phraseCategories, readings, readingCategories
@@ -32,13 +36,16 @@ struct StudyContent: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         letters = try container.decode([StudyLetter].self, forKey: .letters)
-        words = try container.decode([StudyWord].self, forKey: .words)
-        wordsByRoot = Self.uniqueVocabulary(words).reduce(into: [:]) { index, word in
-            for root in word.rootKeys {
-                index[root, default: []].append(word)
-            }
-        }
-        let entriesBySpelling = Dictionary(grouping: words, by: \.hebrewUnpointed)
+        let allWords = try container.decode([StudyWord].self, forKey: .words)
+        let path = try container.decode([StudyPathStage].self, forKey: .learningPath)
+        let pathWordIDs = Set(path.flatMap(\.wordIds))
+        let beginnerWords = allWords.filter { $0.difficulty == .beginner || pathWordIDs.contains($0.id) }
+        self.allWords = allWords
+        self.beginnerWords = beginnerWords
+        learningPath = path
+        wordsByRoot = Self.indexWordsByRoot(allWords)
+        beginnerWordsByRoot = Self.indexWordsByRoot(beginnerWords)
+        let entriesBySpelling = Dictionary(grouping: allWords, by: \.hebrewUnpointed)
         ambiguousSpellings = Set(entriesBySpelling.compactMap { spelling, entries in
             Set(entries.map(\.meaningZh)).count > 1 ? spelling : nil
         })
@@ -58,7 +65,29 @@ struct StudyContent: Decodable {
         grammarAffixes = try container.decode([StudyGrammarAffix].self, forKey: .grammarAffixes)
         grammarBinyanim = try container.decode([StudyGrammarBinyan].self, forKey: .grammarBinyanim)
         minimalPairs = try container.decode([StudyMinimalPair].self, forKey: .minimalPairs)
-        learningPath = try container.decode([StudyPathStage].self, forKey: .learningPath)
+    }
+
+    func edition(hasFullAccess: Bool) -> Self {
+        var result = self
+        result.isFreeEdition = !hasFullAccess
+        return result
+    }
+
+    func isFreeReading(_ id: String) -> Bool {
+        learningPath.contains { $0.readingId == id }
+    }
+
+    func isFreePack(_ pack: StudyWordPack) -> Bool {
+        pack.kind != .words || pack.id == StudyWordPack.beginnerID
+    }
+
+    func savedDailyWord(_ id: String) -> StudyWord? {
+        allWords.first { $0.id == id }
+    }
+
+    func dailyVocabularyPack(in progress: StudyProgress) -> StudyWordPack? {
+        guard let id = progress.dailyVocabularyPackId, let pack = wordPack(id: id) else { return nil }
+        return isFreeEdition && !isFreePack(pack) ? wordPack(id: StudyWordPack.beginnerID) : pack
     }
 
     var introductoryDisplay: [String: Bool] {
@@ -99,7 +128,8 @@ struct StudyContent: Decodable {
     }
 
     func dailyVocabularyWords(in progress: StudyProgress, packId: String?, at date: Date = .now) -> [StudyWord] {
-        guard let packId, let pack = wordPack(id: packId), pack.kind == .words else { return [] }
+        guard let packId, let pack = wordPack(id: packId), pack.kind == .words,
+              !isFreeEdition || isFreePack(pack) else { return [] }
         let stageIDs = Set(recommendedStage(in: progress, at: date)?.wordIds ?? [])
         // Keep saved IDs available for daily plans created before vocabulary grouping.
         let pool = words(inPack: pack.id, includingEquivalentEntries: true)
@@ -113,7 +143,7 @@ struct StudyContent: Decodable {
     }
 
     func dailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
-        dailyVocabularyWords(in: progress, packId: progress.dailyVocabularyPackId, at: date)
+        dailyVocabularyWords(in: progress, packId: dailyVocabularyPack(in: progress)?.id, at: date)
     }
 
     func introductoryDailyVocabularyWords(in progress: StudyProgress, at date: Date = .now) -> [StudyWord] {
@@ -150,7 +180,7 @@ struct StudyContent: Decodable {
     private func matchingWords(inPack id: String) -> [StudyWord] {
         switch id {
         case StudyWordPack.beginnerID:
-            return words.filter { $0.difficulty == .beginner }
+            return isFreeEdition ? beginnerWords : words.filter { $0.difficulty == .beginner }
         case "pack_top1000":
             return words.filter { ($0.frequencyRank ?? Int.max) <= 1000 }
         case "pack_top1001_2000":
@@ -202,9 +232,10 @@ struct StudyContent: Decodable {
         let spellsWord = stage == .spokenWord
         let groupIDs = Set(groupWordIDs)
         let shuffled = words.shuffled()
-        let selected = words.first { $0.id == selectedWordID }
-        let candidates = [selected].compactMap { $0 }
-            + shuffled.filter { groupIDs.contains($0.id) } + shuffled.filter { !groupIDs.contains($0.id) }
+        let selected = selectedWordID.flatMap(savedDailyWord)
+        let groupWords = isFreeEdition ? allWords.filter { groupIDs.contains($0.id) }.shuffled()
+                                      : shuffled.filter { groupIDs.contains($0.id) }
+        let candidates = [selected].compactMap { $0 } + groupWords + shuffled.filter { !groupIDs.contains($0.id) }
         var labels: Set<String> = [spellsWord ? word.hebrewUnpointed : word.meaningZh]
         var options = [word]
         for candidate in candidates {
@@ -221,16 +252,26 @@ struct StudyContent: Decodable {
 
     func words(withRoot root: String) -> [StudyWord] {
         guard let key = StudyRoot.key(for: root) else { return [] }
-        return wordsByRoot[key] ?? []
+        return activeWordsByRoot[key] ?? []
     }
 
     func rootFamilies() -> [(root: String, words: [StudyWord])] {
-        wordsByRoot
+        activeWordsByRoot
             .map { (root: $0.key, words: $0.value) }
             .sorted { lhs, rhs in
                 if lhs.words.count != rhs.words.count { return lhs.words.count > rhs.words.count }
                 return lhs.root < rhs.root
             }
+    }
+
+    private var activeWordsByRoot: [String: [StudyWord]] { isFreeEdition ? beginnerWordsByRoot : wordsByRoot }
+
+    private static func indexWordsByRoot(_ words: [StudyWord]) -> [String: [StudyWord]] {
+        uniqueVocabulary(words).reduce(into: [:]) { index, word in
+            for root in word.rootKeys {
+                index[root, default: []].append(word)
+            }
+        }
     }
 
     static func load() throws -> Self {

@@ -39,6 +39,40 @@ final class AlefCoreTests: XCTestCase {
         XCTAssertEqual(StudyContent.uniqueVocabulary([alias]).map(\.id), [alias.id])
     }
 
+    func testFreeEditionKeepsTheCompleteBeginnerPathAndPreservesPaidStudyData() throws {
+        let content = try StudyContent.load()
+        let free = content.edition(hasFullAccess: false)
+        let freeWordIDs = Set(free.words.map(\.id))
+        let paidPack = try XCTUnwrap(content.wordPack(id: "cat_news"))
+        let paidWord = try XCTUnwrap(content.words(inPack: paidPack.id).first { !freeWordIDs.contains($0.id) })
+        let date = makeDate(year: 2026, month: 11, day: 28)
+
+        XCTAssertTrue(Set(content.learningPath.flatMap(\.wordIds)).isSubset(of: freeWordIDs))
+        XCTAssertTrue(content.learningPath.compactMap(\.readingId).allSatisfy(free.isFreeReading))
+        XCTAssertTrue(content.readings.contains { !free.isFreeReading($0.id) })
+        XCTAssertTrue(StudyComicScenario.telAvivCafe.isFree)
+        XCTAssertFalse(StudyComicScenario.rainyTransfer.isFree)
+        XCTAssertFalse(free.isFreePack(paidPack))
+        XCTAssertFalse(free.rootFamilies().flatMap(\.words).contains { $0.id == paidWord.id })
+
+        progress.setDailyVocabularyPack(paidPack.id, words: [paidWord], date: date)
+        var paidPlan = progress.dailyVocabulary
+        paidPlan.groups[0].studied = 1
+        paidPlan.groups[0].choices = DailyVocabularyChoices(wordCount: 1)
+        progress.write(paidPlan, for: DailyVocabularyPlan.storageKey)
+        XCTAssertEqual(free.dailyVocabularyPack(in: progress)?.id, StudyWordPack.beginnerID)
+        XCTAssertFalse(free.dailyVocabularyWords(in: progress, at: date).isEmpty)
+        XCTAssertTrue(free.dailyVocabularyWords(in: progress, packId: paidPack.id, at: date).isEmpty)
+        XCTAssertEqual(free.savedDailyWord(paidWord.id)?.id, paidWord.id)
+        progress.prepareDailyVocabulary(words: free.dailyVocabularyWords(in: progress, at: date), date: date)
+        XCTAssertEqual(progress.dailyVocabulary.groups.first, paidPlan.groups.first)
+        XCTAssertEqual(progress.dailyVocabularyPackId, paidPack.id)
+
+        progress.setWord(paidWord.id, mastery: .learning, date: date.addingTimeInterval(-172_800))
+        XCTAssertFalse(free.dueWords(in: progress, at: date).contains { $0.id == paidWord.id })
+        XCTAssertTrue(free.edition(hasFullAccess: true).dueWords(in: progress, at: date).contains { $0.id == paidWord.id })
+    }
+
     func testRainyTransferKeepsTheCurrentQuestionAfterMistakesAndCompletesInOrder() {
         var session = RainyTransferSession()
         session.goToStop()

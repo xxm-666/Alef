@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct StudySettingsView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(StudyPurchases.self) private var purchases
     @Environment(StudyFolderSyncManager.self) private var folderSync
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -14,6 +15,18 @@ struct StudySettingsView: View {
         StudyPage {
             StudyHeading(title: "学习与设置", eyebrow: "PROFILE & SYNC")
             statistics
+            if StudyDistribution.isAppStore {
+                NavigationLink {
+                    StudyFullEditionView()
+                } label: {
+                    StudyCard(padding: 10) {
+                        StudyRow(title: "Alef 完整版",
+                                 symbol: purchases.hasFullAccess ? "checkmark.seal.fill" : "lock.open",
+                                 subtitle: purchases.hasFullAccess ? "已解锁 · 购买记录" : "一次购买 · 解锁全部课程")
+                    }
+                }
+                .buttonStyle(.plain)
+            }
             StudyCard(padding: 10) {
                 NavigationLink {
                     StudyAchievementsView()
@@ -61,21 +74,32 @@ struct StudySettingsView: View {
                              badgeColors: progress.theme.heroGradient)
                 }
                 .buttonStyle(.plain)
-                Divider()
-                NavigationLink {
-                    StudyAISettingsView()
-                } label: {
-                    StudyRow(title: "AI 功能", symbol: "waveform.badge.magnifyingglass",
-                             subtitle: "跟读识别服务",
-                             badgeColors: progress.theme.indigoGradient)
+                if !StudyDistribution.isAppStore {
+                    Divider()
+                    NavigationLink {
+                        StudyAISettingsView()
+                    } label: {
+                        StudyRow(title: "AI 功能", symbol: "waveform.badge.magnifyingglass",
+                                 subtitle: "跟读识别服务",
+                                 badgeColors: progress.theme.indigoGradient)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 Divider()
                 NavigationLink {
                     StudyBackupView()
                 } label: {
                     StudyRow(title: "数据备份与恢复", symbol: "externaldrive", subtitle: backupSubtitle,
                              badgeColors: [progress.theme.success, progress.theme.accent])
+                }
+                .buttonStyle(.plain)
+            }
+
+            StudyCard(padding: 10) {
+                NavigationLink {
+                    StudyAboutView()
+                } label: {
+                    StudyRow(title: "关于 Alef", symbol: "info.circle", subtitle: "隐私政策、素材授权与支持")
                 }
                 .buttonStyle(.plain)
             }
@@ -258,6 +282,77 @@ struct StudySettingsView: View {
         case .unconfigured:
             return progress.backupReminderMessage()
         }
+    }
+}
+
+private struct StudyAboutView: View {
+    private let supportURL = URL(string: "https://github.com/xxm-666/Alef/issues")!
+
+    var body: some View {
+        StudyPage {
+            StudyCard(padding: 10, spacing: 2) {
+                NavigationLink {
+                    privacyPolicy
+                } label: {
+                    StudyRow(title: "隐私政策", symbol: "hand.raised")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                NavigationLink {
+                    credits
+                } label: {
+                    StudyRow(title: "素材来源与授权", symbol: "doc.text")
+                }
+                .buttonStyle(.plain)
+                Divider()
+                Link(destination: supportURL) {
+                    StudyRow(title: "使用帮助与问题反馈", symbol: "questionmark.circle")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .studyDetail("关于 Alef")
+    }
+
+    private var privacyPolicy: some View {
+        StudyPage {
+            StudyCard {
+                if let url = Bundle.main.url(forResource: "privacy", withExtension: "txt", subdirectory: "StudyAssets"),
+                   let policy = try? String(contentsOf: url, encoding: .utf8) {
+                    Text(policy).font(.subheadline).textSelection(.enabled)
+                }
+                Link("联系 Alef 支持", destination: supportURL)
+            }
+        }
+        .studyDetail("隐私政策")
+    }
+
+    private var credits: some View {
+        StudyPage {
+            StudyCard {
+                StudySectionTitle("录音与经典选读")
+                Text("录音和经典文本的作者、许可、原始链接和改编说明列在完整清单中。清单也包含侧载版使用的素材。")
+                if let url = Bundle.main.url(forResource: "CREDITS", withExtension: "md", subdirectory: "StudyAssets/audio") {
+                    ShareLink(item: url) {
+                        Label("打开或保存完整授权清单", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            StudyCard {
+                StudySectionTitle("词频与手写字体")
+                Link("FrequencyWords 希伯来语词频（CC BY-SA 4.0）",
+                     destination: URL(string: "https://github.com/hermitdave/FrequencyWords#license")!)
+                Text("Alef 依据 OpenSubtitles 2018 词频排行生成常用程度与词包筛选。")
+                Text("Gveret Levin 手写字体采用 SIL Open Font License 1.1。")
+                if let url = Bundle.main.url(forResource: "GveretLevin-OFL", withExtension: "txt", subdirectory: "StudyAssets") {
+                    ShareLink(item: url) {
+                        Label("打开或保存字体许可", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
+        .font(.subheadline)
+        .studyDetail("素材来源与授权")
     }
 }
 

@@ -1,12 +1,16 @@
-import { copyFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { loadStudyContent, validateStudyContent } from './validate-content.mjs';
 
 const root = new URL('../', import.meta.url);
 const assets = new URL('ios/App/App/StudyAssets/', root);
 const audioDir = new URL('audio/', assets);
+const args = process.argv.slice(2);
+const appStore = args.length === 1 && args[0] === '--app-store';
+if (args.length && !appStore) throw new Error('Usage: npm run prepare:ios -- [--app-store]');
 
 const content = await loadStudyContent(root);
 const summary = await validateStudyContent(content, { rootUrl: root });
+if (appStore) await omitUnverifiedAudio(content);
 
 const files = [...new Set(Object.values(content.audio))];
 const expectedMp3Names = new Set(files.map((name) => name.replace(/^audio\//, '')));
@@ -21,6 +25,7 @@ await Promise.all(
 
 await Promise.all(files.map((name) => copyFile(new URL(`public/${name}`, root), new URL(name, assets))));
 await copyFile(new URL('public/audio/CREDITS.md', root), new URL('audio/CREDITS.md', assets));
+await copyFile(new URL('public/privacy.txt', root), new URL('privacy.txt', assets));
 await copyFile(new URL('build/fonts/GveretLevin-Regular.ttf', root), new URL('GveretLevin-Regular.ttf', assets));
 await copyFile(new URL('build/fonts/GveretLevin-OFL.txt', root), new URL('GveretLevin-OFL.txt', assets));
 await Promise.all([
@@ -35,8 +40,34 @@ const widgetWords = content.words.map(({ id, hebrew, transliteration, meaningZh 
 await writeFile(new URL('widget-words.json', assets), JSON.stringify(widgetWords));
 console.log(
   `Prepared ${summary.letters} letters, ${summary.words} words, ${summary.phrases} phrases, ` +
-    `${summary.readings} readings and ${summary.recordings} recordings for iOS.`,
+    `${summary.readings} readings and ${files.length} recordings for iOS (${appStore ? 'App Store' : 'sideload'}).`,
 );
+
+async function omitUnverifiedAudio(content) {
+  const credits = await readFile(new URL('public/audio/CREDITS.md', root), 'utf8');
+  const documentedRecordings = new Set(Array.from(
+    credits.matchAll(/^\| `(he_[a-f0-9]{12}\.mp3)` \|/gm),
+    ([, filename]) => `audio/${filename}`,
+  ));
+  for (const name of new Set(Object.values(content.audio))) {
+    if (documentedRecordings.has(name)) continue;
+    const file = await readFile(new URL(`public/${name}`, root));
+    if (file.subarray(0, 3).toString() !== 'ID3') continue;
+    const tagLength = file.subarray(6, 10).reduce((length, byte) => length * 128 + byte, 0);
+    const tags = file.subarray(10, 10 + tagLength).toString('utf8');
+    if ((tags.includes('thewh1teagle (Piper Noa)') && tags.includes('creativecommons.org/licenses/by/4.0/')) ||
+        tags.includes('Synthesized by eSpeak NG') || tags.includes('Synthesized with eSpeak NG 1.52')) {
+      documentedRecordings.add(name);
+    }
+  }
+  content.audio = Object.fromEntries(Object.entries(content.audio).filter(([, name]) => documentedRecordings.has(name)));
+  const availableText = new Set(Object.keys(content.audio).map((text) => text.normalize('NFC')));
+  for (const reading of content.readings) {
+    for (const sentence of reading.sentences) {
+      if (sentence.audio && !availableText.has(sentence.hebrew.normalize('NFC'))) delete sentence.audio;
+    }
+  }
+}
 
 function feedbackWave(duration, startFrequency, endFrequency, sweep, volume, triangle) {
   const sampleRate = 24_000;

@@ -1,6 +1,16 @@
 import Foundation
 import Security
 
+enum StudyDistribution {
+    #if ALEF_APP_STORE
+    static let isAppStore = true
+    #elseif DEBUG
+    static let isAppStore = ProcessInfo.processInfo.environment["ALEF_TEST_STOREKIT"] == "1"
+    #else
+    static let isAppStore = false
+    #endif
+}
+
 enum StudyOpenRouterModel: String, CaseIterable, Identifiable {
     static let preferenceKey = "alef.device.aiOpenRouterModel"
 
@@ -112,11 +122,13 @@ enum StudyAIKeychain {
 }
 
 enum StudyAIError: LocalizedError {
+    case unavailable
     case storage, invalidKey, noKey, invalidGateway, invalidRecording, unauthorized, quota
     case requestFailed, noSpeech, timedOut, offline, serviceNotFound
 
     var errorDescription: String? {
         switch self {
+        case .unavailable: "此版本仅支持设备上的跟读对比。"
         case .storage: "无法访问本机钥匙串，请解锁设备后重试。"
         case .invalidKey: "请输入完整的 API 密钥，密钥中不能包含空格或换行。"
         case .noKey: "请先到「我的 → AI 功能」保存此服务的密钥。"
@@ -181,6 +193,9 @@ enum StudyAITranscription {
 
     static func analyze(recording: URL, expected: String, provider: StudyAIProvider,
                         openRouterModel: StudyOpenRouterModel, gateway: String) async throws -> StudyAITranscript {
+        #if ALEF_APP_STORE
+        throw StudyAIError.unavailable
+        #else
         let endpoint = try provider.endpoint(gateway: gateway)
         guard let key = try StudyAIKeychain.read(for: provider) else { throw StudyAIError.noKey }
         guard let size = try? recording.resourceValues(forKeys: [.fileSizeKey]).fileSize,
@@ -230,6 +245,7 @@ enum StudyAITranscription {
         case 504 where provider == .aliyun: throw StudyAIError.timedOut
         default: throw StudyAIError.requestFailed
         }
+        #endif
     }
     static func multipart(audio: Data, model: String, boundary: String) -> Data {
         var body = Data()

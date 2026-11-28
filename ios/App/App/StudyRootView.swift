@@ -14,8 +14,12 @@ struct StudyRootView: View {
     @State private var practicePath: [StudyPracticeRoute] = []
     @State private var widgetTabIDs: [StudyWidgetRoute.Tab: UUID] = [:]
     @State private var tabBarRequests: [String: StudyTabBarRequest] = [:]
+    @State private var purchases = StudyPurchases()
+
+    private var studyContent: StudyContent { content.edition(hasFullAccess: purchases.hasFullAccess) }
 
     var body: some View {
+        let content = studyContent
         TabView(selection: Binding(get: { selectedTab }, set: { progress.write($0, for: "alef.activeView.v1") })) {
             NavigationStack(path: $letterPath) {
                 AlphabetView(content: content)
@@ -73,18 +77,37 @@ struct StudyRootView: View {
         .onChange(of: progress.prefersRecordings, initial: true) { _, enabled in audio.prefersRecordings = enabled }
         .onChange(of: progress.hapticsEnabled, initial: true) { _, enabled in audio.hapticsEnabled = enabled }
         .onChange(of: selectedTab) { _, _ in audio.stop() }
-        .onChange(of: progress.widgetRequest, initial: true) { _, route in
-            guard let route else { return }
-            progress.widgetRequest = nil
-            openWidgetRoute(route)
+        .onChange(of: progress.widgetRequest, initial: true) { _, _ in handlePendingWidget() }
+        .onChange(of: purchases.isReady) { _, isReady in
+            guard isReady else { return }
+            handlePendingWidget()
+            handlePendingReminder()
         }
-        .onAppear { handlePendingReminder() }
+        .task { await purchases.listenForUpdates() }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await purchases.refreshEntitlements()
+            guard !Task.isCancelled else { return }
+            handlePendingReminder()
+        }
+        .onChange(of: purchases.hasFullAccess) { _, hasAccess in
+            if !hasAccess {
+                audio.stop()
+                letterPath = NavigationPath()
+                wordPath = NavigationPath()
+                practicePath = []
+                widgetTabIDs = Dictionary(uniqueKeysWithValues:
+                    [StudyWidgetRoute.Tab.alphabet, .words, .practice, .rules].map { ($0, UUID()) })
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: StudyReminderManager.openReminderNotification)) { _ in
             handlePendingReminder()
         }
         .background {
-            StudyReminderSyncBridge(content: content)
-            StudyWidgetWordsSyncBridge()
+            if purchases.isReady {
+                StudyReminderSyncBridge(content: content)
+                StudyWidgetWordsSyncBridge(content: content)
+            }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard (phase == .active || phase == .background) && folderSync.isConfigured else { return }
@@ -106,6 +129,7 @@ struct StudyRootView: View {
         } message: {
             Text(audio.playbackError ?? "")
         }
+        .environment(purchases)
     }
 
     private func tabBarHost(for tab: String) -> StudyTabBarHost {
@@ -119,6 +143,12 @@ struct StudyRootView: View {
         }
     }
 
+    private func handlePendingWidget() {
+        guard purchases.isReady, let route = progress.widgetRequest else { return }
+        progress.widgetRequest = nil
+        openWidgetRoute(route)
+    }
+
     private func openWidgetRoute(_ route: StudyWidgetRoute) {
         switch route {
         case .letter(let id):
@@ -127,7 +157,7 @@ struct StudyRootView: View {
             progress.write(StudyWidgetRoute.Tab.alphabet.rawValue, for: "alef.activeView.v1")
         case .word(let id):
             guard content.words.contains(where: { $0.id == id }) else { return }
-            wordPath = NavigationPath([id])
+            wordPath = studyContent.words.contains(where: { $0.id == id }) ? NavigationPath([id]) : NavigationPath()
             progress.write(StudyWidgetRoute.Tab.words.rawValue, for: "alef.activeView.v1")
         case .tab(let tab):
             switch tab {
@@ -144,7 +174,7 @@ struct StudyRootView: View {
 
     private func startReview() {
         if case .reviewBatch? = practicePath.last { return }
-        if let batch = StudyReviewOverview.startBatch(content: content, progress: progress) {
+        if let batch = StudyReviewOverview.startBatch(content: studyContent, progress: progress) {
             practicePath.append(.reviewBatch(batch))
         } else if practicePath.isEmpty {
             practicePath.append(.reviewOverview)
@@ -152,11 +182,11 @@ struct StudyRootView: View {
     }
 
     private func handlePendingReminder() {
-        guard StudyReminderManager.takePendingOpen() else { return }
+        guard purchases.isReady, StudyReminderManager.takePendingOpen() else { return }
         progress.write(StudyWidgetRoute.Tab.practice.rawValue, for: "alef.activeView.v1")
         if case .reviewBatch? = practicePath.last { return }
 
-        if let batch = StudyReviewOverview.startBatch(content: content, progress: progress) {
+        if let batch = StudyReviewOverview.startBatch(content: studyContent, progress: progress) {
             practicePath = [.reviewBatch(batch)]
         } else {
             openWidgetRoute(.tab(.practice))
@@ -171,12 +201,14 @@ struct StudyRootView: View {
 
 private struct StudyWidgetWordsSyncBridge: View {
     @Environment(StudyProgress.self) private var progress
+    let content: StudyContent
 
     var body: some View {
+        let availableIDs = progress.learnedWidgetWordIDs.intersection(content.words.map(\.id))
         Color.clear
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .onChange(of: progress.learnedWidgetWordIDs, initial: true) { _, ids in
+            .onChange(of: availableIDs, initial: true) { _, ids in
                 guard let url = StudyWidgetWords.snapshotURL,
                       (try? StudyWidgetWords.writeIDs(ids, to: url)) == true else { return }
                 WidgetCenter.shared.reloadTimelines(ofKind: StudyWidgetWords.kind)

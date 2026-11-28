@@ -6,6 +6,7 @@ enum StudyComicScenario: String, CaseIterable, Identifiable {
     case rainyTransfer
 
     var id: String { rawValue }
+    var isFree: Bool { self == .telAvivCafe }
 
     var navTitle: String {
         switch self {
@@ -805,6 +806,7 @@ struct StudyCafeComicView: View {
 }
 
 struct StudyScenarioPosterCard: View {
+    @Environment(StudyPurchases.self) private var purchases
     let scenario: StudyComicScenario
     var cardWidth: CGFloat? = nil
 
@@ -858,8 +860,9 @@ struct StudyScenarioPosterCard: View {
                                 }
                                 Spacer(minLength: 4)
                                 HStack(spacing: 3) {
-                                    Text("开始")
-                                    Image(systemName: "chevron.right")
+                                    let isLocked = !purchases.hasFullAccess && !scenario.isFree
+                                    Text(isLocked ? "预览" : "开始")
+                                    Image(systemName: isLocked ? "lock" : "chevron.right")
                                         .font(.caption2.weight(.bold))
                                 }
                                 .font(.caption.weight(.bold))
@@ -892,7 +895,7 @@ struct StudyScenarioTheaterHubView: View {
     var body: some View {
         StudyPage {
             StudyHeading(title: "情景剧场", eyebrow: "THEATER · 互动情景对话")
-            Text("跟随图文分镜与真人希伯来语配音，在真实生活语境中练习开口表达与画面互动。")
+            Text("跟随图文分镜与希伯来语配音，在生活情境中练习开口表达。")
                 .font(.subheadline)
                 .foregroundStyle(progress.theme.mutedInk)
 
@@ -910,14 +913,23 @@ struct StudyScenarioTheaterHubView: View {
 }
 
 struct StudyScenarioComicView: View {
+    @Environment(StudyPurchases.self) private var purchases
     let content: StudyContent
     let scenario: StudyComicScenario
 
     var body: some View {
-        switch scenario {
-        case .telAvivCafe: StudyDialogueComicView(content: content, scenario: .telAvivCafe)
-        case .oldCityDayTrip: StudyDialogueComicView(content: content, scenario: .oldCityDayTrip)
-        case .rainyTransfer: StudyRainyTransferView(content: content)
+        if purchases.hasFullAccess || scenario.isFree {
+            switch scenario {
+            case .telAvivCafe: StudyDialogueComicView(content: content, scenario: .telAvivCafe)
+            case .oldCityDayTrip: StudyDialogueComicView(content: content, scenario: .oldCityDayTrip)
+            case .rainyTransfer: StudyRainyTransferView(content: content)
+            }
+        } else {
+            StudyPage {
+                StudyScenarioPosterCard(scenario: scenario)
+                StudyFullEditionLink()
+            }
+            .studyDetail(scenario.navTitle, showsTabBar: true)
         }
     }
 }

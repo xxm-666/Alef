@@ -933,7 +933,9 @@ struct StudyReviewBatch: Codable, Hashable {
         if let saved: [String] = read(Self.pinnedWordPacksKey, default: Optional<[String]>.none) { return saved }
         let preferences = read("alef.wordsState.v1", default: WordPreferences())
         let legacySelection = StudyWordPack.legacyCatalog.first { $0.id == preferences.activePackId }
-        return StudyWordPack.defaultPinnedIDs + [legacySelection?.id].compactMap { $0 }
+        let suggested = StudyDistribution.isAppStore ? [StudyWordPack.beginnerID, "pack_phrases", "pack_readings"]
+                                                     : StudyWordPack.defaultPinnedIDs
+        return suggested + [legacySelection?.id].compactMap { $0 }
     }
 
     func isWordPackPinned(_ id: String) -> Bool {

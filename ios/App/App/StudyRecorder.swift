@@ -681,7 +681,8 @@ struct ShadowingPracticeCard: View {
             if case .success(let result)? = currentComparison {
                 comparisonDetails(result)
             }
-            if let recording = recorder.completedRecordingURL, aiEnabled && canRecognize(recording) {
+            if !StudyDistribution.isAppStore, let recording = recorder.completedRecordingURL,
+               aiEnabled && canRecognize(recording) {
                 aiComparisonView(recording: recording)
             }
         }
@@ -883,7 +884,7 @@ struct ShadowingPracticeCard: View {
 
     private func reloadAIConfiguration() {
         resetAIComparison()
-        configuredProviders = aiEnabled ? StudyAIProvider.allCases.filter { provider in
+        configuredProviders = aiEnabled && !StudyDistribution.isAppStore ? StudyAIProvider.allCases.filter { provider in
             (try? provider.endpoint(gateway: aiGateway)) != nil &&
                 (try? StudyAIKeychain.read(for: provider)) != nil
         } : []
@@ -913,27 +914,25 @@ struct ShadowingPracticeCard: View {
 
     private func aiComparisonView(recording: URL) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let provider = configuredProviders.first {
+            if !configuredProviders.isEmpty {
                 Button {
-                    if configuredProviders.count == 1 {
-                        startAIComparison(recording: recording, provider: provider)
-                    } else {
-                        showsAIProviders = true
-                    }
+                    showsAIProviders = true
                 } label: {
                     Label("用AI识别", systemImage: "waveform")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(StudyButtonStyle())
                 .disabled(aiRequest != nil)
-                .confirmationDialog("选择识别服务", isPresented: $showsAIProviders, titleVisibility: .visible) {
+                .confirmationDialog("发送本次跟读录音？", isPresented: $showsAIProviders, titleVisibility: .visible) {
                     ForEach(configuredProviders) { provider in
-                        Button(provider.title) { startAIComparison(recording: recording, provider: provider) }
+                        Button("同意并发送至 \(provider.title)") {
+                            startAIComparison(recording: recording, provider: provider)
+                        }
                     }
+                    Button("取消", role: .cancel) {}
                 } message: {
-                    Text("选择后将本次录音发送至该服务。")
+                    Text(aiUploadDisclosure)
                 }
-                Text("录音将发送至所选识别服务。")
             } else {
                 Text("请在「我的 → AI 功能」保存识别服务的配置。")
             }
@@ -954,6 +953,19 @@ struct ShadowingPracticeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(progress.theme.cardSurface, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var aiUploadDisclosure: String {
+        var sections = ["所选服务将收到本次录音并进行转写。Alef 会在设备上将转写结果与原句对比。服务可能留存录音并按用量计费。"]
+        if configuredProviders.contains(.openRouter) {
+            sections.append("OpenRouter 会将录音路由至 \(openRouterModel.title) 的服务提供方。")
+        }
+        if configuredProviders.contains(.aliyun),
+           let endpoint = try? StudyAIProvider.aliyun.endpoint(gateway: aiGateway),
+           let host = endpoint.host {
+            sections.append("阿里云选项会先将录音发送至你配置的网关 \(host)。")
+        }
+        return sections.joined(separator: "\n")
     }
 
     @ViewBuilder private func aiTranscriptView(_ result: Result<StudyAITranscript, StudyAIError>) -> some View {

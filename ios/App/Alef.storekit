@@ -1,0 +1,36 @@
+{
+  "identifier" : "529E17EB-7237-458C-8859-A5DE31E71B8F",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "29.00",
+      "familyShareable" : false,
+      "internalID" : "659D2EDE-4CB3-447C-AD49-DE6A20158A78",
+      "localizations" : [
+        {
+          "description" : "一次购买，解锁全部主题词包、分级阅读、情景剧场和易混音辨析。",
+          "displayName" : "Alef 完整版",
+          "locale" : "zh_CN"
+        },
+        {
+          "description" : "Unlock all word packs, graded readings, interactive scenarios, and sound discrimination exercises.",
+          "displayName" : "Alef Full Edition",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.xxm666.alef.full",
+      "referenceName" : "Alef Full Edition",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_locale" : "zh_CN",
+    "_storefront" : "CHN",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

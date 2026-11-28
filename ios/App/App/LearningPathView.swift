@@ -205,7 +205,7 @@ private struct LearningStageDetailView: View {
             if let stageReading {
                 StudySectionTitle("配套阅读")
                 NavigationLink {
-                    StudyReadingView(reading: stageReading)
+                    StudyReadingView(reading: stageReading, isFree: content.isFreeReading(stageReading.id))
                 } label: {
                     StudyCard(padding: 10) {
                         StudyRow(title: stageReading.title, symbol: "text.book.closed",

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PracticeCenterView: View {
     @Environment(StudyProgress.self) private var progress
+    @Environment(StudyPurchases.self) private var purchases
     @Environment(\.dynamicTypeSize) private var typeSize
     let content: StudyContent
     let startReview: () -> Void
@@ -34,9 +35,22 @@ struct PracticeCenterView: View {
                 .buttonStyle(.plain)
 
                 NavigationLink {
-                    MinimalPairQuizView(content: content)
+                    if purchases.hasFullAccess {
+                        MinimalPairQuizView(content: content.edition(hasFullAccess: true))
+                    } else {
+                        StudyPage {
+                            StudyCard {
+                                StudySectionTitle("易混音辨析")
+                                Text("对比容易听混的词，练习分辨相近的现代希伯来语发音。")
+                                    .font(.subheadline)
+                                StudyFullEditionLink()
+                            }
+                        }
+                        .studyDetail("易混音辨析", showsTabBar: true)
+                    }
                 } label: {
-                    practiceTile(title: "易混音辨析", subtitle: "\(content.minimalPairs.count) 组对比", symbol: "ear")
+                    practiceTile(title: "易混音辨析", subtitle: "\(content.minimalPairs.count) 组对比",
+                                 symbol: purchases.hasFullAccess ? "ear" : "lock")
                 }
                 .buttonStyle(.plain)
 
